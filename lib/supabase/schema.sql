@@ -1,6 +1,21 @@
 -- ============================================================
--- Traversal DSA — Supabase schema
--- Run this once in the Supabase SQL editor (or via CLI migration)
+-- Traversal DSA — Supabase schema (consolidated reference)
+--
+-- This file is a single-source-of-truth SNAPSHOT of the full schema as
+-- currently applied, kept for convenience (e.g. bootstrapping a fresh
+-- Supabase project in one paste). It is NOT where new schema changes
+-- should be authored.
+--
+-- Going forward: author every schema change as its own file under
+-- supabase/migrations/, named `NNNN_short_description.sql`
+-- (sequential, zero-padded), with a header comment stating what it
+-- does and the date — see supabase/migrations/0001_initial_schema.sql
+-- onward. Run the new migration file in the Supabase SQL editor same
+-- as always (still no CLI/migration-runner wired up in this repo), and
+-- only AFTER it's been applied, append the same SQL to the end of
+-- this file so schema.sql keeps reflecting current state as one
+-- consolidated read. Don't edit this file first and migrations/ second
+-- — migrations/ is the source, this file is the derived snapshot.
 -- ============================================================
 
 create extension if not exists "pgcrypto";

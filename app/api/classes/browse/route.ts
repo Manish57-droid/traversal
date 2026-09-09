@@ -15,9 +15,15 @@ export async function GET() {
 
   const supabase = supabaseAdmin();
 
+  // `users` must be disambiguated here: PostgREST can reach `users` from
+  // `classes` three ways now (the direct `teacher_id` FK, plus two
+  // many-to-many paths through the `class_members` and
+  // `class_collaborators` junction tables), so a bare `users(...)` embed
+  // is ambiguous and errors with PGRST201. We specifically want the
+  // owner, i.e. the direct FK.
   const { data: classes, error } = await supabase
     .from("classes")
-    .select("id, name, teacher_id, users(full_name, email), class_members(count)")
+    .select("id, name, teacher_id, users!classes_teacher_id_fkey(full_name, email), class_members(count)")
     .order("name");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

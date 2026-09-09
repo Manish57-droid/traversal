@@ -102,11 +102,17 @@ before writing code. It's derived from what already exists in the repo (see `pro
 - **Don't introduce a new library or pattern for something an existing one already handles.**
   E.g. no new HTTP client, state manager, styling system, date library, form library, etc. without
   checking first whether the existing stack (fetch + useState + Tailwind) already covers it.
-- **Ask before changing the DB schema.** `lib/supabase/schema.sql` is hand-applied via the
-  Supabase SQL editor, no migration tooling — a schema change is a manual, somewhat risky step
-  for the user to run themselves. Propose the SQL, explain what it does, and wait for
-  confirmation before telling the user to run it (and before writing app code that assumes it
-  already ran).
+- **Ask before changing the DB schema.** Every change is hand-applied via the Supabase SQL editor,
+  no migration tooling — still a manual, somewhat risky step for the user to run themselves.
+  Propose the SQL, explain what it does, and wait for confirmation before telling the user to run
+  it (and before writing app code that assumes it already ran).
+  **File convention**: author the change as its own new file,
+  `supabase/migrations/NNNN_short_description.sql` (sequential, zero-padded, short header comment
+  with what it does and the date) — don't add it directly to `lib/supabase/schema.sql`. Only
+  after the user confirms they've run the migration, append the same SQL to the end of
+  `schema.sql` too, so that file stays a single consolidated snapshot of current state.
+  `supabase/migrations/` is the authored history; `schema.sql` is the derived, always-current
+  reference — don't let them diverge, and don't skip either one.
 - **Ask before changing auth.** This includes: the sign-up trigger (`handle_new_user`), the
   hard-coded admin email, `middleware.ts`'s role/path-gating logic, or `lib/roles.ts`. Auth
   changes are high-blast-radius (can lock users out or open access) — confirm first.

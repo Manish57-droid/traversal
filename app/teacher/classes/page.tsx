@@ -24,13 +24,24 @@ export default function BrowseClassesPage() {
   const router = useRouter();
   const [classes, setClasses] = useState<ClassBrowseRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [requesting, setRequesting] = useState<string | null>(null);
 
+  // Surfaces a failed response instead of silently falling back to an
+  // empty list — a `?? []` fallback here previously hid a real 500
+  // (an ambiguous PostgREST embed) as "no classes exist yet," which is
+  // exactly why the bug went unnoticed.
   async function load() {
     setLoading(true);
+    setError(null);
     const res = await fetch("/api/classes/browse");
     const data = await res.json();
-    setClasses(data.classes ?? []);
+    if (!res.ok) {
+      setError(data.error || "Failed to load classes.");
+      setClasses([]);
+    } else {
+      setClasses(data.classes ?? []);
+    }
     setLoading(false);
   }
 
@@ -58,8 +69,9 @@ export default function BrowseClassesPage() {
       </div>
 
       {loading && <p className="text-sm text-fg-muted">Loading…</p>}
+      {error && <p className="card p-6 text-center text-sm text-warn">{error}</p>}
 
-      {!loading && (
+      {!loading && !error && (
         <div className="card overflow-x-auto">
           <table className="w-full min-w-[560px] text-left text-sm">
             <thead className="border-b border-line/70 text-xs uppercase tracking-wide text-fg-subtle">

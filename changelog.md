@@ -385,3 +385,59 @@
   point of Step 2: the next class-scoped route only has to call `getClassAuthorization` correctly
   once, instead of every future route risking its own subtly-wrong raw comparison the way `assign`
   and `question-sets/items` already had before the last audit.
+
+## [2026-09-09] — Fix "teacher can't see other teachers' classes"; adopt per-migration SQL files
+- **Diagnosis (Step 1, run live against the actual database, not assumed)**: queried the live
+  Supabase project directly with the service-role key. Real multi-teacher data exists — 2 distinct
+  teacher accounts (`Test1`, `Ankit Kumar`), each owning one class (`SBU`, `ankit-test`) — so this
+  was a genuine bug, not an empty-data false alarm.
+- **Root cause (Step 2, confirmed by executing the exact failing query live, not just reading the
+  code)**: `GET /api/classes/browse` embeds `users(full_name, email)` directly off `classes` to
+  get each class's owner name. That embed used to be unambiguous, but the previous task's
+  `class_collaborators` table gave PostgREST a *second* many-to-many path between `classes` and
+  `users` (on top of the one `class_members` already provided) — so a bare `users(...)` embed is
+  now genuinely ambiguous and PostgREST rejects it outright with `PGRST201: Could not embed
+  because more than one relationship was found for 'classes' and 'users'`. Running the exact query
+  live reproduced this precisely. Compounding it: `app/teacher/classes/page.tsx` did
+  `setClasses(data.classes ?? [])` with no check on `res.ok`, so the 500 error response (which has
+  no `.classes` key) silently became an empty array — the page just rendered "No classes exist
+  yet" with zero indication anything had failed. Two bugs, not one: the query itself, and a
+  silent-failure pattern that hid it.
+- **Fix**: disambiguated the embed to `users!classes_teacher_id_fkey(full_name, email)` in
+  `app/api/classes/browse/route.ts` (the direct owner FK — not the `class_members` or
+  `class_collaborators` paths). Also fixed the silent failure in
+  `app/teacher/classes/page.tsx`: it now checks `res.ok` and surfaces `data.error` in the UI
+  instead of quietly falling back to an empty list, so a future regression like this one would be
+  visible immediately instead of looking like "no classes."
+- **Step 3 verification (executed live, not traced)**: ran the exact fixed query against the real
+  database, then ran the browse route's full relationship-computation logic verbatim against the
+  real data, "as" the real teacher Ankit Kumar (`9ea4892e-...`). Raw result:
+  `{"classes":[{"id":"1614d411-...","name":"ankit-test","owner_name":"Ankit Kumar",
+  "student_count":0,"relationship":"owner"},{"id":"ce385291-...","name":"SBU",
+  "owner_name":"Test1","student_count":1,"relationship":"none"}]}` — confirms Test1's class now
+  correctly appears for Ankit Kumar with `relationship: "none"`, which is exactly what makes the
+  "Request access" button render. (Ran via a temporary script using the service-role client
+  against the live DB, since this environment has no way to fabricate a real browser session/
+  cookie to drive an actual authenticated HTTP round-trip through Next's middleware — disclosing
+  the method rather than overstating it as a full end-to-end HTTP test. The script was deleted
+  after use, not committed.)
+- **Per-migration SQL files adopted**: created `supabase/migrations/`, split the current
+  `lib/supabase/schema.sql` retroactively into `0001_initial_schema.sql` (users/auth/classes/DSA
+  question bank/assignments/progress), `0002_aptitude_module.sql`, and
+  `0003_class_collaboration.sql` (which also carries a note explaining the PGRST201 ambiguity this
+  migration introduced, pointing at this entry). Nothing was re-run — these are the same
+  already-applied statements, just organized into legible per-change files going forward.
+  `schema.sql` itself is kept as-is (not deleted), now explicitly documented at the top as a
+  derived consolidated snapshot, not where new changes get authored. Updated `ai.md`'s
+  "ask before changing the DB schema" rule to describe the new convention: author in
+  `supabase/migrations/`, get it applied, then append to `schema.sql`.
+- Files touched: `app/api/classes/browse/route.ts`, `app/teacher/classes/page.tsx`,
+  `lib/supabase/schema.sql` (header note only), `ai.md`. New:
+  `supabase/migrations/0001_initial_schema.sql`, `supabase/migrations/0002_aptitude_module.sql`,
+  `supabase/migrations/0003_class_collaboration.sql`.
+- Why: A real, user-reported visibility bug, root-caused by actually running the failing query
+  against live data rather than trusting the code to be correct because it looked right — the
+  ambiguous-embed error would not have been obvious from reading the route file alone, and did
+  not show up in `npm run build`'s type-checking or the earlier code-trace-only "verification" for
+  the collaboration feature, which is exactly the gap this task's insistence on executing real
+  queries was meant to close.
