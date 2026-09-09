@@ -39,8 +39,9 @@ export async function middleware(req: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = req.nextUrl;
+  const isTopicsPath = pathname === "/topics" || pathname.startsWith("/topics/");
 
-  if (isPublicPath(pathname) || pathname.startsWith("/_next")) {
+  if (isPublicPath(pathname) || isTopicsPath || pathname.startsWith("/_next")) {
     return response;
   }
 

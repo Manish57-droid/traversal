@@ -4,6 +4,24 @@
 
 :root {
   color-scheme: dark;
+
+  /* "Circuit Board" palette — a dark FR4-green base with copper,
+     gold, and flux-orange accents, standing in for traces, plated
+     contacts, and solder. RGB triples (no commas) so Tailwind's
+     rgb(var(--x) / <alpha-value>) pattern can add opacity. */
+  --bg: 10 18 13;            /* #0A120D deep PCB green-black */
+  --surface: 16 27 20;       /* #101B14 */
+  --surface-2: 23 37 28;     /* #17251C */
+  --fg: 236 233 225;         /* #ECE9E1 warm silkscreen white */
+  --fg-muted: 168 178 168;   /* muted sage */
+  --fg-subtle: 120 133 122;  /* darker muted sage */
+  --line: 46 64 51;          /* subtle PCB-green divider */
+  --accent: 217 130 76;      /* #D9824C copper */
+  --accent-2: 242 168 118;   /* #F2A876 copper, lighter */
+  --success: 232 184 75;     /* #E8B84B gold */
+  --success-2: 245 212 136;  /* #F5D488 gold, lighter */
+  --warn: 255 107 74;        /* #FF6B4A flux orange-red */
+  --warn-2: 255 148 120;     /* #FF9478 flux, lighter */
 }
 
 html {
@@ -11,16 +29,16 @@ html {
 }
 
 body {
-  @apply bg-ink text-slate-100 font-sans antialiased;
+  @apply bg-bg text-fg font-sans antialiased;
 }
 
 ::selection {
-  @apply bg-lime/30 text-white;
+  @apply bg-accent/30 text-fg;
 }
 
 /* visible keyboard focus everywhere */
 :focus-visible {
-  outline: 2px solid theme("colors.lime.DEFAULT");
+  outline: 2px solid theme("colors.success.DEFAULT");
   outline-offset: 2px;
   border-radius: 2px;
 }
@@ -35,22 +53,22 @@ body {
 }
 
 .card {
-  @apply rounded-xl border border-white/10 bg-ink-light/60 backdrop-blur-sm;
+  @apply rounded-xl border border-line/70 bg-surface/70 backdrop-blur-sm;
 }
 
 .btn-primary {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg bg-lime px-4 py-2.5
-    font-semibold text-ink transition-colors hover:bg-lime-light
+  @apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5
+    font-semibold text-ink-fixed transition-colors hover:bg-accent-2
     disabled:cursor-not-allowed disabled:opacity-50;
 }
 
 .btn-secondary {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg border border-white/15
-    bg-transparent px-4 py-2.5 font-medium text-slate-100 transition-colors
-    hover:border-white/30 hover:bg-white/5;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg border border-line
+    bg-transparent px-4 py-2.5 font-medium text-fg transition-colors
+    hover:border-accent/50 hover:bg-surface;
 }
 
 .input {
-  @apply w-full rounded-lg border border-white/10 bg-ink px-3.5 py-2.5 text-sm text-slate-100
-    placeholder:text-slate-500 focus:border-sky/60 focus:outline-none;
+  @apply w-full rounded-lg border border-line bg-bg px-3.5 py-2.5 text-sm text-fg
+    placeholder:text-fg-subtle focus:border-success/60 focus:outline-none;
 }

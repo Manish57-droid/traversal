@@ -63,11 +63,11 @@ export default function StudentDashboardPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="card p-5">
             <p className="text-xs text-slate-400">Completed</p>
-            <p className="font-display text-3xl text-sky">{completed}</p>
+            <p className="font-display text-3xl text-success">{completed}</p>
           </div>
           <div className="card p-5">
             <p className="text-xs text-slate-400">Attempted</p>
-            <p className="font-display text-3xl text-ember">{attempted}</p>
+            <p className="font-display text-3xl text-warn">{attempted}</p>
           </div>
           <div className="card p-5">
             <p className="text-xs text-slate-400">Total on sheet</p>

@@ -6,8 +6,8 @@ import type { AppUser, UserRole, UserStatus } from "@/types";
 const ROLES: UserRole[] = ["student", "teacher", "admin"];
 
 const STATUS_STYLE: Record<UserStatus, string> = {
-  pending: "border-ember/40 text-ember",
-  approved: "border-sky/40 text-sky",
+  pending: "border-warn/40 text-warn",
+  approved: "border-success/40 text-success",
   rejected: "border-red-500/40 text-red-400",
 };
 
@@ -55,7 +55,7 @@ export default function AdminUsersPage() {
             onClick={() => setFilter(f)}
             className={`rounded-full border px-3 py-1.5 text-xs capitalize transition-colors ${
               filter === f
-                ? "border-sky/60 bg-sky/10 text-sky"
+                ? "border-success/60 bg-success/10 text-success"
                 : "border-white/10 text-slate-400 hover:border-white/25"
             }`}
           >
@@ -103,7 +103,7 @@ export default function AdminUsersPage() {
                     {u.status !== "approved" && (
                       <button
                         onClick={() => patchUser(u.id, { status: "approved" })}
-                        className="mr-2 text-xs text-sky hover:underline"
+                        className="mr-2 text-xs text-success hover:underline"
                       >
                         Approve
                       </button>

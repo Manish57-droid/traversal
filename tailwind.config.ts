@@ -8,32 +8,35 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: {
-          DEFAULT: "#0A0B0E",
-          light: "#15171B",
-          lighter: "#1E2226",
+        bg: "rgb(var(--bg) / <alpha-value>)",
+        surface: "rgb(var(--surface) / <alpha-value>)",
+        "surface-2": "rgb(var(--surface-2) / <alpha-value>)",
+        fg: "rgb(var(--fg) / <alpha-value>)",
+        "fg-muted": "rgb(var(--fg-muted) / <alpha-value>)",
+        "fg-subtle": "rgb(var(--fg-subtle) / <alpha-value>)",
+        line: "rgb(var(--line) / <alpha-value>)",
+        "ink-fixed": "#1A1410",
+        accent: {
+          DEFAULT: "rgb(var(--accent) / <alpha-value>)",
+          2: "rgb(var(--accent-2) / <alpha-value>)",
         },
-        lime: {
-          DEFAULT: "#C6F135",
-          light: "#DFFF6B",
+        success: {
+          DEFAULT: "rgb(var(--success) / <alpha-value>)",
+          2: "rgb(var(--success-2) / <alpha-value>)",
         },
-        ember: {
-          DEFAULT: "#FF6A3D",
-          light: "#FF9466",
-        },
-        sky: {
-          DEFAULT: "#4CC9F0",
-          light: "#8AE0FF",
+        warn: {
+          DEFAULT: "rgb(var(--warn) / <alpha-value>)",
+          2: "rgb(var(--warn-2) / <alpha-value>)",
         },
       },
       fontFamily: {
-        display: ["var(--font-display)", "sans-serif"],
+        display: ["var(--font-display)", "serif"],
         sans: ["var(--font-body)", "sans-serif"],
         mono: ["var(--font-mono)", "monospace"],
       },
       backgroundImage: {
         "grid-fade":
-          "radial-gradient(circle at 50% 0%, rgba(198,241,53,0.12), transparent 60%)",
+          "radial-gradient(circle at 50% 0%, rgb(var(--accent) / 0.14), transparent 60%)",
       },
     },
   },

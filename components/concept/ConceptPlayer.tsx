@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 
 // Chrome around any concept visualization: play/pause, step forward/back,
-// a scrubbable dot-per-step progress row, and a caption panel. The 3D
-// scene itself is passed in as a render prop so each topic (array,
-// stack, linked list, tree) can bring its own visual.
+// a scrubbable dot-per-step progress row, a caption panel, and — the
+// "game" part — the scene itself is tappable to advance, like a story,
+// so reading a topic feels like clicking through rather than watching
+// a video. The 3D scene itself is passed in as a render prop so each
+// topic (array, stack, linked list, tree) can bring its own visual.
 export default function ConceptPlayer({
   steps,
   renderScene,
@@ -15,6 +17,7 @@ export default function ConceptPlayer({
 }) {
   const [current, setCurrent] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [tapped, setTapped] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -39,11 +42,26 @@ export default function ConceptPlayer({
     setCurrent(Math.max(0, Math.min(steps.length - 1, index)));
   }
 
+  function handleSceneTap() {
+    setTapped(true);
+    setPlaying(false);
+    setCurrent((prev) => (prev >= steps.length - 1 ? 0 : prev + 1));
+  }
+
   return (
     <div className="space-y-4">
-      <div className="card h-[320px] w-full overflow-hidden sm:h-[420px]">
+      <button
+        onClick={handleSceneTap}
+        aria-label="Tap to advance to the next step"
+        className="card relative block h-[320px] w-full cursor-pointer overflow-hidden text-left sm:h-[420px]"
+      >
         {renderScene(current)}
-      </div>
+        {!tapped && (
+          <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 animate-pulse rounded-full border border-accent/40 bg-bg/80 px-3 py-1 text-xs text-accent-2">
+            Tap to advance →
+          </span>
+        )}
+      </button>
 
       <div className="card p-4 sm:p-5">
         <div className="flex items-center gap-3">
@@ -77,7 +95,7 @@ export default function ConceptPlayer({
                 onClick={() => goTo(i)}
                 aria-label={`Go to step ${i + 1}`}
                 className={`h-1.5 flex-1 min-w-[8px] rounded-full transition-colors ${
-                  i === current ? "bg-sky" : i < current ? "bg-sky/40" : "bg-white/10"
+                  i === current ? "bg-success" : i < current ? "bg-success/40" : "bg-white/10"
                 }`}
               />
             ))}

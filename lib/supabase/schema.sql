@@ -67,12 +67,12 @@ begin
     new.id,
     new.email,
     new.raw_user_meta_data->>'full_name',
-    case
+    (case
       when lower(new.email) = admin_email then 'admin'
       when requested_role = 'teacher' then 'teacher'
       else 'student'
-    end,
-    case when lower(new.email) = admin_email then 'approved' else 'pending' end
+    end)::user_role,
+    (case when lower(new.email) = admin_email then 'approved' else 'pending' end)::user_status
   )
   on conflict (id) do nothing;
   return new;

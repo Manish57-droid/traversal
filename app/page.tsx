@@ -10,7 +10,7 @@ export default async function LandingPage() {
   const userId = user?.id;
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-ink">
+    <main className="relative min-h-screen overflow-hidden bg-bg">
       <div className="absolute inset-0 bg-grid-fade" />
 
       <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-4 sm:px-6">
@@ -53,19 +53,19 @@ export default async function LandingPage() {
 
         <section id="how-it-works" className="grid grid-cols-1 gap-6 border-t border-white/10 py-14 sm:grid-cols-3">
           <div>
-            <p className="font-display text-2xl text-ember">Assign</p>
+            <p className="font-display text-2xl text-warn">Assign</p>
             <p className="mt-2 text-sm text-slate-400">
               A teacher builds a question set from any platform and sends it to a class.
             </p>
           </div>
           <div>
-            <p className="font-display text-2xl text-sky">Solve</p>
+            <p className="font-display text-2xl text-success">Solve</p>
             <p className="mt-2 text-sm text-slate-400">
               Students click through and solve it there — no editor rebuilt here, just the real judge.
             </p>
           </div>
           <div>
-            <p className="font-display text-2xl text-lime-light">Track</p>
+            <p className="font-display text-2xl text-accent-2">Track</p>
             <p className="mt-2 text-sm text-slate-400">
               Check it off. Your dashboard — and your teacher's — updates instantly.
             </p>

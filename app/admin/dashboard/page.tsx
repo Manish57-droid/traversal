@@ -29,7 +29,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {pending > 0 && (
-        <Link href="/admin/users" className="card block border-ember/40 p-4 text-sm text-ember hover:border-ember/70">
+        <Link href="/admin/users" className="card block border-warn/40 p-4 text-sm text-warn hover:border-warn/70">
           {pending} account{pending === 1 ? "" : "s"} waiting for approval →
         </Link>
       )}
@@ -37,15 +37,15 @@ export default function AdminDashboardPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="card p-5">
           <p className="text-xs text-slate-400">Students</p>
-          <p className="font-display text-3xl text-sky">{counts.student}</p>
+          <p className="font-display text-3xl text-success">{counts.student}</p>
         </div>
         <div className="card p-5">
           <p className="text-xs text-slate-400">Teachers</p>
-          <p className="font-display text-3xl text-ember">{counts.teacher}</p>
+          <p className="font-display text-3xl text-warn">{counts.teacher}</p>
         </div>
         <div className="card p-5">
           <p className="text-xs text-slate-400">Admins</p>
-          <p className="font-display text-3xl text-lime-light">{counts.admin}</p>
+          <p className="font-display text-3xl text-accent-2">{counts.admin}</p>
         </div>
       </div>
     </div>

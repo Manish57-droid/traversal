@@ -3,6 +3,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import ConceptPlayer from "@/components/concept/ConceptPlayer";
+import TheoryPanel from "@/components/concept/TheoryPanel";
+import TopicQuiz from "@/components/concept/TopicQuiz";
 import ArrayScene from "@/components/concept/ArrayScene";
 import StackScene from "@/components/concept/StackScene";
 import LinkedListScene from "@/components/concept/LinkedListScene";
@@ -41,10 +43,17 @@ export default function TopicPage({ params }: { params: { slug: string } }) {
         <p className="mt-1 text-sm text-slate-400">{topic.summary}</p>
       </div>
 
+      <TheoryPanel theory={topic.theory} />
+
       <ConceptPlayer
         steps={topic.steps.map((s) => ({ title: s.title, description: s.description }))}
         renderScene={renderScene}
       />
+
+      <div>
+        <h2 className="mb-3 font-display text-xl text-white">Test yourself</h2>
+        <TopicQuiz questions={topic.quiz} />
+      </div>
     </div>
   );
 }

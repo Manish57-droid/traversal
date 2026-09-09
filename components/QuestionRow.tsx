@@ -29,7 +29,7 @@ export default function QuestionRow({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span
-            className="rounded px-2 py-0.5 text-xs font-medium text-ink"
+            className="rounded px-2 py-0.5 text-xs font-medium text-bg"
             style={{ backgroundColor: PLATFORM_COLORS[question.platform] }}
           >
             {PLATFORM_LABELS[question.platform]}
@@ -47,7 +47,7 @@ export default function QuestionRow({
           href={question.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-1 block truncate font-medium text-slate-100 hover:text-sky hover:underline"
+          className="mt-1 block truncate font-medium text-slate-100 hover:text-success hover:underline"
         >
           {question.title}
         </a>
@@ -61,9 +61,9 @@ export default function QuestionRow({
         <span
           className={`h-3 w-3 rounded-full ${
             status === "completed"
-              ? "bg-sky"
+              ? "bg-success"
               : status === "attempted"
-              ? "bg-ember"
+              ? "bg-warn"
               : "border border-slate-500"
           }`}
         />

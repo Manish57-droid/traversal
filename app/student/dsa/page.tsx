@@ -58,7 +58,7 @@ export default function StudentDsaPage() {
             onClick={() => setFilter(f)}
             className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
               filter === f
-                ? "border-sky/60 bg-sky/10 text-sky"
+                ? "border-success/60 bg-success/10 text-success"
                 : "border-white/10 text-slate-400 hover:border-white/25"
             }`}
           >

@@ -32,7 +32,7 @@ export default function SignInPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-ink px-4">
+    <main className="flex min-h-screen items-center justify-center bg-bg px-4">
       <form onSubmit={handleSubmit} className="card w-full max-w-sm space-y-4 p-6">
         <p className="font-display text-xl text-white">Sign in</p>
 
@@ -53,7 +53,7 @@ export default function SignInPage() {
 
         <p className="text-center text-xs text-slate-500">
           No account yet?{" "}
-          <Link href="/sign-up" className="text-sky hover:underline">Create one</Link>
+          <Link href="/sign-up" className="text-success hover:underline">Create one</Link>
         </p>
       </form>
     </main>

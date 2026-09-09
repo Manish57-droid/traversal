@@ -1,20 +1,22 @@
 import type { Metadata } from "next";
-import { Syne, Plus_Jakarta_Sans, IBM_Plex_Mono } from "next/font/google";
+import { Fraunces, Hanken_Grotesk, Space_Mono } from "next/font/google";
 import "./globals.css";
 
-const syne = Syne({
+const fraunces = Fraunces({
   subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  style: ["normal", "italic"],
   variable: "--font-display",
   display: "swap",
 });
-const plusJakarta = Plus_Jakarta_Sans({
+const hankenGrotesk = Hanken_Grotesk({
   subsets: ["latin"],
   variable: "--font-body",
   display: "swap",
 });
-const ibmPlexMono = IBM_Plex_Mono({
+const spaceMono = Space_Mono({
   subsets: ["latin"],
-  weight: ["400", "500"],
+  weight: ["400", "700"],
   variable: "--font-mono",
   display: "swap",
 });
@@ -31,7 +33,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${syne.variable} ${plusJakarta.variable} ${ibmPlexMono.variable}`}>
+    <html lang="en" className={`${fraunces.variable} ${hankenGrotesk.variable} ${spaceMono.variable}`}>
       <body>{children}</body>
     </html>
   );

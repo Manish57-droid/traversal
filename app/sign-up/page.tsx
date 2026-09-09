@@ -50,7 +50,7 @@ export default function SignUpPage() {
 
   if (checkEmail) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-ink px-4">
+      <main className="flex min-h-screen items-center justify-center bg-bg px-4">
         <div className="card max-w-sm p-6 text-center">
           <p className="font-display text-xl text-white">Check your email</p>
           <p className="mt-2 text-sm text-slate-400">
@@ -63,7 +63,7 @@ export default function SignUpPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-ink px-4 py-10">
+    <main className="flex min-h-screen items-center justify-center bg-bg px-4 py-10">
       <form onSubmit={handleSubmit} className="card w-full max-w-sm space-y-4 p-6">
         <div>
           <p className="font-display text-xl text-white">Create your account</p>
@@ -93,7 +93,7 @@ export default function SignUpPage() {
                 key={r}
                 className={`flex-1 cursor-pointer rounded-lg border px-3 py-2 text-center text-sm capitalize transition-colors ${
                   requestedRole === r
-                    ? "border-sky/60 bg-sky/10 text-sky"
+                    ? "border-success/60 bg-success/10 text-success"
                     : "border-white/10 text-slate-300 hover:border-white/25"
                 }`}
               >
@@ -119,7 +119,7 @@ export default function SignUpPage() {
 
         <p className="text-center text-xs text-slate-500">
           Already have an account?{" "}
-          <Link href="/sign-in" className="text-sky hover:underline">Sign in</Link>
+          <Link href="/sign-in" className="text-success hover:underline">Sign in</Link>
         </p>
       </form>
     </main>

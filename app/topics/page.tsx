@@ -16,7 +16,7 @@ export default function TopicsIndexPage() {
           <Link key={topic.slug} href={`/topics/${topic.slug}`} className="card block p-5 transition-colors hover:border-white/25">
             <p className="font-display text-xl text-white">{topic.title}</p>
             <p className="mt-2 text-sm text-slate-400">{topic.summary}</p>
-            <p className="mt-3 text-xs text-sky">{topic.steps.length} steps →</p>
+            <p className="mt-3 text-xs text-success">{topic.steps.length} steps →</p>
           </Link>
         ))}
       </div>

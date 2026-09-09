@@ -11,7 +11,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
   admin: "Admin",
 };
 
-export default function Navbar({ role }: { role?: UserRole }) {
+export default function Navbar({ role, authed = true }: { role?: UserRole; authed?: boolean }) {
   const router = useRouter();
   const homeHref = role ? `/${role}/dashboard` : "/";
 
@@ -23,7 +23,7 @@ export default function Navbar({ role }: { role?: UserRole }) {
   }
 
   return (
-    <header className="sticky top-0 z-30 border-b border-white/10 bg-ink/80 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-white/10 bg-bg/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link href={homeHref} className="font-display text-lg tracking-tight text-white">
           traversal
@@ -65,10 +65,14 @@ export default function Navbar({ role }: { role?: UserRole }) {
               {ROLE_LABEL[role]}
             </span>
           )}
-          {role && (
+          {authed ? (
             <button onClick={handleSignOut} className="btn-secondary py-1.5 text-xs">
               Sign out
             </button>
+          ) : (
+            <Link href="/sign-in" className="btn-secondary py-1.5 text-xs">
+              Sign in
+            </Link>
           )}
         </div>
       </div>

@@ -89,12 +89,12 @@ export default function TeacherQuestionsPage() {
           <div key={q.id} className="card flex flex-wrap items-center justify-between gap-3 p-4">
             <div>
               <span
-                className="mr-2 rounded px-2 py-0.5 text-xs font-medium text-ink"
+                className="mr-2 rounded px-2 py-0.5 text-xs font-medium text-bg"
                 style={{ backgroundColor: PLATFORM_COLORS[q.platform] }}
               >
                 {PLATFORM_LABELS[q.platform]}
               </span>
-              <a href={q.url} target="_blank" rel="noopener noreferrer" className="font-medium text-slate-100 hover:text-sky hover:underline">
+              <a href={q.url} target="_blank" rel="noopener noreferrer" className="font-medium text-slate-100 hover:text-success hover:underline">
                 {q.title}
               </a>
               {q.topic && <span className="ml-2 text-xs text-slate-400">· {q.topic}</span>}

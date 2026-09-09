@@ -51,7 +51,7 @@ function TreeGroup() {
     }
   });
 
-  const nodeColors = ["#FF6A3D", "#C6F135", "#4CC9F0", "#FF9466"];
+  const nodeColors = ["#FF6B4A", "#D9824C", "#E8B84B", "#FF9478"];
 
   return (
     <group ref={groupRef}>
@@ -68,7 +68,7 @@ function TreeGroup() {
         return (
           <mesh key={i} position={mid} quaternion={quaternion}>
             <cylinderGeometry args={[0.015, 0.015, length, 6]} />
-            <meshBasicMaterial color="#2A2E35" transparent opacity={0.7} />
+            <meshBasicMaterial color="#2E4033" transparent opacity={0.7} />
           </mesh>
         );
       })}
@@ -92,8 +92,8 @@ export default function Hero3D() {
     <div className="h-full w-full" aria-hidden="true">
       <Canvas camera={{ position: [0, 0, 9], fov: 50 }} dpr={[1, 1.5]}>
         <ambientLight intensity={0.6} />
-        <pointLight position={[5, 5, 5]} intensity={60} color="#C6F135" />
-        <pointLight position={[-5, -3, 4]} intensity={40} color="#4CC9F0" />
+        <pointLight position={[5, 5, 5]} intensity={60} color="#D9824C" />
+        <pointLight position={[-5, -3, 4]} intensity={40} color="#E8B84B" />
         <TreeGroup />
       </Canvas>
     </div>

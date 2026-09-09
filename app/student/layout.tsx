@@ -11,7 +11,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
   if (user.role !== "student") redirect(`/${user.role}/dashboard`);
 
   return (
-    <div className="min-h-screen bg-ink">
+    <div className="min-h-screen bg-bg">
       <Navbar role="student" />
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">{children}</main>
     </div>

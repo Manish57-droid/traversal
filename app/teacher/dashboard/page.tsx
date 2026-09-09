@@ -83,7 +83,7 @@ export default function TeacherDashboardPage() {
           </select>
           {classes.find((c) => c.id === selectedClass) && (
             <span className="text-xs text-slate-400">
-              Join code: <span className="font-mono text-sky">{classes.find((c) => c.id === selectedClass)?.join_code}</span>
+              Join code: <span className="font-mono text-success">{classes.find((c) => c.id === selectedClass)?.join_code}</span>
             </span>
           )}
         </div>
