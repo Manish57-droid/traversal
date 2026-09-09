@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { supabaseBrowser } from "@/lib/supabase/browser-client";
 import ClassSummaryCharts from "@/components/analytics/ClassSummaryCharts";
 import StudentTable from "@/components/analytics/StudentTable";
 import StudentDrawer from "@/components/analytics/StudentDrawer";
+import ClassAccessPanel from "@/components/analytics/ClassAccessPanel";
 import type { ClassAnalyticsSummary, StudentAnalyticsRow } from "@/types";
 
 interface ClassRow {
@@ -12,7 +15,13 @@ interface ClassRow {
   join_code: string;
 }
 
+type Authorization = "owner" | "collaborator" | "admin";
+
 export default function TeacherDashboardPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>("");
   const [newClassName, setNewClassName] = useState("");
@@ -20,15 +29,30 @@ export default function TeacherDashboardPage() {
 
   const [summary, setSummary] = useState<ClassAnalyticsSummary | null>(null);
   const [students, setStudents] = useState<StudentAnalyticsRow[]>([]);
+  const [authorization, setAuthorization] = useState<Authorization | null>(null);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
 
+  useEffect(() => {
+    supabaseBrowser()
+      .auth.getUser()
+      .then(({ data }) => setCurrentUserId(data.user?.id ?? null));
+  }, []);
+
   async function loadClasses() {
     const res = await fetch("/api/classes");
     const data = await res.json();
-    setClasses(data.classes ?? []);
-    if (data.classes?.length && !selectedClass) setSelectedClass(data.classes[0].id);
+    const fetched: ClassRow[] = data.classes ?? [];
+    setClasses(fetched);
+
+    const requestedClassId = searchParams.get("classId");
+    if (requestedClassId && fetched.some((c) => c.id === requestedClassId)) {
+      setSelectedClass(requestedClassId);
+    } else if (fetched.length && !selectedClass) {
+      setSelectedClass(fetched[0].id);
+    }
   }
 
   useEffect(() => {
@@ -40,14 +64,24 @@ export default function TeacherDashboardPage() {
     if (!selectedClass) {
       setSummary(null);
       setStudents([]);
+      setAuthorization(null);
       return;
     }
     setLoadingAnalytics(true);
+    setAnalyticsError(null);
     fetch(`/api/teacher/analytics?classId=${selectedClass}`)
       .then((r) => r.json())
       .then((d) => {
+        if (d.error) {
+          setAnalyticsError(d.error);
+          setSummary(null);
+          setStudents([]);
+          setAuthorization(null);
+          return;
+        }
         setSummary(d.summary ?? null);
         setStudents(d.students ?? []);
+        setAuthorization(d.authorization ?? null);
       })
       .finally(() => setLoadingAnalytics(false));
   }, [selectedClass]);
@@ -64,6 +98,11 @@ export default function TeacherDashboardPage() {
       setNewClassName("");
       await loadClasses();
     }
+  }
+
+  function handleLeftClass() {
+    setSelectedClass("");
+    loadClasses();
   }
 
   const activeClass = classes.find((c) => c.id === selectedClass);
@@ -87,7 +126,7 @@ export default function TeacherDashboardPage() {
 
       {!loadingClasses && classes.length === 0 && (
         <p className="card p-6 text-center text-sm text-fg-muted">
-          Create a class above, then share its join code with students.
+          Create a class above, or <button onClick={() => router.push("/teacher/classes")} className="text-success hover:underline">browse existing classes</button> to request access to one.
         </p>
       )}
 
@@ -108,10 +147,22 @@ export default function TeacherDashboardPage() {
 
       {loadingAnalytics && <p className="text-sm text-fg-muted">Loading analytics…</p>}
 
+      {analyticsError && (
+        <p className="card p-6 text-center text-sm text-warn">{analyticsError}</p>
+      )}
+
       {!loadingAnalytics && summary && (
         <>
           <ClassSummaryCharts summary={summary} />
           <StudentTable students={students} onSelect={setSelectedStudentId} />
+          {authorization && (
+            <ClassAccessPanel
+              classId={selectedClass}
+              authorization={authorization}
+              currentUserId={currentUserId}
+              onLeft={handleLeftClass}
+            />
+          )}
         </>
       )}
 

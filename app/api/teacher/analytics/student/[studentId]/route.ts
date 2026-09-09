@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { getClassAuthorization, isAuthorized } from "@/lib/classAccess";
 import type { StudentAnalyticsDetail, StudentAptitudeDetailRow, StudentDsaDetailRow } from "@/types";
 
 // GET /api/teacher/analytics/student/:studentId?classId=...
 // Full DSA + Aptitude breakdown for one student. `classId` is required
-// and used only to verify the requesting teacher actually has this
-// student in one of their own classes — same ownership check as the
-// class-level route, just keyed off membership instead of class_id.
+// and used to verify the requesting teacher is authorized for this
+// class (owner, approved collaborator, or admin) AND that the student
+// is actually a member of that specific class — so neither a stray
+// classId nor a stray studentId alone is enough.
 export async function GET(req: Request, { params }: { params: { studentId: string } }) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -18,11 +20,10 @@ export async function GET(req: Request, { params }: { params: { studentId: strin
 
   const supabase = supabaseAdmin();
 
-  let classQuery = supabase.from("classes").select("id").eq("id", classId);
-  if (user.role !== "admin") classQuery = classQuery.eq("teacher_id", user.id);
-  const { data: klass, error: classError } = await classQuery.maybeSingle();
-  if (classError) return NextResponse.json({ error: classError.message }, { status: 500 });
-  if (!klass) return NextResponse.json({ error: "Class not found." }, { status: 404 });
+  const authorization = await getClassAuthorization(classId, user.id, user.role);
+  if (!isAuthorized(authorization)) {
+    return NextResponse.json({ error: "Class not found." }, { status: 404 });
+  }
 
   const { data: membership, error: memberError } = await supabase
     .from("class_members")

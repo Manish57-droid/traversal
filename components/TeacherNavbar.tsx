@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Binary, BookOpen, Calculator, ChevronDown, ListChecks, Menu, Send, Users, X } from "lucide-react";
+import { Binary, BookOpen, Calculator, ChevronDown, Compass, ListChecks, Menu, Send, Users, X } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import UserMenu from "@/components/UserMenu";
 
@@ -13,6 +13,7 @@ import UserMenu from "@/components/UserMenu";
 // second "Dashboard" item pointing at the same URL. Split this into
 // two links once that page exists as its own route.
 const CLASSES_LINK = { href: "/teacher/dashboard", label: "Classes", icon: Users };
+const BROWSE_LINK = { href: "/teacher/classes", label: "Browse", icon: Compass };
 const ASSIGN_LINK = { href: "/teacher/assign", label: "Assign", icon: Send };
 
 // Grouped under the "Content" dropdown — same icons Features.tsx uses
@@ -111,6 +112,7 @@ export default function TeacherNavbar({ user }: { user: { full_name: string | nu
 
         <nav className="hidden items-center gap-1 lg:flex">
           <NavPill {...CLASSES_LINK} active={pathname === CLASSES_LINK.href} />
+          <NavPill {...BROWSE_LINK} active={pathname === BROWSE_LINK.href} />
           <ContentDropdown active={contentActive} pathname={pathname} />
           <NavPill {...ASSIGN_LINK} active={pathname === ASSIGN_LINK.href} />
         </nav>
@@ -145,6 +147,17 @@ export default function TeacherNavbar({ user }: { user: { full_name: string | nu
             >
               <Users className="h-4 w-4" />
               {CLASSES_LINK.label}
+            </Link>
+
+            <Link
+              href={BROWSE_LINK.href}
+              onClick={() => setMenuOpen(false)}
+              className={`flex items-center gap-2 rounded-lg px-2 py-2 transition-colors ${
+                pathname === BROWSE_LINK.href ? "bg-accent/10 text-accent" : "text-fg-muted hover:text-fg"
+              }`}
+            >
+              <Compass className="h-4 w-4" />
+              {BROWSE_LINK.label}
             </Link>
 
             <button

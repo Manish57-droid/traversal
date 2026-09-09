@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { getAuthorizedClassIds, getClassAuthorization, isAuthorized } from "@/lib/classAccess";
 import type { StudentProgressSummary } from "@/types";
 
 // GET /api/teacher/progress?class_id=...
 // Returns a per-student rollup (assigned / completed / attempted / not
-// started) for one class, or every class the teacher owns if omitted.
+// started) for one class, or every class the teacher can manage
+// (owner or approved collaborator) if omitted.
 export async function GET(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -14,16 +16,30 @@ export async function GET(req: Request) {
   const classId = searchParams.get("class_id");
 
   const supabase = supabaseAdmin();
+  let classIds: string[];
 
-  let classQuery = supabase.from("classes").select("id, name");
-  classQuery = user.role === "admin" ? classQuery : classQuery.eq("teacher_id", user.id);
-  if (classId) classQuery = classQuery.eq("id", classId);
+  if (classId) {
+    const auth = await getClassAuthorization(classId, user.id, user.role);
+    if (!isAuthorized(auth)) return NextResponse.json({ summaries: [] });
+    classIds = [classId];
+  } else {
+    const authorizedIds = await getAuthorizedClassIds(user.id, user.role);
+    if (authorizedIds !== null) {
+      classIds = authorizedIds;
+    } else {
+      const { data: allClasses, error } = await supabase.from("classes").select("id");
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      classIds = (allClasses ?? []).map((c) => c.id);
+    }
+  }
 
-  const { data: classes, error: classError } = await classQuery;
+  if (!classIds.length) return NextResponse.json({ summaries: [] });
+
+  const { data: classes, error: classError } = await supabase
+    .from("classes")
+    .select("id, name")
+    .in("id", classIds);
   if (classError) return NextResponse.json({ error: classError.message }, { status: 500 });
-  if (!classes?.length) return NextResponse.json({ summaries: [] });
-
-  const classIds = classes.map((c) => c.id);
 
   const { data: members, error: memberError } = await supabase
     .from("class_members")

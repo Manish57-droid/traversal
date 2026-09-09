@@ -1,18 +1,28 @@
 import { NextResponse } from "next/server";
 import { requireRole, getCurrentAppUser } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { getAuthorizedClassIds } from "@/lib/classAccess";
 
-// GET  /api/classes         -> classes owned by the signed-in teacher
-//                               (or all classes, for admin)
+// GET  /api/classes         -> classes the signed-in teacher can manage
+//                               (owner or approved collaborator; all
+//                               classes for admin). For "every class
+//                               in the system regardless of access",
+//                               see GET /api/classes/browse instead.
 // POST /api/classes { name }-> create a class, returns its join_code
 export async function GET() {
   const user = await getCurrentAppUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const supabase = supabaseAdmin();
-  const query = supabase.from("classes").select("*, class_members(count)");
-  const { data, error } =
-    user.role === "admin" ? await query : await query.eq("teacher_id", user.id);
+  const classIds = await getAuthorizedClassIds(user.id, user.role);
+
+  if (classIds !== null && classIds.length === 0) {
+    return NextResponse.json({ classes: [] });
+  }
+
+  let query = supabase.from("classes").select("*, class_members(count)");
+  if (classIds !== null) query = query.in("id", classIds);
+  const { data, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ classes: data });

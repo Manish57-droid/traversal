@@ -79,6 +79,19 @@ before writing code. It's derived from what already exists in the repo (see `pro
   `lib/supabase/server.ts` (service-role client, bypasses RLS by design — see schema.sql's RLS
   comment) for all reads/writes; RLS itself is defense-in-depth only, not the access-control
   mechanism the app relies on.
+- **Class-scoped authorization**: a class has one owner (`classes.teacher_id`) plus zero or more
+  approved collaborators (`class_collaborators`) with equal rights. **Any route that needs to
+  answer "can this teacher manage this class?" must call `getClassAuthorization(classId, userId,
+  userRole)` from `lib/classAccess.ts`** (returns `'owner' | 'collaborator' | 'admin' | 'none'`;
+  check with `isAuthorized()`), not a raw `teacher_id = user.id` / `created_by = user.id`
+  comparison — that raw-comparison pattern is exactly what predated collaborators and had to be
+  found and refactored route by route (see changelog). For "which classes can this teacher
+  manage" list views (not a single class check), use `getAuthorizedClassIds(userId, userRole)`
+  from the same file instead of hand-rolling the owner+collaborator merge again. Requesting
+  access, approving/rejecting, and revoking collaborators all go through the
+  `/api/classes/[id]/access-requests*` and `/api/classes/[id]/collaborators*` routes — don't
+  insert into `class_collaborators` or `class_access_requests` directly from a new route without
+  reusing that flow.
 - **Error handling**: surface Supabase error messages directly in the JSON error response body
   (`error: error.message`) rather than swallowing or generic-messaging them — matches existing
   routes. On the client, existing pages don't yet do rich error UI (mostly just don't update

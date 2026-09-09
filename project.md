@@ -25,7 +25,12 @@ each student's prep and performance.
 - **Teacher / Admin** — today these are two separate roles in the schema (`teacher`, `admin`),
   not one combined role:
   - **Teacher**: builds the question bank, groups questions into sets, assigns sets to a class,
-    views per-student progress. Will own drive creation/assignment once that module exists.
+    views per-student progress. Will own drive creation/assignment once that module exists. A
+    class now supports co-teaching: one owner (the creator) plus zero or more approved
+    **collaborator** teachers with equal management rights (same access to assign, view analytics,
+    approve/reject further requests) — a teacher can browse every class in the system and request
+    access to one they don't already manage; the owner or an admin approves or rejects. See
+    `class_collaborators` / `class_access_requests` in the schema and `lib/classAccess.ts`.
   - **Admin**: one hard-coded account (by email) that approves/rejects new sign-ups and can
     change anyone's role. Currently a single super-admin, not a per-college admin.
 

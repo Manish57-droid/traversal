@@ -301,3 +301,87 @@
   while at it surfaced two real, pre-existing bugs unrelated to the analytics work itself. The
   navbar had grown to five flat top-level links across three tasks' worth of new pages
   (Aptitude's teacher routes, then analytics) without ever being revisited as a whole.
+
+## [2026-09-09] — Class collaboration model (owner + approved collaborators)
+- What changed: Added `class_access_requests` and `class_collaborators` to
+  `lib/supabase/schema.sql` (enums `class_access_request_status`, `class_collaborator_added_via`;
+  a partial unique index so a teacher can't have two simultaneously-pending requests for the same
+  class — they can re-request after a rejection, since only `pending` rows count; RLS enabled,
+  same service-role-only posture as every other table). Needs the same manual
+  paste-into-the-Supabase-SQL-editor step as always — no migration tooling in this repo. Added
+  `lib/classAccess.ts`: `getClassAuthorization(classId, userId, userRole)` →
+  `'owner' | 'collaborator' | 'admin' | 'none'`, and `getAuthorizedClassIds(userId, userRole)` for
+  list views — the two functions every class-scoped route now calls instead of a raw
+  `teacher_id = user.id` comparison.
+  **Every route refactored to use the new helper** (cross-checked against the previous ownership
+  audit's route list, per instruction, so nothing already-covered was missed):
+  - `GET /api/classes` — now returns owner+collaborator classes (was owner-only) via
+    `getAuthorizedClassIds`.
+  - `POST /api/assign` — class-side check now `getClassAuthorization`+`isAuthorized` (question-set
+    ownership check is unchanged and intentionally separate — see below).
+  - `GET /api/teacher/progress` — both the single-`class_id` path and the "list every class I can
+    manage" path refactored.
+  - `GET /api/teacher/analytics` and `GET /api/teacher/analytics/student/[studentId]` — refactored;
+    both now also return `authorization` in the response so the dashboard UI knows what to show
+    (pending-requests section vs. leave-class button).
+  Explicitly **not** touched, with reasons: `POST/PATCH/DELETE` on `question_sets` and
+  `question_set_items` stay on the existing `created_by = user.id` check — question sets are not
+  part of the class-collaboration model in this pass (a collaborator can assign a class only sets
+  *they* personally created, same as before); sharing sets across collaborators would be a
+  separate, unbuilt feature, noted here rather than silently expanded into scope.
+  New endpoints: `GET /api/classes/browse` (every class in the system, owner name + student count
+  + the requester's own relationship — no roster/content for classes they can't manage);
+  `GET/POST /api/classes/[id]/access-requests` (list pending — owner/admin only; create — any
+  teacher, blocked if already authorized or already pending); `POST
+  .../access-requests/[requestId]/approve` and `.../reject` (owner/admin only); `GET
+  /api/classes/[id]/collaborators` (anyone authorized for the class); `DELETE
+  /api/classes/[id]/collaborators/[teacherId]` (owner, admin, or self-removal only — one
+  collaborator can't remove another); `GET /api/admin/access-requests` (every pending request
+  across every class, for the admin-wide view). Caught and fixed one real bug during
+  implementation, not after: `class_access_requests` has two FKs to `users`
+  (`requesting_teacher_id` and `resolved_by`), which makes PostgREST's automatic embed ambiguous —
+  both places that embed it now use the explicit
+  `users!class_access_requests_requesting_teacher_id_fkey(...)` constraint-name hint.
+  UI: `app/teacher/classes/page.tsx` (browse-all list, click-through only for classes you're
+  authorized for, "Request access" button otherwise); `components/analytics/ClassAccessPanel.tsx`
+  (collaborators list + pending requests with Approve/Reject for owner/admin, "Leave class" for a
+  plain collaborator) added to `app/teacher/dashboard/page.tsx`, which also now reads a `?classId=`
+  query param (for the browse page's click-through) and resolves the current user's id client-side
+  via `supabaseBrowser().auth.getUser()` for the leave-class action; `app/admin/access-requests/
+  page.tsx` (admin-wide pending-request view). Added a "Browse" nav item (Compass icon) to
+  `TeacherNavbar` and "Access requests"/"Browse classes" links to the admin section of the shared
+  `Navbar`. Updated `ai.md` (the new required-helper rule, replacing the old raw-comparison
+  guidance) and `project.md` §2 (Teacher role now describes co-teaching).
+- **Step 6 verification**: same method as the prior ownership audit — traced the exact query/
+  authorization chain for each scenario rather than live multi-teacher HTTP testing (no seeded
+  test accounts or session tooling in this environment to script that with; flagging the method,
+  not overstating it). A non-authorized teacher: `getClassAuthorization` returns `'none'` for them
+  on that class (no `classes.teacher_id` match, no `class_collaborators` row), so `GET
+  /api/teacher/analytics`/`.../student/[id]` both 404 before touching roster or progress data, and
+  `POST /api/assign` 404s before writing anything. A pending request grants nothing: the
+  authorization helper never queries `class_access_requests` at all — only `classes.teacher_id`
+  and `class_collaborators` — so a pending (or rejected) row has zero effect on what a teacher can
+  do until an owner/admin actually calls the approve endpoint, which is the only code path that
+  inserts into `class_collaborators`. A rejected request likewise grants nothing, and (per the
+  partial unique index) doesn't block the same teacher from requesting again later. Both theme
+  modes checked by re-reading every new/changed file for hardcoded color classes — none found;
+  all new UI uses existing tokens (`fg`, `fg-muted`, `fg-subtle`, `accent`, `success`, `warn`,
+  `line`, `surface-2`), consistent with the earlier theming migration.
+- Files touched: `lib/supabase/schema.sql`, `lib/classAccess.ts` (new), `types/index.ts`,
+  `app/api/classes/route.ts`, `app/api/assign/route.ts`, `app/api/teacher/progress/route.ts`,
+  `app/api/teacher/analytics/route.ts`, `app/api/teacher/analytics/student/[studentId]/route.ts`,
+  `app/api/classes/browse/route.ts` (new), `app/api/classes/[id]/access-requests/route.ts` (new),
+  `app/api/classes/[id]/access-requests/[requestId]/approve/route.ts` (new),
+  `app/api/classes/[id]/access-requests/[requestId]/reject/route.ts` (new),
+  `app/api/classes/[id]/collaborators/route.ts` (new),
+  `app/api/classes/[id]/collaborators/[teacherId]/route.ts` (new),
+  `app/api/admin/access-requests/route.ts` (new), `app/teacher/classes/page.tsx` (new),
+  `app/teacher/dashboard/page.tsx`, `app/admin/access-requests/page.tsx` (new),
+  `components/analytics/ClassAccessPanel.tsx` (new), `components/TeacherNavbar.tsx`,
+  `components/Navbar.tsx`, `ai.md`, `project.md`.
+- Why: Co-teaching (multiple teachers sharing a class) wasn't representable at all before — a
+  class had exactly one manager with no path to add another. Centralizing the authorization check
+  in one helper (rather than teaching each route its own owner-or-collaborator logic) was the
+  point of Step 2: the next class-scoped route only has to call `getClassAuthorization` correctly
+  once, instead of every future route risking its own subtly-wrong raw comparison the way `assign`
+  and `question-sets/items` already had before the last audit.

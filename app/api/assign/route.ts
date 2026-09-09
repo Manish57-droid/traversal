@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { getClassAuthorization, isAuthorized } from "@/lib/classAccess";
 
 // POST /api/assign { question_set_id, class_id, due_date? }
 // Assigns an entire question set to every current member of a class,
@@ -17,15 +18,25 @@ export async function POST(req: Request) {
 
   const supabase = supabaseAdmin();
 
-  // Ownership check — without this, any signed-in teacher could assign
-  // into a class they don't own (or assign a question set they didn't
-  // build) just by knowing/guessing its id. Admin bypasses both.
+  // Authorization check — without this, any signed-in teacher could
+  // assign into a class they don't own/collaborate on (or assign a
+  // question set they didn't build) just by knowing/guessing its id.
+  // Class access: owner, approved collaborator, or admin. Question
+  // sets are NOT part of the class-collaboration model in this pass —
+  // a collaborator can only assign sets they personally created, same
+  // as before; sharing sets across collaborators is a separate,
+  // unbuilt feature.
+  const classAuth = await getClassAuthorization(class_id, user.id, user.role);
+  if (!isAuthorized(classAuth)) {
+    return NextResponse.json({ error: "Class not found." }, { status: 404 });
+  }
   if (user.role !== "admin") {
-    const [{ data: klass }, { data: set }] = await Promise.all([
-      supabase.from("classes").select("id").eq("id", class_id).eq("teacher_id", user.id).maybeSingle(),
-      supabase.from("question_sets").select("id").eq("id", question_set_id).eq("created_by", user.id).maybeSingle(),
-    ]);
-    if (!klass) return NextResponse.json({ error: "Class not found." }, { status: 404 });
+    const { data: set } = await supabase
+      .from("question_sets")
+      .select("id")
+      .eq("id", question_set_id)
+      .eq("created_by", user.id)
+      .maybeSingle();
     if (!set) return NextResponse.json({ error: "Question set not found." }, { status: 404 });
   }
 

@@ -170,3 +170,37 @@ export interface StudentAnalyticsDetail {
   dsa: StudentDsaDetailRow[];
   aptitude: StudentAptitudeDetailRow[];
 }
+
+// ---------- Class collaboration ----------
+
+export type ClassRelationship = "owner" | "collaborator" | "admin" | "pending" | "none";
+
+/** One row of the "browse all classes" list. */
+export interface ClassBrowseRow {
+  id: string;
+  name: string;
+  owner_name: string;
+  student_count: number;
+  relationship: ClassRelationship;
+}
+
+export interface ClassAccessRequest {
+  id: string;
+  requesting_teacher_id: string;
+  requested_at: string;
+  full_name: string | null;
+  email: string;
+}
+
+/** Same shape, with the class identified — used by the admin-wide view. */
+export interface AdminClassAccessRequest extends ClassAccessRequest {
+  class_id: string;
+  class_name: string;
+}
+
+export interface ClassCollaborator {
+  teacher_id: string;
+  added_at: string;
+  full_name: string | null;
+  email: string;
+}

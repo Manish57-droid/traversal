@@ -53,7 +53,9 @@ export default function Navbar({ role, authed = true }: { role?: UserRole; authe
               <>
                 <Link href="/admin/dashboard" className="hover:text-fg">Overview</Link>
                 <Link href="/admin/users" className="hover:text-fg">Users</Link>
+                <Link href="/admin/access-requests" className="hover:text-fg">Access requests</Link>
                 <Link href="/teacher/dashboard" className="hover:text-fg">Class progress</Link>
+                <Link href="/teacher/classes" className="hover:text-fg">Browse classes</Link>
                 <Link href="/teacher/question-sets" className="hover:text-fg">Question sets</Link>
                 <Link href="/topics" className="hover:text-fg">Topics</Link>
               </>

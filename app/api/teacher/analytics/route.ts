@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { getClassAuthorization, isAuthorized } from "@/lib/classAccess";
 import type { ClassAnalyticsSummary, StudentAnalyticsRow } from "@/types";
 
 // GET /api/teacher/analytics?classId=...
 // Combined DSA + Aptitude rollup for one class: class-wide totals for
 // the summary charts, plus a per-student row for the sortable table.
-// Teacher/admin only, and a teacher may only see their own classes.
+// Teacher/admin only, and a teacher must be the class's owner or an
+// approved collaborator (equal rights) — checked via the single
+// getClassAuthorization helper, not a raw ownership comparison.
 export async function GET(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -17,9 +20,15 @@ export async function GET(req: Request) {
 
   const supabase = supabaseAdmin();
 
-  let classQuery = supabase.from("classes").select("id, name").eq("id", classId);
-  if (user.role !== "admin") classQuery = classQuery.eq("teacher_id", user.id);
-  const { data: klass, error: classError } = await classQuery.maybeSingle();
+  const authorization = await getClassAuthorization(classId, user.id, user.role);
+  if (!isAuthorized(authorization)) {
+    return NextResponse.json({ error: "Class not found." }, { status: 404 });
+  }
+  const { data: klass, error: classError } = await supabase
+    .from("classes")
+    .select("id, name")
+    .eq("id", classId)
+    .maybeSingle();
 
   if (classError) return NextResponse.json({ error: classError.message }, { status: 500 });
   if (!klass) return NextResponse.json({ error: "Class not found." }, { status: 404 });
@@ -36,6 +45,8 @@ export async function GET(req: Request) {
     return NextResponse.json({
       summary: { dsa: { completed: 0, attempted: 0, not_started: 0 }, aptitude: { attempted: 0, correct: 0, incorrect: 0 } },
       students: [],
+      class: klass,
+      authorization,
     });
   }
 
@@ -88,5 +99,5 @@ export async function GET(req: Request) {
     };
   });
 
-  return NextResponse.json({ summary, students, class: klass });
+  return NextResponse.json({ summary, students, class: klass, authorization });
 }
