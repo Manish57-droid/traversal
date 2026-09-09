@@ -4,7 +4,15 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 
 // POST   /api/question-sets/:id/items { question_id } -> add one question
 // DELETE /api/question-sets/:id/items { question_id } -> remove one question
-// Teacher/admin only.
+// Teacher/admin only, and only the set's own creator (or admin) may
+// mutate it — otherwise any teacher could add/remove questions from a
+// set they don't own just by knowing its id.
+async function assertOwnsSet(supabase: ReturnType<typeof supabaseAdmin>, setId: string, userId: string, isAdmin: boolean) {
+  if (isAdmin) return true;
+  const { data } = await supabase.from("question_sets").select("id").eq("id", setId).eq("created_by", userId).maybeSingle();
+  return !!data;
+}
+
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -15,6 +23,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }
 
   const supabase = supabaseAdmin();
+  if (!(await assertOwnsSet(supabase, params.id, user.id, user.role === "admin"))) {
+    return NextResponse.json({ error: "Question set not found." }, { status: 404 });
+  }
+
   const { error } = await supabase
     .from("question_set_items")
     .insert({ question_set_id: params.id, question_id });
@@ -35,6 +47,10 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   }
 
   const supabase = supabaseAdmin();
+  if (!(await assertOwnsSet(supabase, params.id, user.id, user.role === "admin"))) {
+    return NextResponse.json({ error: "Question set not found." }, { status: 404 });
+  }
+
   const { error } = await supabase
     .from("question_set_items")
     .delete()

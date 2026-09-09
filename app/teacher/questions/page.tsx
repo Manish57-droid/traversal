@@ -50,27 +50,27 @@ export default function TeacherQuestionsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-2xl text-white sm:text-3xl">Question bank</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <h1 className="font-display text-2xl text-fg sm:text-3xl">Question bank</h1>
+        <p className="mt-1 text-sm text-fg-muted">
           Add links here so they're ready to assign to a class from the Assign page.
         </p>
       </div>
 
       <form onSubmit={handleAdd} className="card grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5 lg:items-end">
         <div className="lg:col-span-2">
-          <label className="mb-1 block text-xs text-slate-400">Question link</label>
+          <label className="mb-1 block text-xs text-fg-muted">Question link</label>
           <input required type="url" className="input" placeholder="https://..." value={url} onChange={(e) => setUrl(e.target.value)} />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-slate-400">Title</label>
+          <label className="mb-1 block text-xs text-fg-muted">Title</label>
           <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-slate-400">Topic</label>
+          <label className="mb-1 block text-xs text-fg-muted">Topic</label>
           <input className="input" placeholder="Graphs" value={topic} onChange={(e) => setTopic(e.target.value)} />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-slate-400">Difficulty</label>
+          <label className="mb-1 block text-xs text-fg-muted">Difficulty</label>
           <select className="input" value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
             <option value="unknown">Unspecified</option>
             <option value="easy">Easy</option>
@@ -89,15 +89,15 @@ export default function TeacherQuestionsPage() {
           <div key={q.id} className="card flex flex-wrap items-center justify-between gap-3 p-4">
             <div>
               <span
-                className="mr-2 rounded px-2 py-0.5 text-xs font-medium text-bg"
+                className="mr-2 rounded px-2 py-0.5 text-xs font-medium text-ink-fixed"
                 style={{ backgroundColor: PLATFORM_COLORS[q.platform] }}
               >
                 {PLATFORM_LABELS[q.platform]}
               </span>
-              <a href={q.url} target="_blank" rel="noopener noreferrer" className="font-medium text-slate-100 hover:text-success hover:underline">
+              <a href={q.url} target="_blank" rel="noopener noreferrer" className="font-medium text-fg hover:text-success hover:underline">
                 {q.title}
               </a>
-              {q.topic && <span className="ml-2 text-xs text-slate-400">· {q.topic}</span>}
+              {q.topic && <span className="ml-2 text-xs text-fg-muted">· {q.topic}</span>}
             </div>
           </div>
         ))}

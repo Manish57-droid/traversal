@@ -38,9 +38,9 @@ export default function TopicPage({ params }: { params: { slug: string } }) {
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/topics" className="text-sm text-slate-400 hover:text-white">← All topics</Link>
-        <h1 className="mt-2 font-display text-2xl text-white sm:text-3xl">{topic.title}</h1>
-        <p className="mt-1 text-sm text-slate-400">{topic.summary}</p>
+        <Link href="/topics" className="text-sm text-fg-muted hover:text-fg">← All topics</Link>
+        <h1 className="mt-2 font-display text-2xl text-fg sm:text-3xl">{topic.title}</h1>
+        <p className="mt-1 text-sm text-fg-muted">{topic.summary}</p>
       </div>
 
       <TheoryPanel theory={topic.theory} />
@@ -51,7 +51,7 @@ export default function TopicPage({ params }: { params: { slug: string } }) {
       />
 
       <div>
-        <h2 className="mb-3 font-display text-xl text-white">Test yourself</h2>
+        <h2 className="mb-3 font-display text-xl text-fg">Test yourself</h2>
         <TopicQuiz questions={topic.quiz} />
       </div>
     </div>

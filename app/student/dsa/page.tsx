@@ -44,8 +44,8 @@ export default function StudentDsaPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-2xl text-white sm:text-3xl">Your DSA sheet</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <h1 className="font-display text-2xl text-fg sm:text-3xl">Your DSA sheet</h1>
+        <p className="mt-1 text-sm text-fg-muted">
           Everything here was assigned by a teacher. Click through to solve it on the real
           platform, then come back and check it off.
         </p>
@@ -59,7 +59,7 @@ export default function StudentDsaPage() {
             className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
               filter === f
                 ? "border-success/60 bg-success/10 text-success"
-                : "border-white/10 text-slate-400 hover:border-white/25"
+                : "border-line/70 text-fg-muted hover:border-line"
             }`}
           >
             {f === "all" ? "All" : f.replace("_", " ")}
@@ -68,9 +68,9 @@ export default function StudentDsaPage() {
       </div>
 
       <div className="space-y-3">
-        {loading && <p className="text-sm text-slate-400">Loading your sheet…</p>}
+        {loading && <p className="text-sm text-fg-muted">Loading your sheet…</p>}
         {!loading && filtered.length === 0 && (
-          <p className="card p-6 text-center text-sm text-slate-400">
+          <p className="card p-6 text-center text-sm text-fg-muted">
             Nothing here yet — once your teacher assigns a question set, it'll show up here. Make
             sure you've joined their class from your dashboard.
           </p>

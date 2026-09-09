@@ -19,8 +19,8 @@ export default async function TopicsLayout({ children }: { children: React.React
             href="/sign-up"
             className="card mb-6 flex flex-wrap items-center justify-between gap-3 border-accent/30 p-4 transition-colors hover:border-accent/60"
           >
-            <p className="text-sm text-slate-300">
-              Reading for free — <span className="text-white">sign up</span> to get questions
+            <p className="text-sm text-fg">
+              Reading for free — <span className="text-fg">sign up</span> to get questions
               assigned by a teacher and track your own DSA progress.
             </p>
             <span className="btn-primary shrink-0 px-4 py-2 text-sm">Create free account</span>

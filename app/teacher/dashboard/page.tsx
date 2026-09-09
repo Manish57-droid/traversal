@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import ProgressBar from "@/components/ProgressBar";
-import type { StudentProgressSummary } from "@/types";
+import ClassSummaryCharts from "@/components/analytics/ClassSummaryCharts";
+import StudentTable from "@/components/analytics/StudentTable";
+import StudentDrawer from "@/components/analytics/StudentDrawer";
+import type { ClassAnalyticsSummary, StudentAnalyticsRow } from "@/types";
 
 interface ClassRow {
   id: string;
@@ -13,9 +15,14 @@ interface ClassRow {
 export default function TeacherDashboardPage() {
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>("");
-  const [summaries, setSummaries] = useState<StudentProgressSummary[]>([]);
   const [newClassName, setNewClassName] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loadingClasses, setLoadingClasses] = useState(true);
+
+  const [summary, setSummary] = useState<ClassAnalyticsSummary | null>(null);
+  const [students, setStudents] = useState<StudentAnalyticsRow[]>([]);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
 
   async function loadClasses() {
     const res = await fetch("/api/classes");
@@ -25,14 +32,24 @@ export default function TeacherDashboardPage() {
   }
 
   useEffect(() => {
-    loadClasses().finally(() => setLoading(false));
+    loadClasses().finally(() => setLoadingClasses(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    const qs = selectedClass ? `?class_id=${selectedClass}` : "";
-    fetch(`/api/teacher/progress${qs}`)
+    if (!selectedClass) {
+      setSummary(null);
+      setStudents([]);
+      return;
+    }
+    setLoadingAnalytics(true);
+    fetch(`/api/teacher/analytics?classId=${selectedClass}`)
       .then((r) => r.json())
-      .then((d) => setSummaries(d.summaries ?? []));
+      .then((d) => {
+        setSummary(d.summary ?? null);
+        setStudents(d.students ?? []);
+      })
+      .finally(() => setLoadingAnalytics(false));
   }, [selectedClass]);
 
   async function handleCreateClass(e: React.FormEvent) {
@@ -49,70 +66,58 @@ export default function TeacherDashboardPage() {
     }
   }
 
+  const activeClass = classes.find((c) => c.id === selectedClass);
+
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-2xl text-white sm:text-3xl">Class progress</h1>
-        <p className="mt-1 text-sm text-slate-400">See how every student is moving through assigned questions.</p>
+        <h1 className="font-display text-2xl text-fg sm:text-3xl">Class progress</h1>
+        <p className="mt-1 text-sm text-fg-muted">
+          Combined DSA and Aptitude performance for every student in a class.
+        </p>
       </div>
 
       <form onSubmit={handleCreateClass} className="card flex flex-wrap items-end gap-3 p-4">
-        <div className="flex-1 min-w-[200px]">
-          <label className="mb-1 block text-xs text-slate-400" htmlFor="className">New class name</label>
+        <div className="min-w-[200px] flex-1">
+          <label className="mb-1 block text-xs text-fg-muted" htmlFor="className">New class name</label>
           <input id="className" className="input" placeholder="e.g. CSE-3B" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} />
         </div>
         <button type="submit" className="btn-secondary">Create class</button>
       </form>
 
-      {!loading && classes.length === 0 && (
-        <p className="card p-6 text-center text-sm text-slate-400">
+      {!loadingClasses && classes.length === 0 && (
+        <p className="card p-6 text-center text-sm text-fg-muted">
           Create a class above, then share its join code with students.
         </p>
       )}
 
       {classes.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
-          <select
-            className="input w-auto"
-            value={selectedClass}
-            onChange={(e) => setSelectedClass(e.target.value)}
-          >
+          <select className="input w-auto" value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)}>
             {classes.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-          {classes.find((c) => c.id === selectedClass) && (
-            <span className="text-xs text-slate-400">
-              Join code: <span className="font-mono text-success">{classes.find((c) => c.id === selectedClass)?.join_code}</span>
+          {activeClass && (
+            <span className="text-xs text-fg-muted">
+              Join code: <span className="font-mono text-success">{activeClass.join_code}</span>
             </span>
           )}
         </div>
       )}
 
-      <div className="space-y-3">
-        {summaries.length === 0 && classes.length > 0 && (
-          <p className="card p-6 text-center text-sm text-slate-400">
-            No students in this class yet — share the join code above.
-          </p>
-        )}
-        {summaries.map((s) => {
-          const pct = s.total_assigned ? (s.completed / s.total_assigned) * 100 : 0;
-          return (
-            <div key={s.student_id} className="card p-4">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="font-medium text-slate-100">{s.full_name || s.email}</p>
-                  <p className="text-xs text-slate-400">
-                    {s.completed} completed · {s.attempted} attempted · {s.not_started} not started
-                  </p>
-                </div>
-                <span className="text-sm text-slate-400">{Math.round(pct)}%</span>
-              </div>
-              <ProgressBar value={pct} />
-            </div>
-          );
-        })}
-      </div>
+      {loadingAnalytics && <p className="text-sm text-fg-muted">Loading analytics…</p>}
+
+      {!loadingAnalytics && summary && (
+        <>
+          <ClassSummaryCharts summary={summary} />
+          <StudentTable students={students} onSelect={setSelectedStudentId} />
+        </>
+      )}
+
+      {selectedStudentId && selectedClass && (
+        <StudentDrawer studentId={selectedStudentId} classId={selectedClass} onClose={() => setSelectedStudentId(null)} />
+      )}
     </div>
   );
 }

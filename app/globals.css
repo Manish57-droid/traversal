@@ -8,7 +8,17 @@
   /* "Circuit Board" palette — a dark FR4-green base with copper,
      gold, and flux-orange accents, standing in for traces, plated
      contacts, and solder. RGB triples (no commas) so Tailwind's
-     rgb(var(--x) / <alpha-value>) pattern can add opacity. */
+     rgb(var(--x) / <alpha-value>) pattern can add opacity.
+
+     This bare :root block is only a no-JS/pre-hydration fallback now.
+     next-themes (components/ThemeProvider.tsx) writes an explicit
+     `.light` or `.dark` class to <html> on every page, site-wide, via
+     a blocking script that runs before paint — so in practice every
+     visitor gets one of the two classed palettes below, not this one.
+     Default theme is light (see ThemeProvider's `defaultTheme`); this
+     :root copy matches `.dark` simply because that was the app's one
+     and only palette before theming existed, not because dark is
+     still the default anywhere. */
   --bg: 10 18 13;            /* #0A120D deep PCB green-black */
   --surface: 16 27 20;       /* #101B14 */
   --surface-2: 23 37 28;     /* #17251C */
@@ -22,6 +32,48 @@
   --success-2: 245 212 136;  /* #F5D488 gold, lighter */
   --warn: 255 107 74;        /* #FF6B4A flux orange-red */
   --warn-2: 255 148 120;     /* #FF9478 flux, lighter */
+}
+
+/* Dark palette, applied by next-themes as a class on <html> — site-wide,
+   on every page — whenever the visitor's stored/chosen theme is dark. */
+.dark {
+  color-scheme: dark;
+  --bg: 10 18 13;
+  --surface: 16 27 20;
+  --surface-2: 23 37 28;
+  --fg: 236 233 225;
+  --fg-muted: 168 178 168;
+  --fg-subtle: 120 133 122;
+  --line: 46 64 51;
+  --accent: 217 130 76;
+  --accent-2: 242 168 118;
+  --success: 232 184 75;
+  --success-2: 245 212 136;
+  --warn: 255 107 74;
+  --warn-2: 255 148 120;
+}
+
+/* Light palette — same "circuit board" family, same token names,
+   re-tuned for contrast on a warm paper background instead of PCB
+   black. Applied by next-themes as a class on <html>, site-wide, and
+   is the default theme for every visitor (see ThemeProvider). */
+.light {
+  color-scheme: light;
+  --bg: 250 247 242;         /* #FAF7F2 warm paper */
+  --surface: 255 255 255;    /* #FFFFFF */
+  --surface-2: 241 236 227;  /* #F1ECE3 */
+  --fg: 26 20 16;            /* #1A1410 warm ink */
+  --fg-muted: 96 89 79;      /* #60594F */
+  --fg-subtle: 120 113 101;  /* #786F65 — darkened from an earlier pass;
+                                 the original (#8A8276) only hit ~3.55:1
+                                 against --bg, below WCAG AA for text */
+  --line: 226 217 202;       /* #E2D9CA */
+  --accent: 176 92 42;       /* #B05C2A copper, deepened for contrast */
+  --accent-2: 154 78 34;     /* #9A4E22 copper, darker (hover) */
+  --success: 150 108 20;     /* #966C14 gold, deepened for contrast */
+  --success-2: 120 84 12;    /* #78540C gold, darker (hover) */
+  --warn: 194 68 40;         /* #C24428 flux orange-red, deepened */
+  --warn-2: 156 50 28;       /* #9C321C flux, darker (hover) */
 }
 
 html {

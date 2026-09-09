@@ -51,14 +51,14 @@ export default function TeacherAssignPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-2xl text-white sm:text-3xl">Assign a question set</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <h1 className="font-display text-2xl text-fg sm:text-3xl">Assign a question set</h1>
+        <p className="mt-1 text-sm text-fg-muted">
           Send a whole set to a class at once. Build sets first on the Question sets page.
         </p>
       </div>
 
       {sets.length === 0 || classes.length === 0 ? (
-        <p className="card p-6 text-center text-sm text-slate-400">
+        <p className="card p-6 text-center text-sm text-fg-muted">
           {sets.length === 0
             ? "Create a question set first on the Question sets page."
             : "Create a class first on the Class progress page."}
@@ -66,7 +66,7 @@ export default function TeacherAssignPage() {
       ) : (
         <form onSubmit={handleAssign} className="card grid gap-4 p-5 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-xs text-slate-400">Question set</label>
+            <label className="mb-1 block text-xs text-fg-muted">Question set</label>
             <select className="input" value={setId} onChange={(e) => setSetId(e.target.value)}>
               {sets.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -76,7 +76,7 @@ export default function TeacherAssignPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs text-slate-400">Class</label>
+            <label className="mb-1 block text-xs text-fg-muted">Class</label>
             <select className="input" value={classId} onChange={(e) => setClassId(e.target.value)}>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -84,11 +84,11 @@ export default function TeacherAssignPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs text-slate-400">Due date (optional)</label>
+            <label className="mb-1 block text-xs text-fg-muted">Due date (optional)</label>
             <input type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </div>
           <button type="submit" className="btn-primary self-end">Assign to class</button>
-          {message && <p className="text-sm text-slate-300 sm:col-span-2">{message}</p>}
+          {message && <p className="text-sm text-fg sm:col-span-2">{message}</p>}
         </form>
       )}
     </div>

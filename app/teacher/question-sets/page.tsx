@@ -80,8 +80,8 @@ export default function TeacherQuestionSetsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-2xl text-white sm:text-3xl">Question sets</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <h1 className="font-display text-2xl text-fg sm:text-3xl">Question sets</h1>
+        <p className="mt-1 text-sm text-fg-muted">
           Group questions from the bank into a named set, then assign the whole thing on the Assign page.
         </p>
       </div>
@@ -89,27 +89,27 @@ export default function TeacherQuestionSetsPage() {
       <form onSubmit={handleCreate} className="card space-y-4 p-5">
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-xs text-slate-400">Set name</label>
+            <label className="mb-1 block text-xs text-fg-muted">Set name</label>
             <input className="input" placeholder="Week 3 - Arrays" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-slate-400">Description (optional)</label>
+            <label className="mb-1 block text-xs text-fg-muted">Description (optional)</label>
             <input className="input" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
         </div>
 
         {questions.length > 0 && (
           <div>
-            <p className="mb-2 text-xs text-slate-400">Pick questions from the bank to include</p>
+            <p className="mb-2 text-xs text-fg-muted">Pick questions from the bank to include</p>
             <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
               {questions.map((q) => (
-                <label key={q.id} className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm hover:border-white/25">
+                <label key={q.id} className="flex items-center gap-2 rounded-lg border border-line/70 px-3 py-2 text-sm hover:border-line">
                   <input
                     type="checkbox"
                     checked={selectedQuestionIds.includes(q.id)}
                     onChange={() => toggleQuestion(q.id)}
                   />
-                  <span className="text-slate-300">[{PLATFORM_LABELS[q.platform]}] {q.title}</span>
+                  <span className="text-fg">[{PLATFORM_LABELS[q.platform]}] {q.title}</span>
                 </label>
               ))}
             </div>
@@ -126,8 +126,8 @@ export default function TeacherQuestionSetsPage() {
           <div key={s.id} className="card p-5">
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <p className="font-medium text-slate-100">{s.name}</p>
-                {s.description && <p className="text-xs text-slate-400">{s.description}</p>}
+                <p className="font-medium text-fg">{s.name}</p>
+                {s.description && <p className="text-xs text-fg-muted">{s.description}</p>}
               </div>
               <button
                 onClick={() => setAddingTo(addingTo === s.id ? null : s.id)}
@@ -153,14 +153,14 @@ export default function TeacherQuestionSetsPage() {
 
             <div className="space-y-2">
               {s.question_set_items.length === 0 && (
-                <p className="text-xs text-slate-500">No questions in this set yet.</p>
+                <p className="text-xs text-fg-subtle">No questions in this set yet.</p>
               )}
               {s.question_set_items.map((it) => (
-                <div key={it.question_id} className="flex items-center justify-between rounded-lg border border-white/10 px-3 py-2 text-sm">
-                  <span className="text-slate-300">
+                <div key={it.question_id} className="flex items-center justify-between rounded-lg border border-line/70 px-3 py-2 text-sm">
+                  <span className="text-fg">
                     [{PLATFORM_LABELS[it.questions.platform]}] {it.questions.title}
                   </span>
-                  <button onClick={() => handleRemove(s.id, it.question_id)} className="text-xs text-slate-500 hover:text-red-400">
+                  <button onClick={() => handleRemove(s.id, it.question_id)} className="text-xs text-fg-subtle hover:text-red-400">
                     Remove
                   </button>
                 </div>

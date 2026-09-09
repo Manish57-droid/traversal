@@ -22,8 +22,8 @@ export default function AdminDashboardPage() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl text-white sm:text-3xl">Overview</h1>
-          <p className="mt-1 text-sm text-slate-400">Platform-wide numbers at a glance.</p>
+          <h1 className="font-display text-2xl text-fg sm:text-3xl">Overview</h1>
+          <p className="mt-1 text-sm text-fg-muted">Platform-wide numbers at a glance.</p>
         </div>
         <Link href="/admin/users" className="btn-secondary">Manage users</Link>
       </div>
@@ -36,15 +36,15 @@ export default function AdminDashboardPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="card p-5">
-          <p className="text-xs text-slate-400">Students</p>
+          <p className="text-xs text-fg-muted">Students</p>
           <p className="font-display text-3xl text-success">{counts.student}</p>
         </div>
         <div className="card p-5">
-          <p className="text-xs text-slate-400">Teachers</p>
+          <p className="text-xs text-fg-muted">Teachers</p>
           <p className="font-display text-3xl text-warn">{counts.teacher}</p>
         </div>
         <div className="card p-5">
-          <p className="text-xs text-slate-400">Admins</p>
+          <p className="text-xs text-fg-muted">Admins</p>
           <p className="font-display text-3xl text-accent-2">{counts.admin}</p>
         </div>
       </div>

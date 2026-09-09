@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentAppUser } from "@/lib/roles";
-import Navbar from "@/components/Navbar";
+import TeacherNavbar from "@/components/TeacherNavbar";
 
 export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentAppUser();
@@ -10,7 +10,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
 
   return (
     <div className="min-h-screen bg-bg">
-      <Navbar role="teacher" />
+      <TeacherNavbar user={{ full_name: user.full_name, email: user.email }} />
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">{children}</main>
     </div>
   );

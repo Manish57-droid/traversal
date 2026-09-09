@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Hanken_Grotesk, Space_Mono } from "next/font/google";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -22,9 +23,9 @@ const spaceMono = Space_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Traversal — DSA Practice & Progress",
+  title: "Traversal — Placement Prep & Simulated Drives",
   description:
-    "Paste a problem link, solve it on the real platform, check it off, and watch your DSA progress build up.",
+    "Aptitude, technical, and DSA practice, off-campus opportunities, and simulated placement drives — one platform for students and the colleges training them.",
 };
 
 export default function RootLayout({
@@ -33,8 +34,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${hankenGrotesk.variable} ${spaceMono.variable}`}>
-      <body>{children}</body>
+    <html
+      lang="en"
+      className={`${fraunces.variable} ${hankenGrotesk.variable} ${spaceMono.variable}`}
+      suppressHydrationWarning
+    >
+      <body suppressHydrationWarning>
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }

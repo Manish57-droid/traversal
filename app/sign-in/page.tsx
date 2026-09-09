@@ -33,18 +33,18 @@ export default function SignInPage() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg px-4">
-      <Link href="/" className="text-sm text-slate-400 hover:text-white">
+      <Link href="/" className="text-sm text-fg-muted hover:text-fg">
         ← Back to home
       </Link>
       <form onSubmit={handleSubmit} className="card w-full max-w-sm space-y-4 p-6">
-        <p className="font-display text-xl text-white">Sign in</p>
+        <p className="font-display text-xl text-fg">Sign in</p>
 
         <div>
-          <label className="mb-1 block text-xs text-slate-400" htmlFor="email">Email</label>
+          <label className="mb-1 block text-xs text-fg-muted" htmlFor="email">Email</label>
           <input id="email" type="email" required className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-slate-400" htmlFor="password">Password</label>
+          <label className="mb-1 block text-xs text-fg-muted" htmlFor="password">Password</label>
           <input id="password" type="password" required className="input" value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
 
@@ -54,7 +54,7 @@ export default function SignInPage() {
           {submitting ? "Signing in..." : "Sign in"}
         </button>
 
-        <p className="text-center text-xs text-slate-500">
+        <p className="text-center text-xs text-fg-subtle">
           No account yet?{" "}
           <Link href="/sign-up" className="text-success hover:underline">Create one</Link>
         </p>

@@ -84,3 +84,89 @@ export interface StudentProgressSummary {
   attempted: number;
   not_started: number;
 }
+
+// ---------- Aptitude module ----------
+
+export type AptitudeCategory = "quant" | "logical" | "verbal";
+
+export type AptitudeAttemptStatus = "in_progress" | "submitted" | "expired";
+
+export interface AptitudeQuestion {
+  id: string;
+  category: AptitudeCategory;
+  topic: string;
+  prompt: string;
+  options: string[];
+  correct_option: number;
+  explanation: string | null;
+  difficulty: QuestionDifficulty;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface AptitudePracticeHistory {
+  id: string;
+  student_id: string;
+  question_id: string;
+  attempts_count: number;
+  last_selected_option: number | null;
+  last_correct: boolean | null;
+  last_attempted_at: string | null;
+  first_correct_at: string | null;
+  updated_at: string;
+}
+
+export interface AptitudeTest {
+  id: string;
+  name: string;
+  description: string | null;
+  category: AptitudeCategory | null;
+  time_limit_minutes: number;
+  negative_marking_fraction: number;
+  created_by: string;
+  created_at: string;
+}
+
+// ---------- Teacher analytics dashboard ----------
+
+/** Class-wide totals behind the two summary charts. */
+export interface ClassAnalyticsSummary {
+  dsa: { completed: number; attempted: number; not_started: number };
+  aptitude: { attempted: number; correct: number; incorrect: number };
+}
+
+/** One row of the sortable per-student table. */
+export interface StudentAnalyticsRow {
+  student_id: string;
+  full_name: string | null;
+  email: string;
+  dsa_completion_pct: number;
+  aptitude_accuracy_pct: number;
+  total_attempted: number;
+}
+
+export interface StudentDsaDetailRow {
+  question_id: string;
+  title: string;
+  platform: QuestionPlatform;
+  status: QuestionStatus;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export interface StudentAptitudeDetailRow {
+  question_id: string;
+  topic: string;
+  category: AptitudeCategory;
+  last_correct: boolean | null;
+  attempts_count: number;
+  first_correct_at: string | null;
+}
+
+export interface StudentAnalyticsDetail {
+  student_id: string;
+  full_name: string | null;
+  email: string;
+  dsa: StudentDsaDetailRow[];
+  aptitude: StudentAptitudeDetailRow[];
+}

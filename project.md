@@ -1,0 +1,159 @@
+# Traversal — Project Overview
+
+_Last updated: 2026-09-09_
+
+This is the single source of truth for what Traversal is, what exists today, and where it's
+going. Update this file whenever scope, roles, or the data model change — don't let it drift
+from reality.
+
+## 1. Vision
+
+Traversal is a placement-preparation platform where students prepare for campus/off-campus
+recruitment — aptitude, technical rounds, and DSA practice — and discover off-campus
+opportunities, all in one place. On top of practice, students can run through a **simulated
+"company drive"**: a timed, multi-round flow that mirrors how a real recruiter actually runs a
+drive, so the first time a student sees that format isn't during the real thing.
+
+Teachers and colleges use the same platform to assign practice, build/run drives, and monitor
+each student's prep and performance.
+
+## 2. User roles
+
+- **Student** — practices DSA (today) and, per the roadmap, aptitude/technical content; joins a
+  class via a join code; gets assignments from a teacher; takes simulated drives; tracks their
+  own progress.
+- **Teacher / Admin** — today these are two separate roles in the schema (`teacher`, `admin`),
+  not one combined role:
+  - **Teacher**: builds the question bank, groups questions into sets, assigns sets to a class,
+    views per-student progress. Will own drive creation/assignment once that module exists.
+  - **Admin**: one hard-coded account (by email) that approves/rejects new sign-ups and can
+    change anyone's role. Currently a single super-admin, not a per-college admin.
+
+> **Decided (2026-09-09):** no separate Recruiter/Placement Cell role for now — the existing
+> Admin role covers cross-class oversight needs. Revisit only if a concrete workflow demands it
+> later.
+
+## 3. Core modules
+
+| Module | Status | Notes |
+|---|---|---|
+| **DSA practice** | **EXISTING** | Question bank (teacher-curated links to LeetCode/CodeChef/Codeforces/GfG/HackerRank), question sets, class assignment, per-student checkbox progress (not started/attempted/completed), teacher progress rollup. Students solve on the *external* judge site — there is no in-house code execution/judge. |
+| **Topic explanations (3D concept player)** | **EXISTING** | `/topics` — 4 static, hand-authored concepts (Arrays, Stacks, Linked Lists, Trees) with a theory panel + step-through Three.js scene + quiz. Not stored in Supabase; adding a topic means adding code. |
+| **Auth, roles, approval workflow** | **EXISTING** | Supabase Auth + `users` table + approval gate (pending/approved/rejected) enforced in `middleware.ts` and `lib/roles.ts`. |
+| **Aptitude practice** (quant, logical, verbal — timed tests, topic-wise) | **PARTIAL** | Schema finalized in `lib/supabase/schema.sql` (question bank, practice history, tests, test questions, assignments, attempts — apply via the Supabase SQL editor, same manual step as the rest of the schema; no DB migration tooling in this repo). Practice mode (untimed, topic-wise, immediate feedback) is built end-to-end: teacher question bank CRUD + student practice flow. Test mode (timed, teacher-assigned, scored) is schema-only — not yet built. |
+| **Technical round practice** (CS fundamentals, MCQs, mock interviews) | **PLANNED** | Not started. |
+| **DSA judge / code execution** (in-browser run/submit against test cases) | **PLANNED** | Current DSA module links out to external judges only; no execution engine. |
+| **Off-campus opportunities board** (job/internship postings, filters, application tracking) | **PLANNED** | Not started. |
+| **"Protocol test" / simulated placement drive** (multi-round, timed, sequential, pass/fail gated) | **PLANNED** | Not started. See Open Decisions below — this needs a design call before schema work begins. |
+| **Teacher/admin dashboard: assign tests, create drives, view analytics** | **PARTIAL** | Assigning DSA question sets to a class exists today, and `/teacher/dashboard` is now a combined DSA + Aptitude analytics view (class-wide charts, a sortable per-student table, a click-through detail drawer). Creating/assigning *drives* and *aptitude tests* (Test Mode) still don't exist, so analytics for those are necessarily absent too — this dashboard will need a third module once either ships. |
+
+## 4. Tech stack
+
+- **Framework**: Next.js 14.2 (App Router), React 18, TypeScript.
+- **Styling**: Tailwind CSS, with a small CSS-variable-driven design token layer
+  (`--bg`, `--surface`, `--accent`, `--success`, `--warn`, etc. mapped in `tailwind.config.ts`) —
+  no component library (no shadcn/MUI/etc.), hand-rolled utility-class components.
+- **3D**: React Three Fiber + drei + three.js, used for the landing-page hero and the topic
+  concept player.
+- **Backend**: No separate backend service — Next.js Route Handlers under `app/api/**/route.ts`
+  running on Vercel. No serverless framework beyond what Next.js/Vercel provide out of the box.
+- **Database**: Supabase Postgres. **No ORM** — raw `@supabase/supabase-js` queries via a
+  service-role client (`lib/supabase/server.ts`) used from API routes and server components only.
+  Schema is hand-written SQL in `lib/supabase/schema.sql`, applied manually through the Supabase
+  SQL editor (no migration tool/CLI wired up yet).
+- **Auth**: Supabase Auth (email + password). Session cookie refreshed in `middleware.ts`
+  (`@supabase/ssr`). App-level role/approval data lives in the `users` table (not in Supabase Auth
+  metadata) and is populated automatically by a Postgres trigger (`handle_new_user`) on sign-up —
+  the app never inserts into `users` directly.
+- **Hosting**: Vercel (per README).
+
+## 5. Data model overview
+
+### Existing (see `lib/supabase/schema.sql` for the authoritative definitions)
+
+- **users** — mirrors `auth.users`; adds `role` (`student`/`teacher`/`admin`), `status`
+  (`pending`/`approved`/`rejected`), `full_name`, `avatar_url`.
+- **classes** — a teacher-owned batch, with a `join_code` students use to enroll.
+- **class_members** — student ↔ class join table.
+- **questions** — a single DSA problem link with detected `platform`, `difficulty`, `topic`.
+- **question_sets** / **question_set_items** — a named, reusable bundle of questions.
+- **assignments** — a question set assigned to a class (creates `progress` rows for every
+  student in that class).
+- **progress** — one row per (student, question): status + timestamps.
+- **aptitude_questions** — an MCQ: `category` (quant/logical/verbal), `topic`, `prompt`,
+  `options` (jsonb array), `correct_option` (index), `explanation`, `difficulty` (reuses
+  `question_difficulty`).
+- **aptitude_practice_history** — one row per (student, question): `attempts_count`,
+  `last_selected_option`, `last_correct`, `last_attempted_at`, `first_correct_at`.
+- **aptitude_tests** — a teacher-built timed test: `name`, `category` scope (nullable = mixed),
+  `time_limit_minutes`, `negative_marking_fraction` (0 = none; e.g. 0.25 = quarter mark off per
+  wrong answer).
+- **aptitude_test_questions** — ordered questions within a test (`position`).
+- **aptitude_assignments** — a test assigned to a class (mirrors DSA `assignments`).
+- **aptitude_test_attempts** — one row per (student, test): `status`, `answers` (jsonb),
+  `score` (numeric, net of negative marking), `total_questions`, timestamps.
+
+### Planned additions (draft — will firm up as each module is built)
+
+- **Opportunity** — off-campus job/internship posting: title, company, description, type
+  (job/internship), location/remote, apply URL or in-app application, tags/filters, posted_by,
+  deadline, status (open/closed).
+- **Application** — a student's application to an `Opportunity`: student_id, opportunity_id,
+  status (applied/shortlisted/rejected/offer), applied_at.
+- **TechnicalQuestion** — MCQ-style content for the Technical module, likely to reuse or closely
+  mirror the `aptitude_questions` shape once that module is designed.
+- **Drive** — a simulated placement drive: name, description, created_by (teacher/college),
+  status (draft/published/archived), assigned classes/students.
+- **Round** — one stage of a `Drive`: belongs to a `Drive`, has a `round_type` (aptitude /
+  technical_mcq / coding / interview / custom), an `order` (sequence position, not hardcoded into
+  app logic — see Open Decisions), a time limit, a cutoff/pass criteria, and a reference to the
+  content it draws from (a `Test`, a coding question set, etc.).
+- **RoundType** — enum/lookup describing what kind of round it is (drives the UI/behavior for
+  that round: MCQ test, timed coding, etc.).
+- **DriveAttempt** / **RoundAttempt** — tracks a student's progress through a `Drive`: which round
+  they're on, pass/fail per round, final result (shortlisted/rejected), timestamps — this is what
+  makes the sequential pass/fail gating actually work.
+
+The `Drive`/`Round`/`RoundType` split above is deliberately **not** a fixed hardcoded pipeline in
+the schema — round order lives as data (`order` on `Round`, scoped to a `Drive`), not as a
+hardcoded sequence in application code. This is so the schema can support fully custom drives
+later even though v1 may lock the *product experience* to one fixed template (see Open Decisions).
+
+## 6. Open Decisions
+
+Resolved decisions are kept here (dated) rather than deleted, so the reasoning stays visible.
+Currently there are no open items in this section.
+
+1. **Drive customization, v1 scope** — **Decided (2026-09-09):** v1 ships one fixed,
+   system-defined drive template (Aptitude → Technical MCQ → Coding → Results). The
+   `Drive`/`Round`/`RoundType` schema still stores round order as data (not hardcoded), so a
+   custom builder UI remains possible in v2 without a schema rewrite.
+
+## 6a. Resolved build order
+
+Modules will be built in this order: **Aptitude → Technical → Opportunities board → Drive
+system.** Reason: a Drive's rounds reference content from the Aptitude/Technical/Coding modules
+(a Round points at a Test or question set from those modules) — the Drive system has nothing
+real to assemble until that content exists, so building it first would mean building against
+placeholder data. Opportunities board has no such dependency but is sequenced before Drive since
+it's simpler and independent of the others.
+
+## 7. Non-goals / out of scope (for now)
+
+- **In-house code execution/judge** for DSA problems. Students solve on the real platform
+  (LeetCode/Codeforces/etc.); the app only tracks the checkbox. Building a sandboxed code runner
+  is a significant scope increase and is not planned until explicitly requested.
+- **Payments/monetization** — no billing, subscriptions, or paid tiers.
+- **Native mobile app** — web only (responsive), no React Native/Expo work.
+- **Drive customization builder UI** — even if the Section 6 decision lands on "custom drives,"
+  the actual builder UI (teacher picks rounds/order/cutoffs through a UI) is a **v2** feature.
+  v1's job is to get the `Drive`/`Round`/`RoundType` schema right so it *can* support this later,
+  not to ship the builder itself.
+- **Third-party ATS/recruiter integrations** for the opportunities board — postings are
+  entered/curated in-app (by teachers/admins) for now, not pulled from external job APIs.
+- **Real-time collaboration features** (e.g. live proctoring, live leaderboards during a drive) —
+  the README already flags Supabase Realtime as a deferred upgrade for the existing dashboard;
+  the same applies to anything drive-related.
+- **Multi-tenancy / white-labeling per college** — today there's a single hard-coded admin email
+  and a flat `teacher`/`student`/`admin` role model, not per-college data isolation. Revisit if/
+  when the Recruiter/Placement Cell role (Open Decision #2) is decided.

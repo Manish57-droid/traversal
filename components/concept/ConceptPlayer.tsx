@@ -95,20 +95,20 @@ export default function ConceptPlayer({
                 onClick={() => goTo(i)}
                 aria-label={`Go to step ${i + 1}`}
                 className={`h-1.5 flex-1 min-w-[8px] rounded-full transition-colors ${
-                  i === current ? "bg-success" : i < current ? "bg-success/40" : "bg-white/10"
+                  i === current ? "bg-success" : i < current ? "bg-success/40" : "bg-surface-2"
                 }`}
               />
             ))}
           </div>
 
-          <span className="shrink-0 text-xs text-slate-500">
+          <span className="shrink-0 text-xs text-fg-subtle">
             {current + 1} / {steps.length}
           </span>
         </div>
 
         <div className="mt-4">
-          <p className="font-display text-lg text-white">{steps[current].title}</p>
-          <p className="mt-1 text-sm text-slate-400">{steps[current].description}</p>
+          <p className="font-display text-lg text-fg">{steps[current].title}</p>
+          <p className="mt-1 text-sm text-fg-muted">{steps[current].description}</p>
         </div>
       </div>
     </div>

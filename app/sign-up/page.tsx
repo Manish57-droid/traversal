@@ -51,12 +51,12 @@ export default function SignUpPage() {
   if (checkEmail) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg px-4">
-        <Link href="/" className="text-sm text-slate-400 hover:text-white">
+        <Link href="/" className="text-sm text-fg-muted hover:text-fg">
           ← Back to home
         </Link>
         <div className="card max-w-sm p-6 text-center">
-          <p className="font-display text-xl text-white">Check your email</p>
-          <p className="mt-2 text-sm text-slate-400">
+          <p className="font-display text-xl text-fg">Check your email</p>
+          <p className="mt-2 text-sm text-fg-muted">
             We sent a confirmation link to {email}. Click it, then sign in.
           </p>
           <Link href="/sign-in" className="btn-primary mt-4 inline-flex">Go to sign in</Link>
@@ -67,32 +67,32 @@ export default function SignUpPage() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg px-4 py-10">
-      <Link href="/" className="text-sm text-slate-400 hover:text-white">
+      <Link href="/" className="text-sm text-fg-muted hover:text-fg">
         ← Back to home
       </Link>
       <form onSubmit={handleSubmit} className="card w-full max-w-sm space-y-4 p-6">
         <div>
-          <p className="font-display text-xl text-white">Create your account</p>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="font-display text-xl text-fg">Create your account</p>
+          <p className="mt-1 text-sm text-fg-muted">
             An admin approves new accounts before you can sign in.
           </p>
         </div>
 
         <div>
-          <label className="mb-1 block text-xs text-slate-400" htmlFor="fullName">Full name</label>
+          <label className="mb-1 block text-xs text-fg-muted" htmlFor="fullName">Full name</label>
           <input id="fullName" required className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-slate-400" htmlFor="email">Email</label>
+          <label className="mb-1 block text-xs text-fg-muted" htmlFor="email">Email</label>
           <input id="email" type="email" required className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-slate-400" htmlFor="password">Password</label>
+          <label className="mb-1 block text-xs text-fg-muted" htmlFor="password">Password</label>
           <input id="password" type="password" required minLength={6} className="input" value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
 
         <div>
-          <p className="mb-1 block text-xs text-slate-400">I am a</p>
+          <p className="mb-1 block text-xs text-fg-muted">I am a</p>
           <div className="flex gap-3">
             {(["student", "teacher"] as const).map((r) => (
               <label
@@ -100,7 +100,7 @@ export default function SignUpPage() {
                 className={`flex-1 cursor-pointer rounded-lg border px-3 py-2 text-center text-sm capitalize transition-colors ${
                   requestedRole === r
                     ? "border-success/60 bg-success/10 text-success"
-                    : "border-white/10 text-slate-300 hover:border-white/25"
+                    : "border-line/70 text-fg hover:border-line"
                 }`}
               >
                 <input
@@ -123,7 +123,7 @@ export default function SignUpPage() {
           {submitting ? "Creating account..." : "Create account"}
         </button>
 
-        <p className="text-center text-xs text-slate-500">
+        <p className="text-center text-xs text-fg-subtle">
           Already have an account?{" "}
           <Link href="/sign-in" className="text-success hover:underline">Sign in</Link>
         </p>

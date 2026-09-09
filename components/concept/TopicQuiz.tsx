@@ -40,10 +40,10 @@ export default function TopicQuiz({ questions }: { questions: QuizQuestion[] }) 
     const allCorrect = score === questions.length;
     return (
       <div className="card p-6 text-center">
-        <p className="font-display text-2xl text-white">
+        <p className="font-display text-2xl text-fg">
           {score} / {questions.length}
         </p>
-        <p className="mt-2 text-sm text-slate-400">
+        <p className="mt-2 text-sm text-fg-muted">
           {allCorrect
             ? "Perfect score — this one's locked in."
             : score === 0
@@ -61,14 +61,14 @@ export default function TopicQuiz({ questions }: { questions: QuizQuestion[] }) 
 
   return (
     <div className="card p-5 sm:p-6">
-      <div className="mb-4 flex items-center justify-between text-xs text-slate-500">
+      <div className="mb-4 flex items-center justify-between text-xs text-fg-subtle">
         <span>
           Question {current + 1} of {questions.length}
         </span>
         <span>Score: {score}</span>
       </div>
 
-      <p className="font-display text-lg text-white">{question.question}</p>
+      <p className="font-display text-lg text-fg">{question.question}</p>
 
       <div className="mt-4 space-y-2">
         {question.options.map((option, i) => {
@@ -76,7 +76,7 @@ export default function TopicQuiz({ questions }: { questions: QuizQuestion[] }) 
           const isPicked = i === selected;
           const showResult = selected !== null;
 
-          let style = "border-white/10 hover:border-white/25";
+          let style = "border-line/70 hover:border-line";
           if (showResult && isCorrect) style = "border-success/60 bg-success/10 text-success";
           else if (showResult && isPicked && !isCorrect) style = "border-red-500/50 bg-red-500/10 text-red-400";
 

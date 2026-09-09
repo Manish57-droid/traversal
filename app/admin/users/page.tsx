@@ -42,8 +42,8 @@ export default function AdminUsersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl text-white sm:text-3xl">Users</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <h1 className="font-display text-2xl text-fg sm:text-3xl">Users</h1>
+        <p className="mt-1 text-sm text-fg-muted">
           Approve new sign-ups and manage roles. {pendingCount > 0 && `${pendingCount} waiting on you.`}
         </p>
       </div>
@@ -56,7 +56,7 @@ export default function AdminUsersPage() {
             className={`rounded-full border px-3 py-1.5 text-xs capitalize transition-colors ${
               filter === f
                 ? "border-success/60 bg-success/10 text-success"
-                : "border-white/10 text-slate-400 hover:border-white/25"
+                : "border-line/70 text-fg-muted hover:border-line"
             }`}
           >
             {f}
@@ -65,11 +65,11 @@ export default function AdminUsersPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-400">Loading…</p>
+        <p className="text-sm text-fg-muted">Loading…</p>
       ) : (
         <div className="card overflow-x-auto">
           <table className="w-full min-w-[680px] text-left text-sm">
-            <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="border-b border-line/70 text-xs uppercase tracking-wide text-fg-subtle">
               <tr>
                 <th className="px-4 py-3 font-normal">Name</th>
                 <th className="px-4 py-3 font-normal">Email</th>
@@ -80,9 +80,9 @@ export default function AdminUsersPage() {
             </thead>
             <tbody>
               {filtered.map((u) => (
-                <tr key={u.id} className="border-b border-white/5 last:border-0">
-                  <td className="px-4 py-3 text-slate-200">{u.full_name || "—"}</td>
-                  <td className="px-4 py-3 text-slate-400">{u.email}</td>
+                <tr key={u.id} className="border-b border-line/40 last:border-0">
+                  <td className="px-4 py-3 text-fg">{u.full_name || "—"}</td>
+                  <td className="px-4 py-3 text-fg-muted">{u.email}</td>
                   <td className="px-4 py-3">
                     <select
                       className="input w-auto py-1.5"
@@ -111,7 +111,7 @@ export default function AdminUsersPage() {
                     {u.status !== "rejected" && (
                       <button
                         onClick={() => patchUser(u.id, { status: "rejected" })}
-                        className="text-xs text-slate-500 hover:text-red-400"
+                        className="text-xs text-fg-subtle hover:text-red-400"
                       >
                         Reject
                       </button>
@@ -121,7 +121,7 @@ export default function AdminUsersPage() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                  <td colSpan={5} className="px-4 py-6 text-center text-fg-subtle">
                     No users in this view.
                   </td>
                 </tr>

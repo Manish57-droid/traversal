@@ -17,6 +17,18 @@ export async function POST(req: Request) {
 
   const supabase = supabaseAdmin();
 
+  // Ownership check — without this, any signed-in teacher could assign
+  // into a class they don't own (or assign a question set they didn't
+  // build) just by knowing/guessing its id. Admin bypasses both.
+  if (user.role !== "admin") {
+    const [{ data: klass }, { data: set }] = await Promise.all([
+      supabase.from("classes").select("id").eq("id", class_id).eq("teacher_id", user.id).maybeSingle(),
+      supabase.from("question_sets").select("id").eq("id", question_set_id).eq("created_by", user.id).maybeSingle(),
+    ]);
+    if (!klass) return NextResponse.json({ error: "Class not found." }, { status: 404 });
+    if (!set) return NextResponse.json({ error: "Question set not found." }, { status: 404 });
+  }
+
   const { data: assignment, error: assignError } = await supabase
     .from("assignments")
     .insert({

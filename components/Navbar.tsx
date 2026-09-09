@@ -23,37 +23,39 @@ export default function Navbar({ role, authed = true }: { role?: UserRole; authe
   }
 
   return (
-    <header className="sticky top-0 z-30 border-b border-white/10 bg-bg/80 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-line/70 bg-bg/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-        <Link href={homeHref} className="font-display text-lg tracking-tight text-white">
+        <Link href={homeHref} className="font-display text-lg tracking-tight text-fg">
           traversal
         </Link>
 
         {role && (
-          <nav className="hidden items-center gap-6 text-sm text-slate-300 sm:flex">
+          <nav className="hidden items-center gap-6 text-sm text-fg sm:flex">
             {role === "student" && (
               <>
-                <Link href="/student/dashboard" className="hover:text-white">Dashboard</Link>
-                <Link href="/student/dsa" className="hover:text-white">DSA Sheet</Link>
-                <Link href="/topics" className="hover:text-white">Topics</Link>
+                <Link href="/student/dashboard" className="hover:text-fg">Dashboard</Link>
+                <Link href="/student/dsa" className="hover:text-fg">DSA Sheet</Link>
+                <Link href="/student/aptitude" className="hover:text-fg">Aptitude</Link>
+                <Link href="/topics" className="hover:text-fg">Topics</Link>
               </>
             )}
             {role === "teacher" && (
               <>
-                <Link href="/teacher/dashboard" className="hover:text-white">Class progress</Link>
-                <Link href="/teacher/questions" className="hover:text-white">Question bank</Link>
-                <Link href="/teacher/question-sets" className="hover:text-white">Question sets</Link>
-                <Link href="/teacher/assign" className="hover:text-white">Assign</Link>
-                <Link href="/topics" className="hover:text-white">Topics</Link>
+                <Link href="/teacher/dashboard" className="hover:text-fg">Class progress</Link>
+                <Link href="/teacher/questions" className="hover:text-fg">Question bank</Link>
+                <Link href="/teacher/question-sets" className="hover:text-fg">Question sets</Link>
+                <Link href="/teacher/assign" className="hover:text-fg">Assign</Link>
+                <Link href="/teacher/aptitude/questions" className="hover:text-fg">Aptitude bank</Link>
+                <Link href="/topics" className="hover:text-fg">Topics</Link>
               </>
             )}
             {role === "admin" && (
               <>
-                <Link href="/admin/dashboard" className="hover:text-white">Overview</Link>
-                <Link href="/admin/users" className="hover:text-white">Users</Link>
-                <Link href="/teacher/dashboard" className="hover:text-white">Class progress</Link>
-                <Link href="/teacher/question-sets" className="hover:text-white">Question sets</Link>
-                <Link href="/topics" className="hover:text-white">Topics</Link>
+                <Link href="/admin/dashboard" className="hover:text-fg">Overview</Link>
+                <Link href="/admin/users" className="hover:text-fg">Users</Link>
+                <Link href="/teacher/dashboard" className="hover:text-fg">Class progress</Link>
+                <Link href="/teacher/question-sets" className="hover:text-fg">Question sets</Link>
+                <Link href="/topics" className="hover:text-fg">Topics</Link>
               </>
             )}
           </nav>
@@ -61,7 +63,7 @@ export default function Navbar({ role, authed = true }: { role?: UserRole; authe
 
         <div className="flex items-center gap-3">
           {role && (
-            <span className="hidden rounded-full border border-white/10 px-2.5 py-1 text-xs text-slate-400 sm:inline">
+            <span className="hidden rounded-full border border-line/70 px-2.5 py-1 text-xs text-fg-muted sm:inline">
               {ROLE_LABEL[role]}
             </span>
           )}

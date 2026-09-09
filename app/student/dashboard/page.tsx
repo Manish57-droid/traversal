@@ -53,8 +53,8 @@ export default function StudentDashboardPage() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl text-white sm:text-3xl">Your progress</h1>
-          <p className="mt-1 text-sm text-slate-400">A quick look at how the sheet is filling up.</p>
+          <h1 className="font-display text-2xl text-fg sm:text-3xl">Your progress</h1>
+          <p className="mt-1 text-sm text-fg-muted">A quick look at how the sheet is filling up.</p>
         </div>
         <Link href="/student/dsa" className="btn-primary">Open DSA sheet</Link>
       </div>
@@ -62,35 +62,35 @@ export default function StudentDashboardPage() {
       {!loading && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="card p-5">
-            <p className="text-xs text-slate-400">Completed</p>
+            <p className="text-xs text-fg-muted">Completed</p>
             <p className="font-display text-3xl text-success">{completed}</p>
           </div>
           <div className="card p-5">
-            <p className="text-xs text-slate-400">Attempted</p>
+            <p className="text-xs text-fg-muted">Attempted</p>
             <p className="font-display text-3xl text-warn">{attempted}</p>
           </div>
           <div className="card p-5">
-            <p className="text-xs text-slate-400">Total on sheet</p>
-            <p className="font-display text-3xl text-white">{total}</p>
+            <p className="text-xs text-fg-muted">Total on sheet</p>
+            <p className="font-display text-3xl text-fg">{total}</p>
           </div>
         </div>
       )}
 
       <div className="card p-5">
         <div className="mb-2 flex items-center justify-between text-sm">
-          <span className="text-slate-300">Overall completion</span>
-          <span className="text-slate-400">{Math.round(pct)}%</span>
+          <span className="text-fg">Overall completion</span>
+          <span className="text-fg-muted">{Math.round(pct)}%</span>
         </div>
         <ProgressBar value={pct} />
       </div>
 
       {Object.keys(byTopic).length > 0 && (
         <div className="card p-5">
-          <h2 className="mb-4 text-sm font-medium text-slate-300">By topic</h2>
+          <h2 className="mb-4 text-sm font-medium text-fg">By topic</h2>
           <div className="space-y-4">
             {Object.entries(byTopic).map(([topic, stats]) => (
               <div key={topic}>
-                <div className="mb-1 flex items-center justify-between text-xs text-slate-400">
+                <div className="mb-1 flex items-center justify-between text-xs text-fg-muted">
                   <span>{topic}</span>
                   <span>{stats.completed}/{stats.total}</span>
                 </div>
@@ -102,8 +102,8 @@ export default function StudentDashboardPage() {
       )}
 
       <div className="card max-w-md p-5">
-        <h2 className="mb-1 text-sm font-medium text-slate-300">Join a class</h2>
-        <p className="mb-3 text-xs text-slate-400">
+        <h2 className="mb-1 text-sm font-medium text-fg">Join a class</h2>
+        <p className="mb-3 text-xs text-fg-muted">
           Enter the code your teacher shared so they can assign you questions.
         </p>
         <form onSubmit={handleJoin} className="flex gap-2">
@@ -115,7 +115,7 @@ export default function StudentDashboardPage() {
           />
           <button type="submit" className="btn-secondary">Join</button>
         </form>
-        {joinMessage && <p className="mt-2 text-xs text-slate-400">{joinMessage}</p>}
+        {joinMessage && <p className="mt-2 text-xs text-fg-muted">{joinMessage}</p>}
       </div>
     </div>
   );

@@ -17,15 +17,15 @@ export default async function PendingApprovalPage() {
         <div className="card max-w-sm p-6 text-center">
           {user.status === "rejected" ? (
             <>
-              <p className="font-display text-xl text-white">Account not approved</p>
-              <p className="mt-2 text-sm text-slate-400">
+              <p className="font-display text-xl text-fg">Account not approved</p>
+              <p className="mt-2 text-sm text-fg-muted">
                 Your account request wasn't approved. Contact your admin if you think this is a mistake.
               </p>
             </>
           ) : (
             <>
-              <p className="font-display text-xl text-white">Waiting for approval</p>
-              <p className="mt-2 text-sm text-slate-400">
+              <p className="font-display text-xl text-fg">Waiting for approval</p>
+              <p className="mt-2 text-sm text-fg-muted">
                 Your {user.role} account is created but needs an admin to approve it before you can sign in.
                 Check back soon, or browse the DSA topics below in the meantime — those don't need approval.
               </p>
