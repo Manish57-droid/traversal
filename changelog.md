@@ -441,3 +441,72 @@
   not show up in `npm run build`'s type-checking or the earlier code-trace-only "verification" for
   the collaboration feature, which is exactly the gap this task's insistence on executing real
   queries was meant to close.
+
+## [2026-09-09] — Access-request visibility: no bug found (live-verified); fix redundant auth checks
+- **Step 1 (access-request visibility)**: traced the "Pending requests" section
+  (`components/analytics/ClassAccessPanel.tsx`, rendered from `app/teacher/dashboard/page.tsx`)
+  and its endpoint (`GET /api/classes/[id]/access-requests`). Everything read correctly, so rather
+  than trust that, ran it for real: created two fresh, isolated test teacher accounts (not reused
+  from real data — creating them was additive-only; resetting a real account's password to get a
+  session was considered and rejected as unnecessarily destructive), had one request access to
+  the other's brand-new class, then actually launched a headless Chromium (Playwright, installed
+  temporarily for this — not a project dependency) and drove the real login → dashboard → approve
+  flow end to end. Screenshots confirmed: the "Pending requests (1)" section rendered with the
+  requester's name and working Approve/Reject buttons, and clicking Approve moved them into
+  "Collaborators" and cleared the pending list. **No bug found** — this was already correctly
+  built and wired from the earlier class-collaboration task; reporting that plainly rather than
+  inventing a fix for something that wasn't broken. Test accounts and the test class were deleted
+  after verification; no residue in the real database.
+- **Step 2 (measure first)**: added temporary `console.time`-style timing to the auth-check path
+  (`middleware.ts`, `lib/roles.ts`'s `getCurrentAppUser()`) and to the Supabase queries in 4
+  representative routes (`/api/teacher/analytics`, `/api/questions`, `/api/classes/browse`,
+  `/api/aptitude/practice`), then drove a real authenticated session (Playwright again) through
+  `/teacher/dashboard`, `/teacher/questions`, `/teacher/classes`, `/api/aptitude/practice`, and a
+  fresh `/dashboard` hit, reading actual numbers off the dev server's console.
+- **Step 3 (diagnosis, from the numbers, not a guess)**: for that one session, `middleware
+  auth.getUser()` fired ~15 times (140–1322ms each) and — separately — `getCurrentAppUser`'s own
+  `auth.getUser()` fired ~15 more times (161–1322ms each, summing to **~7.3 seconds** across the
+  session) for the exact same already-verified session, because every layout AND every one of the
+  4-5 client-side `/api/*` calls a single dashboard load triggers independently re-verified the
+  JWT against Supabase Auth's API. This is precisely the first culprit the task flagged as most
+  likely, confirmed by the numbers rather than assumed. The other three suspects were checked and
+  ruled out: no N+1 queries anywhere (every list/rollup route already batches with `.in(...)` —
+  confirmed by both reading the code and by each query showing as a single timed call, not a
+  loop); `class_collaborators`/`class_access_requests` already have the indexes they need
+  (`idx_class_collaborators_teacher`, `idx_class_access_requests_class/teacher`, plus their
+  primary keys) from the migration that created them; and the one real client-side sequencing
+  (class list before analytics) is a genuine dependency, not a fixable waterfall —
+  `ClassAccessPanel` already parallelizes its two independent fetches with `Promise.all`.
+- **Step 4 (fix)**: `middleware.ts` already does the one real, necessary `auth.getUser()` check
+  per request — that stays. It now also sets `x-verified-user-id` on the request headers passed
+  downstream once that check succeeds, after first stripping any client-supplied value for that
+  same header name (so it can't be spoofed — middleware runs before every matched page and every
+  `/api/**` route, per `config.matcher`, so nothing downstream is ever reachable without passing
+  through this first). `getCurrentAppUser()` in `lib/roles.ts` now reads that header and, when
+  present, skips its own `auth.getUser()` call entirely, falling back to a real check only when
+  the header is absent (e.g. public paths middleware doesn't authenticate). **Correctness
+  preserved deliberately**: the `users` table lookup for role/status/profile still runs fresh on
+  every single call, exactly as before — nothing about role, approval status, or profile data is
+  cached or reused across users or requests, only the redundant re-verification of an
+  already-verified JWT is skipped. No tradeoff between correctness and speed was made here; if one
+  had been necessary, it would be called out explicitly rather than shipped quietly, per
+  instruction.
+- **Step 5 (re-measured, not assumed)**: same 5 routes, same login flow, fresh server restart.
+  `getCurrentAppUser`'s own auth check across the session: **~7,334ms → ~32ms** (15 calls
+  averaging 489ms each → 16 calls averaging 2ms each) — essentially eliminated. `middleware
+  auth.getUser()` numbers are unchanged (expected: that check was never redundant, it's the one
+  real verification per request). Wall-clock page-load times were noisy and NOT used as the
+  primary before/after signal — both runs were fresh `next dev` starts, so Next.js's dev-mode
+  per-route cold-compile (a one-time, unrelated cost of 5–20s on a route's first hit) dominated
+  and swamped the auth-check savings in a raw stopwatch reading; the [PERF] log deltas above are
+  the real, isolated signal. Confirmed the app still works correctly post-fix: re-ran the
+  Playwright session through login and `/teacher/dashboard` and screenshotted the result — correct
+  user identity in the navbar, correct page render, no functional regression.
+- Files touched: `middleware.ts`, `lib/roles.ts`. No other files changed — all timing
+  instrumentation added for Steps 2/5 was removed before this entry; `git status` after cleanup
+  showed only these two files modified.
+- Why: The task specifically asked not to guess at performance fixes, and the redundant-auth-check
+  hypothesis it flagged as most likely turned out to be exactly right — measured, not assumed, and
+  fixed without touching how any role/status/authorization decision is actually made, only how
+  many times the same already-verified identity gets re-verified per request.
+
