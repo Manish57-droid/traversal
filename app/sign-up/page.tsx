@@ -50,7 +50,10 @@ export default function SignUpPage() {
 
   if (checkEmail) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-bg px-4">
+      <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg px-4">
+        <Link href="/" className="text-sm text-slate-400 hover:text-white">
+          ← Back to home
+        </Link>
         <div className="card max-w-sm p-6 text-center">
           <p className="font-display text-xl text-white">Check your email</p>
           <p className="mt-2 text-sm text-slate-400">
@@ -63,7 +66,10 @@ export default function SignUpPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-bg px-4 py-10">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg px-4 py-10">
+      <Link href="/" className="text-sm text-slate-400 hover:text-white">
+        ← Back to home
+      </Link>
       <form onSubmit={handleSubmit} className="card w-full max-w-sm space-y-4 p-6">
         <div>
           <p className="font-display text-xl text-white">Create your account</p>

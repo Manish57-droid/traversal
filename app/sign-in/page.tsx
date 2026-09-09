@@ -32,7 +32,10 @@ export default function SignInPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-bg px-4">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg px-4">
+      <Link href="/" className="text-sm text-slate-400 hover:text-white">
+        ← Back to home
+      </Link>
       <form onSubmit={handleSubmit} className="card w-full max-w-sm space-y-4 p-6">
         <p className="font-display text-xl text-white">Sign in</p>
 

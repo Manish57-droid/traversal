@@ -71,6 +71,46 @@ export default async function LandingPage() {
             </p>
           </div>
         </section>
+
+        <section className="border-t border-white/10 py-14">
+          <div className="max-w-2xl">
+            <h2 className="font-display text-2xl text-white sm:text-3xl">
+              What is DSA, and why does it matter?
+            </h2>
+            <p className="mt-4 text-sm text-slate-400 sm:text-base">
+              Data Structures & Algorithms are the toolkit for solving problems efficiently —
+              how to store information so it's fast to search, how to break a big problem into
+              smaller ones, how to avoid doing more work than you need to. It's also the single
+              biggest thing technical interviews test for, at nearly every software company.
+            </p>
+            <p className="mt-3 text-sm text-slate-400 sm:text-base">
+              You don't have to take our word for how any of it works, either — every core topic
+              below is free to read, with a 3D walkthrough and a quick quiz, no account needed.
+            </p>
+          </div>
+
+          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { slug: "arrays", title: "Arrays", blurb: "Contiguous memory, O(1) access, and why linear search costs O(n)." },
+              { slug: "stacks", title: "Stacks", blurb: "Last in, first out — the idea behind undo buttons and recursion." },
+              { slug: "linked-lists", title: "Linked Lists", blurb: "Nodes connected by pointers, one step at a time." },
+              { slug: "trees", title: "Trees", blurb: "Hierarchies, and a level-by-level walk through one with BFS." },
+            ].map((topic) => (
+              <Link
+                key={topic.slug}
+                href={`/topics/${topic.slug}`}
+                className="card block p-4 transition-colors hover:border-accent/40"
+              >
+                <p className="font-display text-lg text-white">{topic.title}</p>
+                <p className="mt-2 text-xs text-slate-400">{topic.blurb}</p>
+              </Link>
+            ))}
+          </div>
+
+          <Link href="/topics" className="btn-secondary mt-6 inline-flex">
+            Explore all topics →
+          </Link>
+        </section>
       </div>
     </main>
   );
