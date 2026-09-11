@@ -332,6 +332,27 @@ create table if not exists class_collaborators (
 
 create index if not exists idx_class_collaborators_teacher on class_collaborators(teacher_id);
 
+-- ---------- ROLE CHANGE AUDIT LOG ----------
+-- An admin account's role was once found silently changed to
+-- 'teacher' with no record of how it happened. Audit found no ID-
+-- mixup bug in any role-mutating path — PATCH /api/admin/users
+-- always targets the row's own id correctly — but nothing logged
+-- role changes, and nothing stopped an admin from changing their own
+-- role via that same generic endpoint (a stray click on their own row
+-- in /admin/users, no confirmation). A `id === admin.id` guard was
+-- added at the application layer; this table makes any future role
+-- change traceable after the fact.
+create table if not exists role_change_log (
+  id uuid primary key default gen_random_uuid(),
+  target_user_id uuid not null references users(id) on delete cascade,
+  previous_role user_role not null,
+  new_role user_role not null,
+  changed_by uuid references users(id) on delete set null,
+  changed_at timestamptz not null default now()
+);
+
+create index if not exists idx_role_change_log_target on role_change_log(target_user_id);
+
 -- ============================================================
 -- ROW LEVEL SECURITY
 -- Supabase Auth identifies the caller; the app's own API routes use
@@ -357,6 +378,7 @@ alter table aptitude_assignments enable row level security;
 alter table aptitude_test_attempts enable row level security;
 alter table class_access_requests enable row level security;
 alter table class_collaborators enable row level security;
+alter table role_change_log enable row level security;
 
 drop policy if exists "users can read own row" on users;
 create policy "users can read own row" on users

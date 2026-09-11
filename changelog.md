@@ -510,3 +510,63 @@
   fixed without touching how any role/status/authorization decision is actually made, only how
   many times the same already-verified identity gets re-verified per request.
 
+## [2026-09-11] — Audit every role-mutating path; guard + log role changes
+- **What was found (Step 1 — full enumeration)**: searched the entire codebase for every write to
+  `users.role`. Exactly two exist: (1) the `handle_new_user` sign-up trigger, which only sets role
+  at row *creation* (`on conflict (id) do nothing` — can never touch an existing row), and (2)
+  `PATCH /api/admin/users`, the only endpoint that can mutate an existing user's role, called from
+  the role `<select>` dropdown on `/admin/users`. Explicitly checked and ruled out, per the task's
+  specific suspicion: the class access-request `approve`/`reject` endpoints and the collaborator-
+  removal endpoint (all from the Prompt 8 collaboration feature) — none of them write to `users`
+  at all; they only touch `class_access_requests`/`class_collaborators`, tables with no `role`
+  column. They were never a candidate once actually read.
+- **What was found (Step 2 — target-id check)**: traced `PATCH /api/admin/users` end to end. No
+  ID-mixup bug — the frontend's `patchUser(u.id, {role})` always passes the row's own id, and the
+  backend always updates `.eq("id", id)` from the request body, never falling back to the
+  requesting admin's own session id. The actual flaw is a **missing safeguard**, not a wrong-target
+  bug: `/admin/users` lists every account — including the admin's own — in one plain table, and
+  each row's role is a live `<select>` that fires the PATCH on `onChange` with no confirmation
+  dialog, updating optimistically before the network call even resolves. A single stray click on
+  your own row's dropdown silently demotes you, with nothing to distinguish that row or stop it —
+  this fully explains a role change nobody consciously remembers causing.
+- **Fix (Step 3)**: `PATCH /api/admin/users` now rejects (400 "You can't change your own role.")
+  any request where `role` is present and `id === admin.id`, before touching the database.
+- **Audit log (Step 4)**: added `role_change_log` (`supabase/migrations/0004_role_change_log.sql`
+  — `target_user_id`, `previous_role`, `new_role`, `changed_by`, `changed_at`; RLS enabled, no
+  policies, same posture as every other table) after presenting the schema and getting explicit
+  confirmation to apply it (this task didn't carry the earlier tasks' blanket schema go-ahead).
+  `PATCH /api/admin/users` now fetches the current role before updating and inserts a log row only
+  when the role is genuinely changing (new value differs from old) — not on every PATCH that
+  happens to include a role matching what's already there. A failed log insert doesn't block the
+  actual role change, which has already succeeded by that point; it's only surfaced server-side.
+  **Applying this migration surfaced a real, separate issue worth recording**: after running the
+  `CREATE TABLE`, the table was confirmed to exist at the Postgres catalog level
+  (`information_schema.tables`) and was visible in Supabase Studio's Table Editor, yet PostgREST
+  kept returning `PGRST205: Could not find the table 'public.role_change_log' in the schema cache`
+  — surviving `NOTIFY pgrst, 'reload schema'` *and* a full project restart. Root cause turned out
+  to be a privilege-grant gap: this table hadn't picked up the default `anon`/`authenticated`/
+  `service_role` grants every other table in this project has automatically had since creation.
+  Fixed with an explicit `grant select, insert, update, delete on role_change_log to anon,
+  authenticated, service_role;` — resolved immediately. Worth knowing if a future table exhibits
+  the same "exists but PostgREST can't see it" symptom.
+- **Step 5 verification (live, two real test accounts, not code-traced)**: created a fresh admin
+  test account (deliberately *not* the real hard-coded admin, so the real account was never
+  touched) and a fresh pending-teacher target account. Drove a real logged-in session through
+  `/admin/users`: approved the target (status `pending` → `approved`), changed the target's role
+  (`teacher` → `student`), and attempted a self-role-change on the admin's own id directly against
+  the API. Results, queried straight from the database afterward:
+  - Admin's own row: `{"role":"admin","status":"approved"}` — unchanged.
+  - Target's row: `{"role":"student","status":"approved"}` — correctly updated, and only the
+    target.
+  - Self-role-change attempt: `{"status":400,"body":{"error":"You can't change your own role."}}`.
+  - The actual `role_change_log` row: `{"target_user_id":"c285dd2b-...","previous_role":"teacher",
+    "new_role":"student","changed_by":"a4929bee-...","changed_at":"2026-09-11T04:21:36.803398+00:00"}`
+    — `changed_by` is the admin test account's id, confirming attribution is correct.
+  Test accounts and the log row deleted afterward; no fixtures left behind.
+- Files touched: `app/api/admin/users/route.ts`, `lib/supabase/schema.sql`. New:
+  `supabase/migrations/0004_role_change_log.sql`.
+- Why: An admin's role changed with nobody able to say how or why — the fix isn't just patching
+  the one flaw found, but making the whole class of "generic update endpoint accidentally targets
+  the wrong/same row" bug both harder to trigger (the guard) and, if it ever happens again anyway,
+  actually traceable (the log) instead of a repeat mystery.
+
