@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Binary, BookOpen, Calculator, ChevronDown, Compass, ListChecks, Menu, Send, Users, X } from "lucide-react";
+import { Binary, BookOpen, Calculator, ChevronDown, Compass, ListChecks, MessagesSquare, Menu, Send, Users, X } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import UserMenu from "@/components/UserMenu";
 
@@ -23,6 +23,7 @@ const CONTENT_LINKS = [
   { href: "/teacher/question-sets", label: "Question sets", icon: ListChecks },
   { href: "/teacher/questions", label: "DSA Questions", icon: Binary },
   { href: "/teacher/aptitude/questions", label: "Aptitude Questions", icon: Calculator },
+  { href: "/teacher/interview-prep", label: "Interview Prep", icon: MessagesSquare },
 ];
 
 function NavPill({ href, label, icon: Icon, active }: { href: string; label: string; icon: typeof Users; active: boolean }) {

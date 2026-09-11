@@ -231,3 +231,32 @@ export interface RoleChangeLogRow {
   changed_by_name: string;
   changed_at: string;
 }
+
+// ---------- Interview preparation ----------
+
+export interface InterviewCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  icon: string;
+  display_order: number;
+  created_at: string;
+}
+
+/** Category row plus how many questions it currently holds — powers
+ * the student-facing category grid. */
+export interface InterviewCategoryWithCount extends InterviewCategory {
+  question_count: number;
+}
+
+export interface InterviewQuestion {
+  id: string;
+  category_id: string;
+  question: string;
+  answer: string;
+  difficulty: QuestionDifficulty;
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+}

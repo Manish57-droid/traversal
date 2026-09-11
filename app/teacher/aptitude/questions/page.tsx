@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { AptitudeCategory, AptitudeQuestion } from "@/types";
+import { APTITUDE_TOPIC_SUGGESTIONS } from "@/lib/aptitudeTopics";
 
 const CATEGORIES: AptitudeCategory[] = ["quant", "logical", "verbal"];
 const CATEGORY_LABELS: Record<AptitudeCategory, string> = {
@@ -159,10 +160,18 @@ export default function TeacherAptitudeQuestionsPage() {
             <label className="mb-1 block text-xs text-fg-muted">Topic</label>
             <input
               className="input"
+              list="aptitude-topic-suggestions"
               placeholder="Time & Work"
               value={form.topic}
               onChange={(e) => setForm((f) => ({ ...f, topic: e.target.value }))}
             />
+            {/* Suggestions only — topic stays free text, so a name not in
+                this starting taxonomy is still accepted. */}
+            <datalist id="aptitude-topic-suggestions">
+              {APTITUDE_TOPIC_SUGGESTIONS[form.category].map((t) => (
+                <option key={t} value={t} />
+              ))}
+            </datalist>
           </div>
           <div>
             <label className="mb-1 block text-xs text-fg-muted">Difficulty</label>

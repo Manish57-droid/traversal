@@ -11,6 +11,7 @@ const NAV_LINKS = [
   { href: "/student/dashboard", label: "Dashboard" },
   { href: "/student/dsa", label: "DSA" },
   { href: "/student/aptitude", label: "Aptitude" },
+  { href: "/student/interview-prep", label: "Interview Prep" },
   { href: "/topics", label: "Topics" },
 ];
 
