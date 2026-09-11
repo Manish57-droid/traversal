@@ -32,7 +32,13 @@ each student's prep and performance.
     access to one they don't already manage; the owner or an admin approves or rejects. See
     `class_collaborators` / `class_access_requests` in the schema and `lib/classAccess.ts`.
   - **Admin**: one hard-coded account (by email) that approves/rejects new sign-ups and can
-    change anyone's role. Currently a single super-admin, not a per-college admin.
+    change anyone's role. Currently a single super-admin, not a per-college admin. Has its own
+    dedicated interface as of 2026-09-11: a sidebar shell (`AdminSidebar`, collapsible to an icon
+    rail on medium screens, a slide-out drawer on mobile) fronting `/admin/dashboard` (platform
+    stat cards + a merged recent-activity feed), `/admin/users`, `/admin/classes` (placeholder —
+    admin already has full access via `/teacher/classes` in the meantime), `/admin/access-requests`,
+    and `/admin/role-log` (the `role_change_log` audit trail from the previous task, made
+    actually visible/filterable).
 
 > **Decided (2026-09-09):** no separate Recruiter/Placement Cell role for now — the existing
 > Admin role covers cross-class oversight needs. Revisit only if a concrete workflow demands it

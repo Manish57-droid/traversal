@@ -204,3 +204,30 @@ export interface ClassCollaborator {
   full_name: string | null;
   email: string;
 }
+
+// ---------- Admin dashboard ----------
+
+export interface AdminOverviewStats {
+  teacherCount: number;
+  studentCount: number;
+  classCount: number;
+  pendingSignups: number;
+  pendingAccessRequests: number;
+}
+
+export interface AdminActivityItem {
+  id: string;
+  description: string;
+  timestamp: string;
+}
+
+export interface RoleChangeLogRow {
+  id: string;
+  target_user_id: string;
+  target_name: string;
+  previous_role: UserRole;
+  new_role: UserRole;
+  changed_by: string | null;
+  changed_by_name: string;
+  changed_at: string;
+}

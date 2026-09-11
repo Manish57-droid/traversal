@@ -6,9 +6,18 @@ import { ChevronDown, LogOut } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/browser-client";
 
 // Avatar + name with a dropdown for signing out — shared by
-// TeacherNavbar and StudentNavbar so the interaction (and the sign-out
-// call itself) only lives in one place.
-export default function UserMenu({ name, email }: { name: string; email: string }) {
+// TeacherNavbar/StudentNavbar (top navbar, dropdown opens downward)
+// and AdminSidebar (bottom of a sidebar, dropdown opens upward via
+// `placement="top"` so it doesn't clip off the bottom of the viewport).
+export default function UserMenu({
+  name,
+  email,
+  placement = "bottom",
+}: {
+  name: string;
+  email: string;
+  placement?: "top" | "bottom";
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -46,7 +55,11 @@ export default function UserMenu({ name, email }: { name: string; email: string 
       </button>
 
       {open && (
-        <div className="card absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden p-1">
+        <div
+          className={`card absolute right-0 z-50 w-56 overflow-hidden p-1 ${
+            placement === "top" ? "bottom-full left-0 right-auto mb-2" : "top-full mt-2"
+          }`}
+        >
           <div className="px-3 py-2">
             <p className="truncate text-sm font-medium text-fg">{name || "—"}</p>
             <p className="truncate text-xs text-fg-muted">{email}</p>

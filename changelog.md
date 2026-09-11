@@ -570,3 +570,67 @@
   the wrong/same row" bug both harder to trigger (the guard) and, if it ever happens again anyway,
   actually traceable (the log) instead of a repeat mystery.
 
+## [2026-09-11] — Admin gets a real interface: sidebar shell, Overview, Role Log
+- **Step 1 (routing check)**: traced `app/dashboard/page.tsx` (the post-login role router) and
+  `middleware.ts`'s `/admin` guard. Both were already structurally correct — the router redirects
+  `admin` to `/admin/dashboard` specifically (not a `/teacher/**` route), and middleware's
+  `/admin` check is a real role comparison (`profile.role !== "admin"`), not just an
+  "is logged in" check. Verified live rather than trusting the read: a fresh admin test account,
+  logged in for real, landed at `http://localhost:3000/admin/dashboard` after the redirect chain
+  settled (not `/teacher/dashboard` or anywhere else). No routing bug found in this pass — what
+  *was* missing was a real admin interface behind that URL to land on, which is what the rest of
+  this task builds. (What most plausibly explained the reported "immediate navigation bug" feel:
+  before this task, `/admin/dashboard` existed but was a bare two-stat-card page sharing the
+  generic `Navbar`, whose admin nav section pointed mostly at `/teacher/**` pages — landing there
+  and then clicking anything took you straight into the teacher shell with no way back, which
+  reads like a navigation bug even though the initial redirect itself was correct.)
+- **Step 2 (sidebar shell)**: new `components/AdminSidebar.tsx` — full sidebar (icon + label) on
+  large screens, collapses to an icon-only rail on medium screens, becomes a slide-out drawer
+  (hamburger-triggered) on mobile. Five sections: Overview, Users, Classes, Access Requests, Role
+  Log, with active-route highlighting. Users and Access Requests link straight to the real,
+  already-existing pages (`/admin/users`, `/admin/access-requests`) rather than placeholders,
+  since building fake stand-ins for working pages would've been worse than just wiring them in.
+  Classes (`/admin/classes`) is a genuine placeholder — no dedicated admin classes view exists
+  yet — with a link out to `/teacher/classes`, which admin already has full access to. Bottom of
+  the sidebar: the same `ThemeToggle` component, and `UserMenu` (also shared with Teacher/Student
+  navbars) extended with an optional `placement="top"` prop so its dropdown opens upward instead
+  of clipping off the bottom of the viewport when anchored at the bottom of a sidebar — the only
+  change made to that component; existing callers are unaffected (defaults to the old behavior).
+  `app/admin/layout.tsx` now renders the sidebar instead of the shared `Navbar`.
+- **Step 3 (Overview)**: `GET /api/admin/overview` (new) returns five stat counts (teachers,
+  students, classes, pending sign-ups, pending class-access-requests) plus a merged, time-sorted
+  "recent activity" feed — the 10 most recent `role_change_log` rows and the 10 most recent
+  `class_access_requests` (any status), each rendered as a one-line description ("X changed Y's
+  role: Teacher → Student", "Z approved X's access request to SBU"). `role_change_log` has two
+  FKs to `users` (`target_user_id`, `changed_by`) — same PGRST201 ambiguity as
+  `class_access_requests` elsewhere in this app — so both embeds use the explicit
+  `users!role_change_log_target_user_id_fkey(...)` / `...changed_by_fkey(...)` constraint-name
+  hints from the start, rather than discovering the error live again.
+- **Step 4 (Role Log page)**: `GET /api/admin/role-log` (new) + `app/admin/role-log/page.tsx` —
+  every `role_change_log` row with target/actor names resolved, sortable by timestamp, filterable
+  by target user name. The audit trail from the last task now has an actual page.
+- **Step 5 (live verification, not traced)**: created a fresh admin test account and a fresh
+  non-admin test account (neither the real hard-coded admin). Logged in as the test admin for
+  real: landed at `/admin/dashboard` after the redirect settled. Changed the non-admin test
+  account's role via the *real* `/admin/users` UI (teacher → student) to produce a genuine
+  `role_change_log` row, then cross-checked all five Overview stat card numbers against a direct
+  database query taken at the same moment — **exact match on all five**:
+  `{teacherCount: 2, studentCount: 2, classCount: 4, pendingSignups: 0, pendingAccessRequests: 2}`
+  vs. cards showing `[2, 2, 4, 0, 2]`. `/admin/role-log` showed the real row just created
+  (`Non Admin Test | Teacher → Student | Admin UI Test | <timestamp>`). Screenshotted both light
+  and dark theme (Overview, Role Log, mobile drawer) — all render correctly on tokens, no
+  hardcoded colors (grepped every new/changed file to confirm). The non-admin test account,
+  navigating directly to `/admin/dashboard` by URL after its role-change, was redirected to
+  `/student/dashboard` — confirmed blocked. Test accounts, the log row, and the test class were
+  deleted afterward; two *real* pending access requests already in the database (from actual
+  earlier use, not test fixtures) were deliberately left untouched and showed up correctly in the
+  Overview's recent-activity feed as part of this same verification.
+- Files touched: `app/admin/layout.tsx`, `app/admin/dashboard/page.tsx` (rewritten), `types/index.ts`,
+  `components/UserMenu.tsx`, `project.md` (§2 Admin description). New: `components/AdminSidebar.tsx`,
+  `app/admin/classes/page.tsx`, `app/admin/role-log/page.tsx`, `app/api/admin/overview/route.ts`,
+  `app/api/admin/role-log/route.ts`.
+- Why: Admin had no real home of its own — a bare two-stat page and a shared navbar mostly pointed
+  at teacher routes. This gives admin a proper shell and makes the previous task's audit log
+  actually usable, not just a table sitting in the database that nobody without direct DB access
+  could ever look at.
+
