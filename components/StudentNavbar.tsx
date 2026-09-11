@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import UserMenu from "@/components/UserMenu";
+import type { UserRole } from "@/types";
 
 const NAV_LINKS = [
   { href: "/student/dashboard", label: "Dashboard" },
@@ -15,7 +16,7 @@ const NAV_LINKS = [
   { href: "/topics", label: "Topics" },
 ];
 
-export default function StudentNavbar({ user }: { user: { full_name: string | null; email: string } }) {
+export default function StudentNavbar({ user }: { user: { full_name: string | null; email: string; role: UserRole } }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -42,7 +43,7 @@ export default function StudentNavbar({ user }: { user: { full_name: string | nu
 
         <div className="hidden items-center gap-3 md:flex">
           <ThemeToggle />
-          <UserMenu name={user.full_name ?? ""} email={user.email} />
+          <UserMenu name={user.full_name ?? ""} email={user.email} role={user.role} />
         </div>
 
         <div className="flex items-center gap-2 md:hidden">
@@ -75,7 +76,7 @@ export default function StudentNavbar({ user }: { user: { full_name: string | nu
             ))}
           </nav>
           <div className="mt-4 flex items-center justify-between border-t border-line/70 pt-4">
-            <UserMenu name={user.full_name ?? ""} email={user.email} />
+            <UserMenu name={user.full_name ?? ""} email={user.email} role={user.role} />
           </div>
         </div>
       )}

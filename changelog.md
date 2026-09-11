@@ -688,3 +688,79 @@
   question. The aptitude taxonomy removes the "invent a topic name from scratch every time" friction
   for teachers without taking away the flexibility of free text.
 
+## [2026-09-11] — DSA/Aptitude/Interview Prep seed data + link-curation workflow
+- **What changed**: bulk-seeded starter content across all three question banks, all titles/topics
+  used external sites (dsa.apnacollege.in, hynts.in) only for naming/categorization structure —
+  zero scraped question or answer text; every prompt/answer word is either admin-authored or from
+  the two ready-made seed JSON files.
+  - **DSA question bank**: real per-problem links for `dsa.apnacollege.in`'s "Sigma" sheet turned
+    out to be JS-rendered and partly "Coming Soon" (confirmed via a real headless-browser render,
+    not just a text fetch) and hynts.in's problem list sits behind sign-up — rather than fabricate
+    URLs, proposed and got explicit confirmation to seed all 447 titles unlinked, flagged for
+    curation. Required a schema change: `supabase/migrations/0006_dsa_link_curation.sql` drops
+    `not null` on `questions.url`, adds `needs_link_curation boolean not null default false` (+
+    check constraint requiring one of `url`/`needs_link_curation`, + partial index), applied by the
+    user before import. Added a `PATCH` handler to `app/api/questions/route.ts` for setting the
+    real link later (auto-detects `platform`), a "447 questions still need a real link" filter
+    banner + inline "Add link" mini-form per row in `app/teacher/questions/page.tsx`, and a
+    "Link coming soon" state in `components/QuestionRow.tsx` for students. Result: 448 total (1
+    pre-existing real link + 447 newly seeded, all flagged).
+  - **Aptitude**: imported the 53-question seed file with `created_by` set to the real admin
+    account, skipping exact-duplicate prompts against existing rows. 2 of 53 were exact duplicates
+    of pre-existing (unrelated) "Number Series" rows and were skipped — 51 newly inserted, 53 total.
+  - **Interview Prep**: imported the 36-question seed file across its 6 named categories, which
+    already existed from the prior module-build task and were reused rather than duplicated. 1 of
+    36 was an exact duplicate of a previously-seeded example and was skipped — 35 newly inserted.
+    All 10 categories unchanged in count; only the 6 touched gained questions.
+- **Verification (live, not traced)**: fresh, isolated student/teacher/admin test accounts. As
+  student, in both light and dark mode: the Aptitude "Quant" category rendered its real seeded
+  topics (Percentages, Profit and Loss, Ratio and Proportion, etc., 3 questions each); the
+  Interview Prep C++ category rendered its real Q&A content. As teacher: the question bank showed
+  the "447 questions still need a real link — click to filter →" banner with per-row "Add link"
+  buttons, confirming the curation workflow renders correctly. Test accounts deleted afterward;
+  seeded data left in place.
+- Files touched: `app/api/questions/route.ts`, `components/QuestionRow.tsx`,
+  `app/teacher/questions/page.tsx`, `types/index.ts`, `lib/supabase/schema.sql`. New:
+  `supabase/migrations/0006_dsa_link_curation.sql`.
+- Why: gives every question bank real starter content instead of empty/near-empty tables, without
+  ever fabricating a URL or copying another site's written text — the curation flag makes the "447
+  titles still need a real link" gap visible and actionable to teachers instead of silently wrong.
+
+## [2026-09-11] — Interview Prep sidebar navigation, navbar role badges, real platform icons
+- **What changed**: three independent, unrelated UI improvements.
+  - **Interview Prep sidebar navigation**: `app/student/interview-prep/[category]/page.tsx`
+    rewritten as a two-column desktop layout — a sticky left sidebar listing every question in the
+    category as a numbered clickable link, main content on the right as the same accordion list.
+    Clicking a sidebar entry scrolls to and expands that question (multiple questions can stay open
+    at once — a deliberate choice, not auto-collapsing). The currently-in-view question is
+    highlighted in the sidebar as the user scrolls, via a real `IntersectionObserver` (not
+    click-only). Below `lg`, the sidebar collapses into a "Jump to question" button that opens a
+    slide-in drawer instead of two columns.
+  - **Role badges in every authenticated navbar**: new `components/RoleBadge.tsx` — a small
+    pill (`Student`/`Teacher`/`Admin`) using the existing `accent` token, no new color. Added as an
+    optional `role` prop on the already-shared `components/UserMenu.tsx` (one implementation, not
+    three) and threaded through `TeacherNavbar`, `StudentNavbar`, and `AdminSidebar`'s user section
+    via a one-line change in each of the three layout files (`app/teacher|student|admin/layout.tsx`)
+    passing `role: user.role` down.
+  - **Real platform icons on the landing page**: added `react-icons` and swapped the Platforms
+    section's placeholder letter-badges for real brand marks — `SiLeetcode`, `SiCodechef`,
+    `SiCodeforces`, `SiGeeksforgeeks`, `SiHackerrank` from `react-icons/si`, each rendered in its
+    own brand color. All 5 were available — no fallback needed for any of them.
+- **Verification (live, not traced)**: fresh, isolated student/teacher/admin test accounts, both
+  themes. Interview Prep: clicking sidebar entry #3 scrolled the main panel to and expanded exactly
+  that question (confirmed via screenshot, both themes) while the sidebar highlight tracked it;
+  scrolling the page further moved the highlighted sidebar entry, confirming the scroll-spy is
+  live, not just click-driven. Role badges: confirmed rendering next to the name in the student
+  navbar ("STUDENT"), teacher navbar ("TEACHER"), and admin sidebar ("ADMIN"). Platform icons:
+  confirmed all 5 render with their real brand colors on the landing page in both themes. `tsc
+  --noEmit` clean, hardcoded-color grep clean, production build succeeded (all 42 routes).
+  Test accounts deleted afterward.
+- Files touched: `components/UserMenu.tsx`, `components/TeacherNavbar.tsx`,
+  `components/StudentNavbar.tsx`, `components/AdminSidebar.tsx`,
+  `app/teacher/layout.tsx`, `app/student/layout.tsx`, `app/admin/layout.tsx`,
+  `components/landing/Platforms.tsx`, `package.json`. New: `components/RoleBadge.tsx`.
+- Why: the sidebar turns a long flat accordion into something actually navigable once a category
+  has more than a handful of questions; the role badge makes it obvious at a glance which account
+  context you're in (useful for anyone who tests across roles, and clearer for real users too);
+  real brand icons replace generic placeholders with marks students actually recognize.
+

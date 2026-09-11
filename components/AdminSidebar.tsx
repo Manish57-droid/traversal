@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { GraduationCap, History, Inbox, LayoutDashboard, Menu, Users, X } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import UserMenu from "@/components/UserMenu";
+import type { UserRole } from "@/types";
 
 const NAV_LINKS = [
   { href: "/admin/dashboard", label: "Overview", icon: LayoutDashboard },
@@ -43,7 +44,7 @@ function NavItem({
   );
 }
 
-export default function AdminSidebar({ user }: { user: { full_name: string | null; email: string } }) {
+export default function AdminSidebar({ user }: { user: { full_name: string | null; email: string; role: UserRole } }) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -78,7 +79,7 @@ export default function AdminSidebar({ user }: { user: { full_name: string | nul
             <ThemeToggle />
           </div>
           <div className="flex justify-center lg:justify-start">
-            <UserMenu name={user.full_name ?? ""} email={user.email} placement="top" />
+            <UserMenu name={user.full_name ?? ""} email={user.email} role={user.role} placement="top" />
           </div>
         </div>
       </aside>
@@ -121,7 +122,7 @@ export default function AdminSidebar({ user }: { user: { full_name: string | nul
             </div>
             {nav(() => setDrawerOpen(false))}
             <div className="mt-auto border-t border-line/70 px-3 pt-4">
-              <UserMenu name={user.full_name ?? ""} email={user.email} placement="top" />
+              <UserMenu name={user.full_name ?? ""} email={user.email} role={user.role} placement="top" />
             </div>
           </div>
         </div>

@@ -4,18 +4,25 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, LogOut } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/browser-client";
+import RoleBadge from "@/components/RoleBadge";
+import type { UserRole } from "@/types";
 
 // Avatar + name with a dropdown for signing out — shared by
 // TeacherNavbar/StudentNavbar (top navbar, dropdown opens downward)
 // and AdminSidebar (bottom of a sidebar, dropdown opens upward via
 // `placement="top"` so it doesn't clip off the bottom of the viewport).
+// `role`, when passed, renders a small badge next to the name — the
+// one shared place this shows up, rather than three separate navbar
+// implementations each adding their own.
 export default function UserMenu({
   name,
   email,
+  role,
   placement = "bottom",
 }: {
   name: string;
   email: string;
+  role?: UserRole;
   placement?: "top" | "bottom";
 }) {
   const router = useRouter();
@@ -51,6 +58,7 @@ export default function UserMenu({
           {initial}
         </span>
         <span className="hidden max-w-[10rem] truncate sm:inline">{name || email}</span>
+        {role && <span className="hidden sm:inline"><RoleBadge role={role} /></span>}
         <ChevronDown className={`h-3.5 w-3.5 text-fg-muted transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
@@ -61,7 +69,10 @@ export default function UserMenu({
           }`}
         >
           <div className="px-3 py-2">
-            <p className="truncate text-sm font-medium text-fg">{name || "—"}</p>
+            <div className="flex items-center gap-2">
+              <p className="truncate text-sm font-medium text-fg">{name || "—"}</p>
+              {role && <RoleBadge role={role} />}
+            </div>
             <p className="truncate text-xs text-fg-muted">{email}</p>
           </div>
           <div className="border-t border-line/70" />

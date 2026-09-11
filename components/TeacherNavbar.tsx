@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Binary, BookOpen, Calculator, ChevronDown, Compass, ListChecks, MessagesSquare, Menu, Send, Users, X } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import UserMenu from "@/components/UserMenu";
+import type { UserRole } from "@/types";
 
 // "Classes" links to /teacher/dashboard — today that one page handles
 // both creating/managing classes and the per-student progress rollup,
@@ -97,7 +98,7 @@ function ContentDropdown({ active, pathname }: { active: boolean; pathname: stri
   );
 }
 
-export default function TeacherNavbar({ user }: { user: { full_name: string | null; email: string } }) {
+export default function TeacherNavbar({ user }: { user: { full_name: string | null; email: string; role: UserRole } }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [contentExpanded, setContentExpanded] = useState(false);
@@ -120,7 +121,7 @@ export default function TeacherNavbar({ user }: { user: { full_name: string | nu
 
         <div className="hidden items-center gap-3 lg:flex">
           <ThemeToggle />
-          <UserMenu name={user.full_name ?? ""} email={user.email} />
+          <UserMenu name={user.full_name ?? ""} email={user.email} role={user.role} />
         </div>
 
         <div className="flex items-center gap-2 lg:hidden">
@@ -207,7 +208,7 @@ export default function TeacherNavbar({ user }: { user: { full_name: string | nu
             </Link>
           </nav>
           <div className="mt-4 flex items-center justify-between border-t border-line/70 pt-4">
-            <UserMenu name={user.full_name ?? ""} email={user.email} />
+            <UserMenu name={user.full_name ?? ""} email={user.email} role={user.role} />
           </div>
         </div>
       )}
