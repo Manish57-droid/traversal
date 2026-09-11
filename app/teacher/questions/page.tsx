@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PLATFORM_COLORS, PLATFORM_LABELS } from "@/lib/platform";
 import type { Question } from "@/types";
 
@@ -13,6 +13,12 @@ export default function TeacherQuestionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const [showNeedsLinkOnly, setShowNeedsLinkOnly] = useState(false);
+  const [curatingId, setCuratingId] = useState<string | null>(null);
+  const [curationUrl, setCurationUrl] = useState("");
+  const [curationError, setCurationError] = useState<string | null>(null);
+  const [curating, setCurating] = useState(false);
+
   async function load() {
     const res = await fetch("/api/questions");
     const data = await res.json();
@@ -22,6 +28,9 @@ export default function TeacherQuestionsPage() {
   useEffect(() => {
     load();
   }, []);
+
+  const needsLinkCount = useMemo(() => questions.filter((q) => q.needs_link_curation).length, [questions]);
+  const filtered = showNeedsLinkOnly ? questions.filter((q) => q.needs_link_curation) : questions;
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -44,6 +53,34 @@ export default function TeacherQuestionsPage() {
       setError(err.message);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  function startCuration(q: Question) {
+    setCuratingId(q.id);
+    setCurationUrl("");
+    setCurationError(null);
+  }
+
+  async function handleCurationSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!curatingId) return;
+    setCurationError(null);
+    setCurating(true);
+    try {
+      const res = await fetch("/api/questions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: curatingId, url: curationUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setCuratingId(null);
+      await load();
+    } catch (err: any) {
+      setCurationError(err.message);
+    } finally {
+      setCurating(false);
     }
   }
 
@@ -84,23 +121,70 @@ export default function TeacherQuestionsPage() {
         {error && <p className="text-sm text-red-400 lg:col-span-5">{error}</p>}
       </form>
 
+      {needsLinkCount > 0 && (
+        <button
+          onClick={() => setShowNeedsLinkOnly((v) => !v)}
+          className={`card block w-full p-4 text-left text-sm transition-colors ${
+            showNeedsLinkOnly ? "border-warn/60 text-warn" : "border-warn/40 text-warn hover:border-warn/70"
+          }`}
+        >
+          {needsLinkCount} question{needsLinkCount === 1 ? "" : "s"} still need a real link
+          {showNeedsLinkOnly ? " — showing only these →" : " — click to filter →"}
+        </button>
+      )}
+
       <div className="space-y-3">
-        {questions.map((q) => (
-          <div key={q.id} className="card flex flex-wrap items-center justify-between gap-3 p-4">
-            <div>
-              <span
-                className="mr-2 rounded px-2 py-0.5 text-xs font-medium text-ink-fixed"
-                style={{ backgroundColor: PLATFORM_COLORS[q.platform] }}
-              >
-                {PLATFORM_LABELS[q.platform]}
-              </span>
-              <a href={q.url} target="_blank" rel="noopener noreferrer" className="font-medium text-fg hover:text-success hover:underline">
-                {q.title}
-              </a>
-              {q.topic && <span className="ml-2 text-xs text-fg-muted">· {q.topic}</span>}
+        {filtered.map((q) => (
+          <div key={q.id} className="card flex flex-col gap-3 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <span
+                  className="mr-2 rounded px-2 py-0.5 text-xs font-medium text-ink-fixed"
+                  style={{ backgroundColor: PLATFORM_COLORS[q.platform] }}
+                >
+                  {PLATFORM_LABELS[q.platform]}
+                </span>
+                {q.url ? (
+                  <a href={q.url} target="_blank" rel="noopener noreferrer" className="font-medium text-fg hover:text-success hover:underline">
+                    {q.title}
+                  </a>
+                ) : (
+                  <span className="font-medium text-fg-muted">{q.title}</span>
+                )}
+                {q.topic && <span className="ml-2 text-xs text-fg-muted">· {q.topic}</span>}
+              </div>
+              {q.needs_link_curation && curatingId !== q.id && (
+                <button onClick={() => startCuration(q)} className="shrink-0 text-xs text-warn hover:underline">
+                  Add link
+                </button>
+              )}
             </div>
+
+            {curatingId === q.id && (
+              <form onSubmit={handleCurationSubmit} className="flex flex-wrap items-center gap-2 border-t border-line/70 pt-3">
+                <input
+                  required
+                  type="url"
+                  autoFocus
+                  className="input flex-1"
+                  placeholder="https://leetcode.com/problems/..."
+                  value={curationUrl}
+                  onChange={(e) => setCurationUrl(e.target.value)}
+                />
+                <button className="btn-secondary py-1.5 text-xs" disabled={curating}>
+                  {curating ? "Saving..." : "Save link"}
+                </button>
+                <button type="button" onClick={() => setCuratingId(null)} className="text-xs text-fg-muted hover:text-fg">
+                  Cancel
+                </button>
+                {curationError && <p className="w-full text-xs text-red-400">{curationError}</p>}
+              </form>
+            )}
           </div>
         ))}
+        {filtered.length === 0 && (
+          <p className="card p-6 text-center text-sm text-fg-muted">Nothing here yet.</p>
+        )}
       </div>
     </div>
   );

@@ -42,15 +42,22 @@ export default function QuestionRow({
           {question.difficulty !== "unknown" && (
             <span className="text-xs capitalize text-fg-muted">{question.difficulty}</span>
           )}
+          {question.needs_link_curation && (
+            <span className="rounded border border-warn/40 px-2 py-0.5 text-xs text-warn">Link coming soon</span>
+          )}
         </div>
-        <a
-          href={question.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-1 block truncate font-medium text-fg hover:text-success hover:underline"
-        >
-          {question.title}
-        </a>
+        {question.url ? (
+          <a
+            href={question.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1 block truncate font-medium text-fg hover:text-success hover:underline"
+          >
+            {question.title}
+          </a>
+        ) : (
+          <p className="mt-1 truncate font-medium text-fg-muted">{question.title}</p>
+        )}
       </div>
 
       <button

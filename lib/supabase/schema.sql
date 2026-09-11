@@ -117,21 +117,29 @@ create table if not exists class_members (
 );
 
 -- ---------- QUESTIONS ----------
--- A pasted problem link, normalized with detected platform.
+-- A pasted problem link, normalized with detected platform. `url` is
+-- nullable specifically for bulk-seeded titles awaiting a real link —
+-- see `needs_link_curation` below and 0006_dsa_link_curation.sql.
 create table if not exists questions (
   id uuid primary key default gen_random_uuid(),
   title text not null,
-  url text not null,
+  url text,
   platform question_platform not null default 'other',
   difficulty question_difficulty not null default 'unknown',
   topic text,                          -- e.g. "Arrays", "Graphs", "DP"
   notes text,
   created_by uuid references users(id) on delete set null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- A flagged row has no url yet by definition; an unflagged row must
+  -- have a real one — keeps the two states from silently drifting.
+  needs_link_curation boolean not null default false,
+  constraint questions_url_required_unless_flagged
+    check (needs_link_curation or url is not null)
 );
 
 create index if not exists idx_questions_platform on questions(platform);
 create index if not exists idx_questions_topic on questions(topic);
+create index if not exists idx_questions_needs_link_curation on questions(needs_link_curation) where needs_link_curation;
 
 -- ---------- QUESTION SETS ----------
 -- A named bundle of questions (e.g. "Week 3 - Arrays") a teacher builds

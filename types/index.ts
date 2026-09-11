@@ -27,13 +27,16 @@ export interface AppUser {
 export interface Question {
   id: string;
   title: string;
-  url: string;
+  /** Null only when `needs_link_curation` is true — a bulk-seeded
+   * title awaiting a teacher to add the real judge link. */
+  url: string | null;
   platform: QuestionPlatform;
   difficulty: QuestionDifficulty;
   topic: string | null;
   notes: string | null;
   created_by: string | null;
   created_at: string;
+  needs_link_curation: boolean;
 }
 
 export interface ProgressRow {
