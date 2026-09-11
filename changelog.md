@@ -634,3 +634,57 @@
   actually usable, not just a table sitting in the database that nobody without direct DB access
   could ever look at.
 
+## [2026-09-11] — Interview Preparation module + aptitude topic taxonomy
+- **What changed**: two additions, both following the same rule — external sites referenced for
+  categorization *structure* only (never fetched; used from general knowledge of how they group
+  topics), zero question/answer/topic content copied from anywhere. All real content is authored
+  in-app.
+  - **Interview Preparation** (new, alongside — not replacing — the existing `/topics` 3D concept
+    player): `interview_categories` (name, slug, description, icon, display_order) and
+    `interview_questions` (category_id, question, answer, difficulty, `created_by` — same
+    attribution pattern as every other question bank in this app) added via
+    `supabase/migrations/0005_interview_prep.sql`. Authoring is teacher **and** admin (not
+    admin-only) — matches the existing DSA and Aptitude question-bank convention rather than
+    introducing a new, inconsistent restriction. Built `app/student/interview-prep/page.tsx`
+    (category grid, icon + name + live question count) → `.../[category]/page.tsx` (accordion
+    question list, answer hidden until clicked, difficulty + "Added by <name>" shown once
+    expanded) and `app/teacher/interview-prep/page.tsx` (CRUD for both categories and questions).
+    `lib/interviewIcons.ts` maps a small known set of lucide icon names (matching the category
+    list) to components, falling back to a generic icon for anything unrecognized — icon choice
+    stays admin-authored free text but can never render nothing. Added "Interview Prep" to both
+    `StudentNavbar` (flat link, alongside Topics) and `TeacherNavbar`'s existing Content dropdown
+    (alongside DSA/Aptitude Questions). Seeded the 10 categories proposed and confirmed with the
+    user (C++, Java, Python, SQL, DBMS, Operating Systems, Computer Networks, System Design, OOP
+    Concepts, JavaScript) plus one original example Q&A per category (attributed to the real admin
+    account) — everything else is intentionally empty, pending real authoring.
+  - **Aptitude topic taxonomy**: `lib/aptitudeTopics.ts` — a starting per-category topic-name list
+    (Quant: Time & Work, Profit & Loss, Percentages, etc.; Logical: Blood Relations, Syllogisms,
+    Seating Arrangement, etc.; Verbal: Reading Comprehension, Synonyms & Antonyms, Para Jumbles,
+    etc. — full lists confirmed with the user before building), wired into the existing teacher
+    aptitude question form as an HTML `<datalist>` autocomplete on the topic field. `topic` stays
+    free text on `aptitude_questions` — this only suggests, never constrains.
+- **Verification (live, not traced)**: fresh, isolated student and teacher test accounts (neither
+  the real admin). As student: nav showed both "Interview Prep" and "Topics" together, the
+  category grid rendered all 10 seeded categories, and opening the C++ category's accordion in
+  dark mode revealed the real seeded answer with "Easy · Added by manish kushwaha" (the real admin
+  account) — confirming `created_by` attribution displays correctly for authored content. As
+  teacher: the Content dropdown showed "Interview Prep", and adding a brand-new test question
+  through the actual authoring UI showed up immediately with "Added by IPrep Test Teacher" —
+  confirming attribution saves correctly too, not just for pre-seeded rows. Both light and dark
+  theme screenshotted throughout; every new/changed file grepped for hardcoded colors (none
+  found, `text-red-400` on delete buttons excepted — the same pre-existing, already-flagged
+  pattern used across the rest of the app). Test question and test accounts deleted afterward; the
+  10 real seeded categories and their example Q&A were left in place.
+- Files touched: `types/index.ts`, `project.md` (§3 new module row + aptitude taxonomy note),
+  `components/StudentNavbar.tsx`, `components/TeacherNavbar.tsx`,
+  `app/teacher/aptitude/questions/page.tsx`, `lib/supabase/schema.sql`. New:
+  `supabase/migrations/0005_interview_prep.sql`, `lib/interviewIcons.ts`, `lib/aptitudeTopics.ts`,
+  `app/api/interview-prep/categories/route.ts`, `app/api/interview-prep/questions/route.ts`,
+  `app/student/interview-prep/page.tsx`, `app/student/interview-prep/[category]/page.tsx`,
+  `app/teacher/interview-prep/page.tsx`.
+- Why: Interview Prep gives students a browsable reference for the conceptual questions actual
+  interviews ask (distinct from Aptitude's timed MCQs and DSA's judge-linked problems), authored
+  entirely in-house rather than scraped — keeping the app's own voice and avoiding any copyright
+  question. The aptitude taxonomy removes the "invent a topic name from scratch every time" friction
+  for teachers without taking away the flexibility of free text.
+
