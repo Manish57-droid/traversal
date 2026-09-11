@@ -130,6 +130,84 @@ export interface AptitudeTest {
   created_at: string;
 }
 
+// ---------- Proctored Tests ----------
+// A separate, class-scoped exam type with its own MCQ question bank
+// (not shared with Aptitude or DSA). Schema/creation only for now —
+// the secure test-taking screen is a follow-up task.
+
+export type ProctoredAttemptStatus = "in_progress" | "submitted" | "auto_submitted_violation" | "expired";
+
+export type ProctoredViolationType = "tab_switch" | "fullscreen_exit" | "copy_attempt" | "camera_off";
+
+export interface ProctoredQuestion {
+  id: string;
+  prompt: string;
+  options: string[];
+  correct_option: number;
+  explanation: string | null;
+  difficulty: QuestionDifficulty;
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+}
+
+export interface ProctoredTest {
+  id: string;
+  class_id: string;
+  name: string;
+  description: string | null;
+  time_limit_minutes: number;
+  negative_marking_fraction: number;
+  max_violations_before_autosubmit: number;
+  require_camera: boolean;
+  require_mic: boolean;
+  created_by: string;
+  created_at: string;
+  results_released: boolean;
+}
+
+export interface ProctoredTestWithQuestions extends ProctoredTest {
+  question_count: number;
+}
+
+export interface ProctoredTestAttempt {
+  id: string;
+  test_id: string;
+  student_id: string;
+  status: ProctoredAttemptStatus;
+  answers: Record<string, number>;
+  score: number | null;
+  total_questions: number | null;
+  violation_count: number;
+  time_taken_seconds: number | null;
+  started_at: string;
+  submitted_at: string | null;
+}
+
+/** Sanitized for the student while an attempt is in progress — never
+ * includes `correct_option`/`explanation` (see the review endpoint,
+ * which is the only place those are ever sent, and only post-release). */
+export interface ProctoredAttemptQuestion {
+  id: string;
+  prompt: string;
+  options: string[];
+  difficulty: QuestionDifficulty;
+}
+
+export interface ProctoredViolationBreakdown {
+  attempt_id: string;
+  student_id: string;
+  student_name: string;
+  student_email: string;
+  status: ProctoredAttemptStatus;
+  score: number | null;
+  total_questions: number | null;
+  violation_count: number;
+  started_at: string;
+  submitted_at: string | null;
+  violations_by_type: Partial<Record<ProctoredViolationType, number>>;
+}
+
 // ---------- Teacher analytics dashboard ----------
 
 /** Class-wide totals behind the two summary charts. */

@@ -390,6 +390,119 @@ create table if not exists interview_questions (
 
 create index if not exists idx_interview_questions_category on interview_questions(category_id);
 
+-- ---------- PROCTORED TESTS ----------
+-- A separate, class-scoped exam type with its own dedicated MCQ
+-- question bank (not shared with Aptitude or DSA). Schema/creation
+-- only for now — the secure test-taking screen (camera/mic capture,
+-- fullscreen enforcement, live violation detection) is a follow-up
+-- task. See project.md §3 "Proctored tests / simulated placement drive".
+do $$ begin
+  create type proctored_attempt_status as enum ('in_progress', 'submitted', 'auto_submitted_violation', 'expired');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type proctored_violation_type as enum ('tab_switch', 'fullscreen_exit', 'copy_attempt', 'camera_off');
+exception when duplicate_object then null; end $$;
+
+-- One MCQ. Same shape as aptitude_questions — MCQ only for v1, no
+-- coding questions, since there's no in-house judge. Reuses
+-- question_difficulty from above.
+create table if not exists proctored_questions (
+  id uuid primary key default gen_random_uuid(),
+  prompt text not null,
+  options jsonb not null,
+  correct_option int not null,
+  explanation text,
+  difficulty question_difficulty not null default 'unknown',
+  created_by uuid references users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint proctored_questions_options_len check (jsonb_array_length(options) >= 2),
+  constraint proctored_questions_correct_option_range
+    check (correct_option >= 0 and correct_option < jsonb_array_length(options))
+);
+
+-- A proctored test belongs to exactly one class — no cross-class
+-- reuse for v1, so class_id is NOT NULL; the class-scoped
+-- authorization (owner/collaborator/admin via getClassAuthorization)
+-- is the only gate on creating/editing one.
+create table if not exists proctored_tests (
+  id uuid primary key default gen_random_uuid(),
+  class_id uuid not null references classes(id) on delete cascade,
+  name text not null,
+  description text,
+  time_limit_minutes int not null,
+  negative_marking_fraction numeric not null default 0,
+  max_violations_before_autosubmit int not null default 3,
+  require_camera boolean not null default false,
+  require_mic boolean not null default false,
+  created_by uuid not null references users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  -- Gates the full per-question review page (see
+  -- 0008_proctored_results_release.sql) — students always see their
+  -- own score immediately on submit, but right/wrong detail stays
+  -- hidden until the teacher explicitly releases it.
+  results_released boolean not null default false
+);
+
+create index if not exists idx_proctored_tests_class on proctored_tests(class_id);
+
+-- Ordered questions within a test — same explicit-position junction
+-- pattern as aptitude_test_questions.
+create table if not exists proctored_test_questions (
+  test_id uuid not null references proctored_tests(id) on delete cascade,
+  question_id uuid not null references proctored_questions(id) on delete cascade,
+  position int not null,
+  primary key (test_id, question_id),
+  unique (test_id, position)
+);
+
+-- One row per (student, test). `violation_count` is the live tally
+-- the test-taking screen will increment; once it reaches
+-- max_violations_before_autosubmit the attempt is force-submitted
+-- with status 'auto_submitted_violation'.
+create table if not exists proctored_test_attempts (
+  id uuid primary key default gen_random_uuid(),
+  test_id uuid not null references proctored_tests(id) on delete cascade,
+  student_id uuid not null references users(id) on delete cascade,
+  status proctored_attempt_status not null default 'in_progress',
+  answers jsonb not null default '{}',
+  score numeric,
+  total_questions int,
+  violation_count int not null default 0,
+  time_taken_seconds int,
+  started_at timestamptz not null default now(),
+  submitted_at timestamptz,
+  unique (test_id, student_id)
+);
+
+create index if not exists idx_proctored_attempts_test on proctored_test_attempts(test_id);
+create index if not exists idx_proctored_attempts_student on proctored_test_attempts(student_id);
+
+-- Full audit log per attempt — this is the record a teacher reviews,
+-- since no camera images/video are stored per the no-storage decision.
+create table if not exists proctored_violations (
+  id uuid primary key default gen_random_uuid(),
+  attempt_id uuid not null references proctored_test_attempts(id) on delete cascade,
+  violation_type proctored_violation_type not null,
+  occurred_at timestamptz not null default now()
+);
+
+create index if not exists idx_proctored_violations_attempt on proctored_violations(attempt_id);
+
+-- Atomic increment for violation_count — a plain read-then-write from
+-- application code raced when two violations landed within the same
+-- second (found during live verification), under-reporting the count
+-- and letting the auto-submit-at-threshold check miss its trigger.
+create or replace function increment_proctored_violation_count(p_attempt_id uuid)
+returns int
+language sql
+as $$
+  update proctored_test_attempts
+  set violation_count = violation_count + 1
+  where id = p_attempt_id
+  returning violation_count;
+$$;
+
 -- ============================================================
 -- ROW LEVEL SECURITY
 -- Supabase Auth identifies the caller; the app's own API routes use
@@ -418,6 +531,11 @@ alter table class_collaborators enable row level security;
 alter table role_change_log enable row level security;
 alter table interview_categories enable row level security;
 alter table interview_questions enable row level security;
+alter table proctored_questions enable row level security;
+alter table proctored_tests enable row level security;
+alter table proctored_test_questions enable row level security;
+alter table proctored_test_attempts enable row level security;
+alter table proctored_violations enable row level security;
 
 drop policy if exists "users can read own row" on users;
 create policy "users can read own row" on users

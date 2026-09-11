@@ -59,8 +59,8 @@ each student's prep and performance.
 | **Interview Preparation** (language/topic Q&A: C++, Java, Python, SQL, DBMS, OS, Networking, System Design, OOP, JavaScript) | **EXISTING** | `/student/interview-prep` (category grid → accordion Q&A) and `/teacher/interview-prep` (CRUD authoring, teacher/admin, same `created_by` attribution pattern as the rest of the app) are built. Content is intentionally empty aside from 1-2 example entries per category — real questions are authored by admin/teacher through the UI, not imported. Complements, doesn't replace, the "Technical round practice" module above (that one's MCQ-style timed practice; this is a static, browsable Q&A reference). |
 | **DSA judge / code execution** (in-browser run/submit against test cases) | **PLANNED** | Current DSA module links out to external judges only; no execution engine. |
 | **Off-campus opportunities board** (job/internship postings, filters, application tracking) | **PLANNED** | Not started. |
-| **"Protocol test" / simulated placement drive** (multi-round, timed, sequential, pass/fail gated) | **PLANNED** | Not started. See Open Decisions below — this needs a design call before schema work begins. |
-| **Teacher/admin dashboard: assign tests, create drives, view analytics** | **PARTIAL** | Assigning DSA question sets to a class exists today, and `/teacher/dashboard` is now a combined DSA + Aptitude analytics view (class-wide charts, a sortable per-student table, a click-through detail drawer). Creating/assigning *drives* and *aptitude tests* (Test Mode) still don't exist, so analytics for those are necessarily absent too — this dashboard will need a third module once either ships. |
+| **"Protocol test" / simulated placement drive** (multi-round, timed, sequential, pass/fail gated) | **IN PROGRESS** | **Proctored Tests** now has a full end-to-end MCQ exam flow, built in two slices. Schema/authoring (first slice): a class-scoped exam type with its own MCQ-only question bank (`proctored_questions`, not shared with Aptitude/DSA), test authoring (`proctored_tests` + ordered `proctored_test_questions`), class-gated via `getClassAuthorization` — teacher/admin UI at `/teacher/proctored-questions` (bank CRUD) and a "Proctored tests" panel on `/teacher/dashboard`. Test-taking (second slice): `/student/proctored-tests` (list + status), `/student/proctored-tests/[testId]/start` (rules screen + camera/mic check), `/student/proctored-tests/[testId]/take` (fullscreen exam UI — timer, question palette, autosaved answers), server-side violation logging + auto-submit at threshold, teacher-controlled result release gating a full review page. **Honest limits, read this before assuming more than it does**: (1) camera/mic, when required, is a **live browser check only** — the feed is never recorded, saved, or uploaded anywhere, so there is no video evidence to review after the fact, only the violation log; (2) nothing here can detect or block another running application, a second monitor, or remote-desktop software — a browser has no access to that; this is **detection-and-response inside the tab** (fullscreen-exit, tab-switch/blur, copy/cut, camera dropping out), not prevention of every way to cheat; (3) every security-relevant decision (violation count, elapsed time, final score) is computed and enforced server-side — the client only ever reflects state, confirmed by directly rewinding an attempt's `started_at` in the database and observing the server independently close it out as expired, ignoring whatever the client's own countdown displayed. Still not built: multi-round drives (this is single-test, not the full sequential-rounds "drive" concept from Section 5's data model). |
+| **Teacher/admin dashboard: assign tests, create drives, view analytics** | **PARTIAL** | Assigning DSA question sets to a class exists today, and `/teacher/dashboard` is now a combined DSA + Aptitude analytics view (class-wide charts, a sortable per-student table, a click-through detail drawer) plus the new Proctored Tests panel described above. Creating/assigning *drives* and *aptitude tests* (Test Mode) still don't exist, so analytics for those are necessarily absent too — this dashboard will need further modules once those ship. |
 
 ## 4. Tech stack
 
@@ -107,6 +107,19 @@ each student's prep and performance.
 - **aptitude_assignments** — a test assigned to a class (mirrors DSA `assignments`).
 - **aptitude_test_attempts** — one row per (student, test): `status`, `answers` (jsonb),
   `score` (numeric, net of negative marking), `total_questions`, timestamps.
+- **proctored_questions** — an MCQ for the Proctored Tests bank (separate from Aptitude/DSA):
+  `prompt`, `options` (jsonb array), `correct_option` (index), `explanation`, `difficulty`.
+- **proctored_tests** — a class-scoped timed exam: `class_id` (NOT NULL — belongs to exactly one
+  class), `name`, `description`, `time_limit_minutes`, `negative_marking_fraction`,
+  `max_violations_before_autosubmit`, `require_camera`, `require_mic`, `results_released`
+  (teacher-controlled gate on the full per-question review page).
+- **proctored_test_questions** — ordered questions within a proctored test (`position`).
+- **proctored_test_attempts** — one row per (student, test): `status`
+  (in_progress/submitted/auto_submitted_violation/expired), `answers` (jsonb), `score`,
+  `total_questions`, `violation_count`, `time_taken_seconds`, timestamps.
+- **proctored_violations** — full audit log per attempt (`violation_type`: tab_switch/
+  fullscreen_exit/copy_attempt/camera_off, `occurred_at`) — no camera images/video are stored,
+  this log is what a teacher reviews instead.
 
 ### Planned additions (draft — will firm up as each module is built)
 

@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { href: "/student/dsa", label: "DSA" },
   { href: "/student/aptitude", label: "Aptitude" },
   { href: "/student/interview-prep", label: "Interview Prep" },
+  { href: "/student/proctored-tests", label: "Proctored Tests" },
   { href: "/topics", label: "Topics" },
 ];
 

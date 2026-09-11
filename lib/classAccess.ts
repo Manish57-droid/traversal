@@ -38,6 +38,23 @@ export function isAuthorized(auth: ClassAuthorization): boolean {
 }
 
 /**
+ * Student-side equivalent of getClassAuthorization: is this student an
+ * enrolled member of the class? Used by student-facing routes (e.g.
+ * Proctored Tests) where the caller is never an owner/collaborator,
+ * just a class_members row.
+ */
+export async function isClassMember(classId: string, studentId: string): Promise<boolean> {
+  const supabase = supabaseAdmin();
+  const { data } = await supabase
+    .from("class_members")
+    .select("student_id")
+    .eq("class_id", classId)
+    .eq("student_id", studentId)
+    .maybeSingle();
+  return !!data;
+}
+
+/**
  * Class ids this user may manage (owner or approved collaborator).
  * Returns `null` for admin, meaning "no filter — every class" rather
  * than an actual (possibly huge) id list; callers should treat `null`

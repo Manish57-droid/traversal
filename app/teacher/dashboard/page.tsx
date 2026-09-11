@@ -7,6 +7,7 @@ import ClassSummaryCharts from "@/components/analytics/ClassSummaryCharts";
 import StudentTable from "@/components/analytics/StudentTable";
 import StudentDrawer from "@/components/analytics/StudentDrawer";
 import ClassAccessPanel from "@/components/analytics/ClassAccessPanel";
+import ProctoredTestsPanel from "@/components/ProctoredTestsPanel";
 import type { ClassAnalyticsSummary, StudentAnalyticsRow } from "@/types";
 
 interface ClassRow {
@@ -156,12 +157,15 @@ export default function TeacherDashboardPage() {
           <ClassSummaryCharts summary={summary} />
           <StudentTable students={students} onSelect={setSelectedStudentId} />
           {authorization && (
-            <ClassAccessPanel
-              classId={selectedClass}
-              authorization={authorization}
-              currentUserId={currentUserId}
-              onLeft={handleLeftClass}
-            />
+            <>
+              <ProctoredTestsPanel classId={selectedClass} />
+              <ClassAccessPanel
+                classId={selectedClass}
+                authorization={authorization}
+                currentUserId={currentUserId}
+                onLeft={handleLeftClass}
+              />
+            </>
           )}
         </>
       )}

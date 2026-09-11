@@ -764,3 +764,195 @@
   context you're in (useful for anyone who tests across roles, and clearer for real users too);
   real brand icons replace generic placeholders with marks students actually recognize.
 
+## [2026-09-11] — Proctored Tests foundation (schema + authoring, no test-taking yet)
+- **What changed**: the first slice of "Protocol test" / simulated placement drive — a new,
+  separate exam type created by a teacher/admin under a specific class, with its own dedicated
+  MCQ question bank. Schema and creation/authoring only; the secure test-taking screen (camera/mic
+  capture, fullscreen enforcement, live violation detection, scoring) is a separate follow-up task.
+  - **Schema** (`supabase/migrations/0007_proctored_tests.sql`, presented and confirmed before
+    applying): `proctored_questions` (MCQ, same shape as `aptitude_questions` — options jsonb,
+    correct_option index, reuses `question_difficulty`; MCQ only for v1, no coding questions, no
+    in-house judge); `proctored_tests` (`class_id` NOT NULL — a test belongs to exactly one class,
+    unlike `aptitude_tests`/`aptitude_assignments` which separate test from class-assignment;
+    `time_limit_minutes`, `negative_marking_fraction`, `max_violations_before_autosubmit` default
+    3, `require_camera`/`require_mic` toggles); `proctored_test_questions` (ordered junction,
+    same explicit-`position` pattern as `aptitude_test_questions`); `proctored_test_attempts` (one
+    per student per test, `violation_count`, unique on `(test_id, student_id)`); `proctored_violations`
+    (full audit log per attempt — `tab_switch`/`fullscreen_exit`/`copy_attempt`/`camera_off` — this
+    is the record a teacher reviews, since no camera images/video are stored per the no-storage
+    decision). RLS enabled on all five, same service-role-bypass-only posture as every other table.
+  - **Authorization**: every class-scoped route (`GET`/`POST /api/proctored-tests`) reuses the
+    existing centralized `getClassAuthorization(classId, userId, userRole)` helper — no new ad-hoc
+    ownership check — so a test can only be created/listed by the class's owner, an approved
+    collaborator, or an admin.
+  - **Question bank CRUD**: `app/teacher/proctored-questions/page.tsx` +
+    `app/api/proctored-questions/route.ts`, mirroring the existing Aptitude/Interview-Prep bank
+    patterns (options editor with a radio for the correct answer, difficulty, `created_by`
+    attribution shown as "Added by <name>" via the same `users(full_name, email)` join). Added
+    "Proctored Questions" to the teacher navbar's Content dropdown.
+  - **Test creation UI**: a new "Proctored tests" panel (`components/ProctoredTestsPanel.tsx`) on
+    the class detail page (`/teacher/dashboard`, the same view both teacher and admin already use
+    for a selected class) — lists existing tests for the class and a "Create test" form (name,
+    description, time limit, negative marking, violation threshold, camera/mic toggles, manual
+    question checkboxes or "Pick N random"). Rendered only when the caller already has
+    owner/collaborator/admin authorization on the selected class, alongside the existing
+    `ClassAccessPanel`.
+- **Bug found and fixed during verification**: the "N random" question-count input had a native
+  HTML `max` attribute set to the bank size. With a small bank (e.g. 1 question) and the input's
+  default value of 5, the browser's own validation silently blocked the entire form's submit —
+  including manual checkbox selection, which doesn't even use that field — with no visible error
+  until you noticed the tooltip. Fixed by dropping `max` (the random-pick logic already clamps
+  via `Math.min(randomCount, bank.length)` in code, so the attribute was redundant and actively
+  harmful).
+- **Verification (live, not traced)**: fresh, isolated accounts — an owning teacher, an outsider
+  teacher with no relationship to the test class, and an admin — plus a throwaway class and one
+  seeded proctored question. Confirmed via direct API calls: the outsider teacher's
+  `POST /api/proctored-tests` on the class returned **404 "Class not found"** (the class-not-found
+  response, not a 403, matches the existing pattern elsewhere in the app of not confirming a
+  class's existence to an unauthorized caller); the admin's request against the same class
+  succeeded (201) regardless of not owning it. Confirmed via the real UI: the owning teacher
+  opened the "Create test" form, filled it out, selected a question, and submitted — the test
+  (`"UI Test Drive"`) was verified present in the database afterward with the exact submitted
+  values. Both light and dark mode screenshotted on the class dashboard (list + panel) and the
+  question bank page — dark mode renders cleanly, camera/violation-threshold badges visible.
+  Production build succeeded with the two new routes (`/teacher/proctored-questions`,
+  `/api/proctored-tests`, `/api/proctored-questions`) compiling cleanly. Test accounts, class,
+  question, and all created test tests deleted afterward.
+- Files touched: `types/index.ts`, `components/TeacherNavbar.tsx`, `app/teacher/dashboard/page.tsx`,
+  `lib/supabase/schema.sql`, `project.md` (§3 status row now IN PROGRESS + §5 new tables). New:
+  `supabase/migrations/0007_proctored_tests.sql`, `app/api/proctored-questions/route.ts`,
+  `app/api/proctored-tests/route.ts`, `app/teacher/proctored-questions/page.tsx`,
+  `components/ProctoredTestsPanel.tsx`.
+- Why: proctored tests need their own bank because they're MCQ-only and graded under exam
+  conditions — mixing them into the Aptitude bank would blur "practice content" with "exam
+  content" and risk a question a student already saw in practice mode showing up in a proctored
+  test. Scoping every test to exactly one class (rather than a separate assignment step like
+  Aptitude/DSA) matches how a real placement drive works: a specific batch, sitting a specific
+  exam, once. Building schema + authoring first — and deliberately stopping before the
+  test-taking screen — lets the data model and authorization get reviewed and hardened before any
+  student-facing surface (camera capture, violation detection) is built on top of it.
+
+## [2026-09-11] — Proctored Tests: full student test-taking screen, violation detection, result release
+- **What changed**: the second slice of Proctored Tests — the actual student-facing exam flow on
+  top of last task's schema/authoring foundation. Everything security- or integrity-relevant
+  (violation count, elapsed time, final score) is computed and enforced server-side; the client
+  only ever reflects state it's told, never decides it.
+  - **Schema additions**: `proctored_tests.results_released` (boolean, default false — gates the
+    full review page) via `0008_proctored_results_release.sql`; an atomic-increment Postgres
+    function `increment_proctored_violation_count` via `0009_proctored_violation_increment.sql`
+    (see the bug below — this replaced a JS-side read-then-write).
+  - **Pre-test screen** (`/student/proctored-tests/[testId]/start`): plainly states what's
+    actually checked — fullscreen, tab-switch/copy logging, violation-count auto-submit — and
+    explicitly does **not** claim to detect other running applications or remote-desktop software,
+    since a browser has no way to see either. If the test requires camera/mic, `getUserMedia` is
+    requested here with a live preview so the student can confirm it's working before starting;
+    denial blocks the Start button. Clicking "Start Test" calls `requestFullscreen()` first (still
+    inside the click's user-gesture window, before any `await`) and then starts/resumes the
+    attempt server-side in the same handler.
+  - **Test screen** (`/student/proctored-tests/[testId]/take`): top bar (student name + class,
+    server-authoritative countdown), main question/options panel, right-side numbered palette
+    (green = answered, yellow = visited, red = untouched), Submit with a confirmation dialog.
+    Every answer selection immediately `PATCH`es the attempt's `answers` jsonb (autosave, not
+    deferred to final submit) — a violation-triggered auto-submit or a crashed tab still scores
+    real saved answers. The client's countdown is purely cosmetic: it's seeded from a server-given
+    `remaining_seconds` and re-synced from the server every 30s; the server independently
+    recomputes `(started_at + time_limit_minutes) − now()` on every write endpoint and force-closes
+    an overdue attempt regardless of what the client believes.
+  - **Violation detection**, each logged via `POST .../violations` (inserts a `proctored_violations`
+    row and atomically bumps `violation_count` — never trusts a client-reported count): fullscreen
+    exit (`fullscreenchange`, shows a blocking "Resume" overlay, logged the instant exit is
+    detected, not on the Resume click), tab-switch/blur (`visibilitychange` + `blur`, debounced so
+    overlapping events don't double-log), copy/cut/contextmenu/selectstart prevention over the
+    question area (only copy/cut are logged as violations; the other two are silently blocked),
+    and camera-off (`track.onended`/`mute`, only when the test requires a camera). Each violation
+    shows a brief non-blocking toast with the running count; reaching
+    `max_violations_before_autosubmit` immediately force-submits
+    (`status = 'auto_submitted_violation'`) and redirects to the result screen.
+  - **Submit + scoring**: `POST /api/proctored-tests/[id]/attempts/[attemptId]/submit` is the only
+    place a score is ever computed — it takes no body at all. Whether the closeout is a normal
+    submit, a timeout, or a violation-triggered auto-submit is derived entirely from the attempt's
+    own server-known state (`violation_count` vs. the test's threshold, elapsed time vs. its
+    limit) inside a shared `finalizeAttempt` helper (`lib/proctoredScoring.ts`), never from
+    anything the client claims — a deliberately stricter reading of "client never decides" than a
+    passed-in reason flag would have been. Idempotent: calling it twice just returns the existing
+    result.
+  - **Post-submit + review**: the result screen (`/student/proctored-tests/[testId]/result`) shows
+    only the score, with wording specific to how the attempt ended — no per-question right/wrong
+    here. `/student/proctored-tests/[testId]/review` is gated on `results_released`: a 403 with
+    "Results haven't been released yet" until the teacher flips it, then the full per-question
+    correct/incorrect + explanation view. A "Release results" / "Unrelease results" toggle was
+    added to the teacher's per-test expandable detail (`components/ProctoredTestsPanel.tsx`),
+    alongside a per-student violation audit — status, score, total violation count, and a
+    breakdown chip per violation type (e.g. "Fullscreen exit: 1 · Tab switch: 1") — this is what
+    makes the no-camera-storage tradeoff acceptable, since a teacher can still see a suspicious
+    pattern without any recording ever existing.
+- **Bug found and fixed during verification**: two violations landing within the same second (a
+  fullscreen exit immediately followed by a tab switch — an entirely realistic sequence, e.g. a
+  student exiting fullscreen by switching apps) raced on a plain read-then-write increment in
+  application code. Both requests read the same starting `violation_count`, both computed `+1`,
+  and the second write clobbered the first — two rows landed in `proctored_violations` but the
+  count only advanced by one, silently letting the auto-submit-at-threshold check miss its
+  trigger. Fixed with a single atomic `UPDATE ... SET violation_count = violation_count + 1
+  ... RETURNING` done inside Postgres via an RPC function, since the JS client has no atomic
+  increment of its own for a plain column.
+- **Verification (live, not traced)** — fresh, isolated teacher/student accounts, a throwaway
+  class, 3 real questions, and a real proctored test (2-violation threshold to make the auto-submit
+  path reachable quickly):
+  - **Fullscreen exit**: confirmed real `requestFullscreen()` engaged in the browser
+    (`document.fullscreenElement` was genuinely truthy after Start), simulated exit fired the
+    `fullscreenchange` listener, the blocking "You exited fullscreen" overlay appeared, and a
+    `fullscreen_exit` row landed in `proctored_violations` immediately (not on the Resume click).
+  - **Tab switch**: a `blur` event logged a `tab_switch` row.
+  - **Violation threshold**: with the atomic-increment fix applied, the second violation correctly
+    pushed `violation_count` to 2 (matching the test's threshold), the attempt was force-submitted
+    server-side with `status = 'auto_submitted_violation'` and a real computed score (1/3, matching
+    the one correct answer that had been saved), and the client was redirected to
+    `/result?status=auto_submitted_violation&score=1&total=3`.
+  - **Server-authoritative timer**: with the client's on-screen countdown still showing `29:56`,
+    the attempt's `started_at` was rewound 2 hours into the past directly in the database (the
+    "manually adjust the clock" check, done by directly manipulating the value the server actually
+    trusts rather than the OS clock, since server and browser share a machine in local dev). The
+    very next server call — the same endpoint the client's 30-second resync hits — independently
+    computed `remaining_seconds: 0`, closed the attempt out as `status: "expired"` with a real
+    score, and the client was auto-redirected to the result screen on its next check. The client's
+    own displayed value never factored into the decision.
+  - **Result-release gating**: `GET .../review` returned `403 "Results haven't been released yet."`
+    before the teacher's toggle, and `200` with full `correct_option`/`selected_option` detail
+    immediately after — same test, same attempt, only the flag changed.
+  - **Teacher violation view**: the expandable per-test detail correctly showed
+    `auto_submitted_violation · 1/3`, `2 violations`, and per-type chips `Fullscreen exit: 1` /
+    `Tab switch: 1`.
+  - **Both themes**: start screen, live exam screen (top bar, palette, options), the fullscreen-exit
+    overlay, the result screen, the student review page, and the teacher violation/release view all
+    screenshotted in light and dark — all render cleanly, no dark-mode contrast issues, no
+    unstyled/raw-color leaks. One real bug found and fixed along the way: the exam screen's outer
+    container had no explicit `z-index`, so the normal `StudentNavbar` (which does carry one)
+    painted over the custom top bar instead of being fully covered by the immersive exam view —
+    fixed by giving the exam container `z-50`, which also has the security-adjacent benefit of
+    fully hiding the app's own nav links during a test rather than leaving them visually peeking
+    through.
+  - A production build was run clean (all new routes compiling) and all test accounts, class,
+    questions, and attempts were deleted afterward.
+- Files touched: `types/index.ts`, `lib/classAccess.ts` (new `isClassMember`), `lib/supabase/schema.sql`,
+  `components/StudentNavbar.tsx`, `components/ProctoredTestsPanel.tsx`,
+  `app/api/proctored-tests/route.ts`, `app/teacher/dashboard/page.tsx`, `project.md` (§3 status +
+  honest limitations, §5 new column). New: `supabase/migrations/0008_proctored_results_release.sql`,
+  `supabase/migrations/0009_proctored_violation_increment.sql`, `lib/proctoredScoring.ts`,
+  `app/api/proctored-tests/[id]/route.ts`, `app/api/proctored-tests/[id]/attempts/route.ts`,
+  `app/api/proctored-tests/[id]/attempts/[attemptId]/route.ts`,
+  `app/api/proctored-tests/[id]/attempts/[attemptId]/submit/route.ts`,
+  `app/api/proctored-tests/[id]/attempts/[attemptId]/violations/route.ts`,
+  `app/api/proctored-tests/[id]/review/route.ts`, `app/api/student/proctored-tests/route.ts`,
+  `app/student/proctored-tests/page.tsx`, `app/student/proctored-tests/[testId]/start/page.tsx`,
+  `app/student/proctored-tests/[testId]/take/page.tsx`,
+  `app/student/proctored-tests/[testId]/result/page.tsx`,
+  `app/student/proctored-tests/[testId]/review/page.tsx`.
+- Why: a proctored exam is only as trustworthy as its weakest enforcement point — every design
+  choice here (server-computed timer, server-computed score, atomic violation counting, a
+  reason-less submit endpoint that derives its own status) exists to make sure the one thing a
+  student's browser controls is what they see, never what actually gets recorded. Being explicit
+  in project.md about what this can't do (no cross-application detection, no camera storage) is
+  as important as documenting what it can — anyone building on this later needs to know a
+  "proctored" test here means "logged and auto-submitted on suspicious activity," not "cheating is
+  impossible."
+
