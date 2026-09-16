@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser-client";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -88,7 +89,14 @@ export default function SignUpPage() {
         </div>
         <div>
           <label className="mb-1 block text-xs text-fg-muted" htmlFor="password">Password</label>
-          <input id="password" type="password" required minLength={6} className="input" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <PasswordInput
+            id="password"
+            required
+            minLength={6}
+            autoComplete="new-password"
+            value={password}
+            onChange={setPassword}
+          />
         </div>
 
         <div>

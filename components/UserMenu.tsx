@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, LogOut } from "lucide-react";
+import { ChevronDown, LogOut, User } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/browser-client";
 import RoleBadge from "@/components/RoleBadge";
 import type { UserRole } from "@/types";
@@ -76,6 +77,15 @@ export default function UserMenu({
             <p className="truncate text-xs text-fg-muted">{email}</p>
           </div>
           <div className="border-t border-line/70" />
+          <Link
+            href="/profile"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-fg-muted
+              transition-colors hover:bg-surface-2 hover:text-fg"
+          >
+            <User className="h-4 w-4" />
+            Profile
+          </Link>
           <button
             onClick={handleSignOut}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-fg-muted

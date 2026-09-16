@@ -956,3 +956,99 @@
   "proctored" test here means "logged and auto-submitted on suspicious activity," not "cheating is
   impossible."
 
+## [2026-09-16] — Profile editing, OTP-based forgot password, reusable password-visibility toggle
+- **REQUIRED MANUAL STEP — not yet done, must be done for the OTP email to work for real users**:
+  in the Supabase Dashboard, go to **Authentication → Email Templates → Reset Password** and change
+  the template body to render `{{ .Token }}` (the 6-digit — in this project, actually 8-digit, see
+  below — OTP) instead of the default `{{ .ConfirmationURL }}` link. Until this is done, the email
+  a real user receives after using "Forgot password?" will contain a confirmation link, not a code,
+  and the `/reset-password` screen this task built will have nothing to enter. This cannot be done
+  from code; someone with dashboard access has to make this change directly.
+- **What changed**: three related additions to account management.
+  - **`PasswordInput`** (`components/PasswordInput.tsx`): a reusable wrapper around a standard
+    input with an Eye/EyeOff (lucide-react) toggle button flipping between `type="password"` and
+    `type="text"`. Migrated onto every password field in the app — sign-in, sign-up, the new
+    profile password-change form, and both new OTP-reset fields — no field left as a raw
+    `type="password"` input (confirmed via a repo-wide grep after migrating).
+  - **`app/profile/page.tsx`** (works for any role — student/teacher/admin all land here):
+    shows name, read-only email, and the existing `RoleBadge` component (reused, not
+    reimplemented). An "Edit" button reveals an editable name field; Save calls the new
+    `PATCH /api/profile` route, which updates only the caller's own `users.full_name` row
+    (`getCurrentAppUser()` scopes it — no id is ever accepted from the client). A "Change
+    Password" section takes current/new/confirm password (all `PasswordInput`): before calling
+    `supabase.auth.updateUser({ password })`, it first re-authenticates via
+    `signInWithPassword` with the current password — a failure there is surfaced as "Current
+    password is incorrect" and the update is never attempted. New passwords are checked against a
+    shared `lib/passwordStrength.ts` rule (min 8 characters, at least one number) with live visible
+    feedback, and must match the confirm field, before the submit button even enables. A "Profile"
+    link was added to the shared `UserMenu` dropdown (one implementation, reused across all three
+    navbars, same pattern as the earlier role-badge work) so every role can actually reach the page.
+    **Skipped, noted rather than faked**: the optional "send a notification email on password
+    change" — this app has no email-sending infrastructure of its own (no Edge Function, no SMTP/
+    third-party email API configured anywhere); Supabase Auth's built-in emails only cover its own
+    specific flows (signup confirmation, password recovery), not arbitrary custom notifications, so
+    building this properly is a separate infrastructure task, not a few lines here.
+  - **Forgot password (OTP-based)**: a "Forgot password?" link added next to the password label on
+    `/sign-in`. `app/forgot-password/page.tsx` collects an email and calls
+    `resetPasswordForEmail` — once Step 0's template change is live, this is what triggers the code
+    email. `app/reset-password/page.tsx` takes the emailed code, new password, and confirm
+    (`PasswordInput` for both), calls `supabase.auth.verifyOtp({ email, token, type: 'recovery' })`
+    to exchange the code for a real session, then `updateUser({ password })` to set the new
+    password — same strength/match rule as the profile form. An expired/incorrect code surfaces
+    Supabase's own error text plainly ("Token has expired or is invalid") rather than failing
+    silently. Both new routes added to `middleware.ts`'s `PUBLIC_PATHS` so a signed-out visitor can
+    actually reach them.
+- **Real finding from live testing — this project's OTP is 8 digits, not 6**: the task described a
+  6-digit code (Supabase's documented default), but retrieving the actual value this project's
+  Supabase instance issues (via `supabase.auth.admin.generateLink({ type: 'recovery', email })`,
+  which returns the identical OTP a real email would contain, in `properties.email_otp` — used here
+  specifically because no real inbox was available to read from during automated testing) showed an
+  8-digit numeric code. The code input originally had `maxLength={6}`, which would have silently
+  truncated every real code a user typed and made the entire flow permanently fail end-to-end
+  despite looking correct in isolation. Fixed by raising the cap to 12 and switching the on-screen
+  copy from "6-digit code" to length-agnostic "verification code" wording in both
+  `forgot-password` and `reset-password`, since the true length is a property of this Supabase
+  project's configuration, not something the client should assume.
+- **Another finding, unrelated to this app's code**: `resetPasswordForEmail` rejected one
+  specific test address (`verify.account.test@gmail.com`) with `400 Email address ... is invalid`,
+  even though the identical address works fine for `signUp`/`signInWithPassword` and other,
+  similarly-dotted addresses at the same domain passed. This is a Supabase-side validation quirk on
+  that specific endpoint, not a bug in this task's code — worth knowing if a real user ever reports
+  "forgot password says my email is invalid" despite being able to sign in normally.
+- **Verification (live, not traced)** — fresh, isolated test accounts, Playwright driving the real
+  UI throughout:
+  - **Name edit**: changed a name on `/profile`, confirmed the new value persisted (re-queried
+    after a fresh page load) and showed correctly in the shared navbar afterward.
+  - **Password change**: wrong current password → "Current password is incorrect", change
+    rejected (confirmed the password was NOT altered). Correct current password → "Password
+    changed successfully", and a direct sign-in call with the new password succeeded.
+  - **Forgot-password → reset-password, fully end-to-end**: requested a code from the real
+    `/forgot-password` UI ("Check your email" screen confirmed) → retrieved the real OTP via the
+    admin-API method described above → submitted a wrong code first and confirmed "Token has
+    expired or is invalid" rendered → submitted the real code with a new password → "Password
+    updated" screen shown → **signed in with the new password against the real `/sign-in` page and
+    confirmed it landed on `/student/dashboard`**, proving the whole chain actually works, not just
+    that each API call individually succeeded.
+  - **Eye-toggle**: confirmed `type` flips `password → text` (and the icon swaps Eye ↔ EyeOff) on
+    every migrated field — sign-in, sign-up, and both profile password fields — via direct
+    attribute checks and a visual screenshot showing one field's plaintext value next to two
+    still-masked fields.
+  - Both light and dark mode screenshotted for `/profile`, `/sign-in`, `/forgot-password`, and
+    `/reset-password` (including its wrong-code error state and its success state) — all render
+    cleanly, no dark-mode contrast issues.
+  - `tsc --noEmit` clean; a full production build was run once mid-task and passed (all new routes
+    compiling, including catching a `useSearchParams` missing-Suspense build error on
+    `/reset-password`, fixed by wrapping the form in `<Suspense>`) — a second build was
+    intentionally skipped at the end of this task to avoid clobbering a dev server the user was
+    actively using in the same session. All test accounts deleted afterward.
+- Files touched: `app/sign-in/page.tsx`, `app/sign-up/page.tsx`, `components/UserMenu.tsx`,
+  `middleware.ts`. New: `components/PasswordInput.tsx`, `components/ProfileForm.tsx`,
+  `lib/passwordStrength.ts`, `app/api/profile/route.ts`, `app/profile/page.tsx`,
+  `app/forgot-password/page.tsx`, `app/reset-password/page.tsx`.
+- Why: password reset previously didn't exist at all — a locked-out user had no self-service path.
+  OTP over a magic link keeps the flow inside the app's own UI (no separate email-client context
+  switch to click a link) and matches what was explicitly asked for. Re-authenticating before a
+  profile password change (rather than trusting the client's own claim that it knows the current
+  password) closes the obvious hole where a session left open on a shared device could otherwise
+  have its password silently changed by anyone at the keyboard.
+

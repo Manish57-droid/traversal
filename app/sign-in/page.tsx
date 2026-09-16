@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser-client";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -44,8 +45,19 @@ export default function SignInPage() {
           <input id="email" type="email" required className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-fg-muted" htmlFor="password">Password</label>
-          <input id="password" type="password" required className="input" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <div className="mb-1 flex items-center justify-between">
+            <label className="block text-xs text-fg-muted" htmlFor="password">Password</label>
+            <Link href="/forgot-password" className="text-xs text-fg-subtle hover:text-fg">
+              Forgot password?
+            </Link>
+          </div>
+          <PasswordInput
+            id="password"
+            required
+            autoComplete="current-password"
+            value={password}
+            onChange={setPassword}
+          />
         </div>
 
         {error && <p className="text-sm text-red-400">{error}</p>}

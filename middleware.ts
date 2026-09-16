@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptionsWithName } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/", "/sign-in", "/sign-up"];
+const PUBLIC_PATHS = ["/", "/sign-in", "/sign-up", "/forgot-password", "/reset-password"];
 const TRUSTED_USER_HEADER = "x-verified-user-id";
 
 function isPublicPath(pathname: string) {
