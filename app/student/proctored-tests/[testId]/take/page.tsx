@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import QuestionPalette from "@/components/QuestionPalette";
 import type { ProctoredAttemptQuestion, ProctoredViolationType } from "@/types";
 
 interface TestConfig {
@@ -407,32 +408,13 @@ export default function ProctoredTestTakePage() {
         </div>
 
         <div className="flex shrink-0 flex-col gap-4 sm:w-56">
-          <div className="card p-4">
-            <p className="mb-3 text-xs uppercase tracking-wide text-fg-subtle">Questions</p>
-            <div className="grid grid-cols-6 gap-2 sm:grid-cols-4">
-              {questions.map((q, i) => {
-                const answered = answers[q.id] !== undefined;
-                const seen = visited.has(q.id);
-                const style = answered
-                  ? "border-success/60 bg-success/10 text-success"
-                  : seen
-                    ? "border-warn/50 bg-warn/10 text-warn"
-                    : "border-red-500/40 bg-red-500/5 text-red-400";
-                return (
-                  <button
-                    key={q.id}
-                    type="button"
-                    onClick={() => setCurrentIndex(i)}
-                    className={`flex h-9 w-9 items-center justify-center rounded-lg border text-xs font-medium transition-colors ${style} ${
-                      currentIndex === i ? "ring-2 ring-accent" : ""
-                    }`}
-                  >
-                    {i + 1}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <QuestionPalette
+            questions={questions}
+            answers={answers}
+            visited={visited}
+            currentIndex={currentIndex}
+            onJump={setCurrentIndex}
+          />
 
           <button
             type="button"

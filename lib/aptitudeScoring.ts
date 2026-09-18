@@ -1,37 +1,29 @@
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { remainingSeconds } from "@/lib/testTiming";
-import type { ProctoredAttemptStatus } from "@/types";
-
-// Re-exported so existing imports of `remainingSeconds` from this
-// module keep working unchanged — the actual timer math now lives in
-// lib/testTiming.ts, shared with Aptitude Test Mode.
-export { remainingSeconds };
+import type { AptitudeAttemptStatus } from "@/types";
 
 interface AttemptRow {
   id: string;
   test_id: string;
-  status: ProctoredAttemptStatus;
+  status: AptitudeAttemptStatus;
   answers: Record<string, number>;
-  violation_count: number;
   started_at: string;
 }
 
 interface TestRow {
   time_limit_minutes: number;
   negative_marking_fraction: number;
-  max_violations_before_autosubmit: number;
 }
 
 /**
- * The single place an attempt is ever scored and closed out. Called
- * from three places (timer expiry, violation threshold, manual
- * submit) — the status is always derived from the attempt's own
- * server-known state (violation_count vs threshold, elapsed time vs
- * limit), never from a client-supplied "reason". Idempotent: if the
- * attempt is already finalized, returns its existing result instead
- * of rescoring.
+ * The single place an Aptitude Test Mode attempt is ever scored and
+ * closed out — mirrors lib/proctoredScoring.ts's finalizeAttempt, but
+ * with no violation concept: status is derived purely from elapsed
+ * time vs. the limit (in_progress -> submitted, or expired on
+ * timeout), never from anything the client claims. Idempotent: if
+ * already finalized, returns the existing result instead of rescoring.
  */
-export async function finalizeAttempt(attempt: AttemptRow, test: TestRow) {
+export async function finalizeAptitudeAttempt(attempt: AttemptRow, test: TestRow) {
   const supabase = supabaseAdmin();
 
   if (attempt.status !== "in_progress") {
@@ -39,11 +31,11 @@ export async function finalizeAttempt(attempt: AttemptRow, test: TestRow) {
   }
 
   const { data: testQuestions } = await supabase
-    .from("proctored_test_questions")
-    .select("question_id, proctored_questions(correct_option)")
+    .from("aptitude_test_questions")
+    .select("question_id, aptitude_questions(correct_option)")
     .eq("test_id", attempt.test_id);
 
-  const rows = (testQuestions ?? []) as unknown as { question_id: string; proctored_questions: { correct_option: number } | null }[];
+  const rows = (testQuestions ?? []) as unknown as { question_id: string; aptitude_questions: { correct_option: number } | null }[];
   const totalQuestions = rows.length;
 
   let correct = 0;
@@ -51,7 +43,7 @@ export async function finalizeAttempt(attempt: AttemptRow, test: TestRow) {
   for (const row of rows) {
     const selected = attempt.answers?.[row.question_id];
     if (selected === undefined || selected === null) continue;
-    if (row.proctored_questions && selected === row.proctored_questions.correct_option) correct += 1;
+    if (row.aptitude_questions && selected === row.aptitude_questions.correct_option) correct += 1;
     else wrong += 1;
   }
 
@@ -59,15 +51,10 @@ export async function finalizeAttempt(attempt: AttemptRow, test: TestRow) {
   const remaining = remainingSeconds(attempt.started_at, test.time_limit_minutes);
   const timeTakenSeconds = Math.max(0, test.time_limit_minutes * 60 - remaining);
 
-  const finalStatus: ProctoredAttemptStatus =
-    attempt.violation_count >= test.max_violations_before_autosubmit
-      ? "auto_submitted_violation"
-      : remaining <= 0
-        ? "expired"
-        : "submitted";
+  const finalStatus: AptitudeAttemptStatus = remaining <= 0 ? "expired" : "submitted";
 
   const { error } = await supabase
-    .from("proctored_test_attempts")
+    .from("aptitude_test_attempts")
     .update({
       status: finalStatus,
       score,

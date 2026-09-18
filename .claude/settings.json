@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node _check_aptitude_schema.mjs)",
+      "Bash(node _check_aptitude_schema2.mjs)",
+      "Bash(grep -rn \"#[0-9a-fA-F]\\\\{3,6\\\\}\\\\b\" app/student/aptitude app/api/aptitude components/AptitudeTestsPanel.tsx components/AssignedAptitudeTests.tsx components/QuestionPalette.tsx components/TestReviewView.tsx components/TestResultBanner.tsx app/api/student/aptitude)",
+      "Bash(netstat -ano)",
+      "Bash(npm run *)",
+      "Bash(taskkill //F //PID 11292)",
+      "Bash(curl -s -o /dev/null -w \"3001:%{http_code}\\\\n\" http://localhost:3001)",
+      "Bash(node _setup_aptitude_test.mjs)",
+      "Bash(node _verify_aptitude.mjs)",
+      "Bash(node _get_test_id.mjs)",
+      "Bash(node _verify_aptitude_student.mjs)",
+      "Bash(node _check_apt_attempt.mjs)",
+      "Bash(node _verify_apt_timer.mjs)",
+      "Bash(node _debug_apt_reload.mjs)",
+      "Bash(node _verify_apt_release.mjs)",
+      "Bash(node _recapture_teacher_results.mjs)",
+      "Bash(node -e ' *)",
+      "Bash(rm -f _setup_aptitude_test.mjs _verify_aptitude.mjs _verify_aptitude_student.mjs _verify_apt_timer.mjs _verify_apt_release.mjs _recapture_teacher_results.mjs)",
+      "Bash(rm -rf \"C:/Users/ankit/AppData/Local/Temp/claude/d--FreeLanching-Traversal/aptitude_shots\")"
+    ]
+  }
+}

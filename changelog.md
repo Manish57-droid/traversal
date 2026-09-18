@@ -1052,3 +1052,106 @@
   password) closes the obvious hole where a session left open on a shared device could otherwise
   have its password silently changed by anyone at the keyboard.
 
+## [2026-09-18] — Aptitude Test Mode: timed, teacher-assigned, scored tests
+- **Step 1 — schema confirmation (queried before building, not assumed)**: all four tables designed
+  earlier for this exist exactly as originally specced — `aptitude_tests` (`negative_marking_fraction`
+  confirmed `numeric not null default 0` via a live insert probe; `category` nullable = mixed),
+  `aptitude_test_questions` (ordered junction, `position`), `aptitude_assignments` (mirrors the DSA
+  `assignments` shape: `test_id`, `class_id`, `assigned_by`, `due_date`), `aptitude_test_attempts`
+  (`status`/`answers`/`score`/`total_questions`/`time_taken_seconds`, unique on `(test_id, student_id)`).
+  All four were empty (0 rows) — Test Mode had genuinely never been used. The one thing missing was
+  `results_released` on `aptitude_tests`, needed to gate the review page the same way Proctored Tests
+  does — added via `supabase/migrations/0010_aptitude_results_release.sql`, confirmed and applied.
+- **What changed**: the full timed/scored test flow on top of that schema, deliberately *not*
+  proctored — no fullscreen lock, no camera/mic, no violation detection; that's what Proctored Tests
+  is for, this is a plain timed test.
+  - **Authorization**: every class-scoped route uses the existing `getClassAuthorization` helper,
+    same as everywhere else in the app — no raw ownership check. Since `aptitude_tests` itself has
+    no `class_id` (unlike `proctored_tests` — assignment is a separate `aptitude_assignments` row,
+    matching the DSA question-set/assignment model), authorization checks against *every* class a
+    test is currently assigned to and passes if the caller is authorized on any of them.
+  - **Teacher UI** (`components/AptitudeTestsPanel.tsx`, added to the same class-detail view
+    Proctored Tests and `ClassAccessPanel` live in): create a test (name, description, category or
+    mixed, time limit, negative marking fraction, optional due date) and pick questions from the
+    existing Aptitude bank — manually, or "Pick N random" scoped to a category+topic. Creating and
+    assigning happen as one call (`POST /api/aptitude/tests`), since this UI always creates a test in
+    the context of one class. Existing tests list with question count/time limit/negative marking/due
+    date, each expandable into a **results rollup**: attempt count, average score, a score-distribution
+    bar chart (recharts, bucketed), per-student score + status + time taken, and the "Release
+    results" / "Unrelease results" toggle.
+  - **Student take screen** (`app/student/aptitude/test/[testId]/page.tsx`): combined pre-test info
+    (question count, time limit, negative marking, an explicit "no fullscreen lock, no camera, no
+    activity monitoring" line) and the take-test UI in one route — unlike Proctored Tests, there's no
+    fullscreen/camera permission gesture to arrange for, so no separate `/start` route was needed.
+    Server-authoritative timer (identical math to Proctored Tests, extracted into shared
+    `lib/testTiming.ts`), answers autosaved on every selection, auto-submit on timeout with whatever
+    was answered. Also added to the student Aptitude index page as an "Assigned tests" section
+    (`components/AssignedAptitudeTests.tsx`) so students have somewhere to actually find an assigned
+    test.
+  - **Scoring**: `lib/aptitudeScoring.ts`'s `finalizeAptitudeAttempt` — the only place a score is ever
+    computed, mirroring `lib/proctoredScoring.ts`'s pattern exactly but with no violation concept:
+    status is derived purely from elapsed time vs. the limit (`in_progress` → `submitted`, or
+    `expired` on timeout), never from anything the client claims. Negative marking applied server-side
+    only (`correct − wrong × negative_marking_fraction`).
+  - **Result + review**: post-submit shows score only, matching the leak-safe pattern confirmed on
+    Proctored Tests. The full per-question review stays gated behind `results_released` until the
+    teacher flips it — same mechanism, and the same components: `TestResultBanner` and
+    `TestReviewView` were *extracted* from the Proctored Tests pages (which now import them too,
+    replacing what used to be inline JSX) and reused as-is for Aptitude, rather than reimplementing
+    the pattern a second time. The right-side question palette (`QuestionPalette`) was extracted the
+    same way and is now shared by both take screens.
+- **Verification (live, not traced)** — fresh, isolated owner-teacher/outsider-teacher/student
+  accounts, a throwaway class, and two real questions:
+  - **Authorization**: the outsider teacher's `POST /api/aptitude/tests` against the class returned
+    **404 "Class not found"** (masking existence, same as every other class-scoped route in the app);
+    the owning teacher's identical request through the real UI succeeded and the test showed up
+    correctly assigned, negative marking and all, alongside the (separately unaffected) Proctored
+    Tests panel on the same page.
+  - **Negative marking**: answered one question correctly and one incorrectly with
+    `negative_marking_fraction = 1` — score came back **0/2** (`+1 − 1×1`). A second attempt with both
+    answered correctly came back **2/2**. Confirmed by directly inspecting the saved `answers` jsonb
+    against each question's `correct_option`, not just trusting the displayed number.
+  - **Score-only until release**: `GET .../review` returned **403 "Results haven't been released
+    yet"** before the teacher's toggle, and **200** with full `correct_option`/`selected_option` detail
+    immediately after — same test, same attempt, only the flag changed. The result screen itself
+    showed only "You scored 0/2", no per-question detail, both before and after (the review page is a
+    separate route).
+  - **Server-authoritative timer**: with the client's on-screen countdown still showing `29:57`, the
+    attempt's `started_at` was rewound 2 hours into the past directly in the database (same method
+    used for Proctored Tests — manipulating what the server actually trusts, since server and browser
+    share a machine in local dev). The server's next check independently computed
+    `remaining_seconds: 0` and closed the attempt out as `expired` with a real computed score; reloading
+    the take page showed the correctly-scored "already completed" state rather than stale in-progress
+    content — the client's own displayed value never factored into the decision.
+  - **Both themes**: pre-test screen, live take screen, result screen, student review, and the
+    teacher results rollup (including the score-distribution chart) all screenshotted in light and
+    dark — all render cleanly, chart colors and contrast hold up in both.
+  - A production build was run once mid-task (all new routes compiling); a second build at the end
+    was intentionally skipped to avoid clobbering a dev server the user had open in the same session —
+    `tsc --noEmit` confirmed clean instead. All test accounts, class, and questions deleted afterward.
+- Files touched: `lib/proctoredScoring.ts` (now re-exports `remainingSeconds` from the new shared
+  module instead of defining it locally), `lib/supabase/schema.sql`, `types/index.ts`,
+  `app/teacher/dashboard/page.tsx`, `app/student/aptitude/page.tsx`,
+  `app/student/proctored-tests/[testId]/result/page.tsx`,
+  `app/student/proctored-tests/[testId]/review/page.tsx`,
+  `app/student/proctored-tests/[testId]/take/page.tsx` (last three refactored to use the newly
+  shared components, not just added to). New: `supabase/migrations/0010_aptitude_results_release.sql`,
+  `lib/testTiming.ts`, `lib/aptitudeScoring.ts`, `components/QuestionPalette.tsx`,
+  `components/TestReviewView.tsx`, `components/TestResultBanner.tsx`,
+  `components/AptitudeTestsPanel.tsx`, `components/AssignedAptitudeTests.tsx`,
+  `app/api/aptitude/tests/route.ts`, `app/api/aptitude/tests/[id]/route.ts`,
+  `app/api/aptitude/tests/[id]/attempts/route.ts`,
+  `app/api/aptitude/tests/[id]/attempts/[attemptId]/route.ts`,
+  `app/api/aptitude/tests/[id]/attempts/[attemptId]/submit/route.ts`,
+  `app/api/aptitude/tests/[id]/review/route.ts`, `app/api/student/aptitude/tests/route.ts`,
+  `app/student/aptitude/test/[testId]/page.tsx`,
+  `app/student/aptitude/test/[testId]/result/page.tsx`,
+  `app/student/aptitude/test/[testId]/review/page.tsx`.
+- Why: this was designed alongside Aptitude practice mode from the start and then deferred —
+  building it now, on the same review-release pattern Proctored Tests already established and
+  proved out, meant most of the hard design decisions (server-only scoring, score-only result
+  screens, a teacher-controlled release gate) were already made and just needed a second, honest
+  application rather than being re-argued from scratch. Extracting the shared components instead of
+  copy-pasting them means the two test modes can't quietly drift apart on how a review page or a
+  result banner behaves.
+

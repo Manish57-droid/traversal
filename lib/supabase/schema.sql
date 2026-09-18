@@ -254,7 +254,10 @@ create table if not exists aptitude_tests (
   time_limit_minutes int not null,
   negative_marking_fraction numeric not null default 0,
   created_by uuid not null references users(id) on delete cascade,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Gates the full per-question review page, same mechanism as
+  -- proctored_tests.results_released (0008_proctored_results_release.sql).
+  results_released boolean not null default false
 );
 
 -- Ordered questions within a test. `position` is explicit (not row

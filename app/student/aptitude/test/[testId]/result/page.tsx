@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import TestResultBanner from "@/components/TestResultBanner";
 
-export default function ProctoredTestResultPage() {
+export default function AptitudeTestResultPage() {
   const searchParams = useSearchParams();
 
   const status = searchParams.get("status") ?? "submitted";
@@ -17,8 +17,8 @@ export default function ProctoredTestResultPage() {
       status={status}
       score={score}
       total={total}
-      backHref="/student/proctored-tests"
-      backLabel="Back to Proctored Tests"
+      backHref="/student/aptitude"
+      backLabel="Back to Aptitude"
     />
   );
 }

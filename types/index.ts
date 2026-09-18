@@ -128,6 +128,52 @@ export interface AptitudeTest {
   negative_marking_fraction: number;
   created_by: string;
   created_at: string;
+  results_released: boolean;
+}
+
+export interface AptitudeTestWithQuestions extends AptitudeTest {
+  question_count: number;
+  /** Only present when listed in the context of one class assignment
+   * (aptitude_tests itself has no class_id — see aptitude_assignments). */
+  due_date?: string | null;
+  assignment_id?: string;
+}
+
+export interface AptitudeTestAttempt {
+  id: string;
+  test_id: string;
+  student_id: string;
+  status: AptitudeAttemptStatus;
+  answers: Record<string, number>;
+  score: number | null;
+  total_questions: number | null;
+  time_taken_seconds: number | null;
+  started_at: string;
+  submitted_at: string | null;
+}
+
+/** Sanitized for the student while an attempt is in progress — never
+ * includes `correct_option`/`explanation` (only the review endpoint,
+ * gated on results_released, ever sends those). */
+export interface AptitudeAttemptQuestion {
+  id: string;
+  prompt: string;
+  options: string[];
+  difficulty: QuestionDifficulty;
+}
+
+/** One row of the teacher's per-test results rollup. */
+export interface AptitudeAttemptRollup {
+  attempt_id: string;
+  student_id: string;
+  student_name: string;
+  student_email: string;
+  status: AptitudeAttemptStatus;
+  score: number | null;
+  total_questions: number | null;
+  time_taken_seconds: number | null;
+  started_at: string;
+  submitted_at: string | null;
 }
 
 // ---------- Proctored Tests ----------

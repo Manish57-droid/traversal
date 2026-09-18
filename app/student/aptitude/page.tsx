@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AssignedAptitudeTests from "@/components/AssignedAptitudeTests";
 import type { AptitudeCategory } from "@/types";
 
 const CATEGORIES: { slug: AptitudeCategory; title: string; blurb: string }[] = [
@@ -17,6 +18,8 @@ export default function StudentAptitudePage() {
           feedback and an explanation right after each answer.
         </p>
       </div>
+
+      <AssignedAptitudeTests />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {CATEGORIES.map((c) => (

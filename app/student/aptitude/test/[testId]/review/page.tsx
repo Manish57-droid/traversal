@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import TestReviewView, { type ReviewQuestion } from "@/components/TestReviewView";
 
-export default function ProctoredTestReviewPage() {
+export default function AptitudeTestReviewPage() {
   const params = useParams<{ testId: string }>();
   const [questions, setQuestions] = useState<ReviewQuestion[] | null>(null);
   const [score, setScore] = useState<number | null>(null);
@@ -13,7 +13,7 @@ export default function ProctoredTestReviewPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/proctored-tests/${params.testId}/review`)
+    fetch(`/api/aptitude/tests/${params.testId}/review`)
       .then(async (r) => {
         const data = await r.json();
         if (!r.ok) {
