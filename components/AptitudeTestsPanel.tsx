@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Download } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { AptitudeAttemptRollup, AptitudeCategory, AptitudeQuestion, AptitudeTestWithQuestions } from "@/types";
 
@@ -34,7 +34,7 @@ function scoreDistribution(attempts: AptitudeAttemptRollup[]) {
   return Array.from(buckets.entries()).map(([range, count]) => ({ range, count }));
 }
 
-function TestDetail({ testId }: { testId: string }) {
+function TestDetail({ testId, classId }: { testId: string; classId: string }) {
   const [attempts, setAttempts] = useState<AptitudeAttemptRollup[] | null>(null);
   const [released, setReleased] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
@@ -78,9 +78,18 @@ function TestDetail({ testId }: { testId: string }) {
             ? "Results are released — students can see their full right/wrong review."
             : "Results are not released yet — students only see their score."}
         </p>
-        <button onClick={toggleRelease} disabled={busy || released === null} className="btn-secondary py-1.5 text-xs">
-          {busy ? "Saving..." : released ? "Unrelease results" : "Release results"}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <a
+            href={`/api/aptitude/tests/${testId}/report?classId=${classId}`}
+            className="btn-secondary flex items-center gap-1.5 py-1.5 text-xs"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download Report
+          </a>
+          <button onClick={toggleRelease} disabled={busy || released === null} className="btn-secondary py-1.5 text-xs">
+            {busy ? "Saving..." : released ? "Unrelease results" : "Release results"}
+          </button>
+        </div>
       </div>
 
       {attempts === null && <p className="text-xs text-fg-subtle">Loading results…</p>}
@@ -262,7 +271,7 @@ export default function AptitudeTestsPanel({ classId }: { classId: string }) {
                 />
               </div>
             </button>
-            {expandedTestId === t.id && <TestDetail testId={t.id} />}
+            {expandedTestId === t.id && <TestDetail testId={t.id} classId={classId} />}
           </div>
         ))}
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Camera, ChevronDown, Mic, ShieldAlert } from "lucide-react";
+import { Camera, ChevronDown, Download, Mic, ShieldAlert } from "lucide-react";
 import type { ProctoredQuestion, ProctoredTestWithQuestions, ProctoredViolationBreakdown } from "@/types";
 
 const VIOLATION_LABEL: Record<string, string> = {
@@ -46,9 +46,15 @@ function TestDetail({ testId }: { testId: string }) {
             ? "Results are released — students can see their full right/wrong review."
             : "Results are not released yet — students only see their score."}
         </p>
-        <button onClick={toggleRelease} disabled={busy || released === null} className="btn-secondary py-1.5 text-xs">
-          {busy ? "Saving..." : released ? "Unrelease results" : "Release results"}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <a href={`/api/proctored-tests/${testId}/report`} className="btn-secondary flex items-center gap-1.5 py-1.5 text-xs">
+            <Download className="h-3.5 w-3.5" />
+            Download Report
+          </a>
+          <button onClick={toggleRelease} disabled={busy || released === null} className="btn-secondary py-1.5 text-xs">
+            {busy ? "Saving..." : released ? "Unrelease results" : "Release results"}
+          </button>
+        </div>
       </div>
 
       {attempts === null && <p className="text-xs text-fg-subtle">Loading attempts…</p>}

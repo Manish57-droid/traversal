@@ -1155,3 +1155,102 @@
   copy-pasting them means the two test modes can't quietly drift apart on how a review page or a
   result banner behaves.
 
+## [2026-09-18] — "Download Report" Excel exports: Proctored, Aptitude, and DSA
+- **Library substitution, disclosed up front**: the task specified `chartjs-node-canvas`, which
+  hard-depends on the `canvas` npm package requiring native compilation. This sandbox has no full
+  Visual Studio + Windows SDK (only partial build tools) and the prebuilt-binary download timed
+  out (network-restricted), so `canvas` cannot install here at all — confirmed by trying directly,
+  not assumed. Substituted `@napi-rs/canvas` (ships a prebuilt native binary, installed cleanly) +
+  `chart.js` directly, replicating exactly what `chartjs-node-canvas` does internally. Verified with
+  a standalone test render before building anything on top of it — same Chart.js rendering, same
+  visual output, just a different (actually installable) canvas backend. User confirmed this
+  substitution before proceeding.
+- **Chart image, not a live Excel chart**: every pie chart is a rendered PNG embedded at the top of
+  its sheet, not an editable native Excel chart object — true native charts need paid tooling
+  (SheetJS Pro). An image is the standard, practical approach for a plain-JS stack and is what's
+  built here; noted explicitly since it's a real capability difference (no click-to-edit chart in
+  Excel) from what "add a chart" might otherwise imply.
+- **What changed**: a "Download Report" button generating a real `.xlsx` file, in three places.
+  - **`lib/reports.ts`** (shared, so the three endpoints don't triplicate this): `requireReportAccess`
+    (the same `getClassAuthorization`/`isAuthorized` pattern used everywhere else in the app, checked
+    against every class a test/assignment could be scoped to), `renderPieChartPng` (the
+    `@napi-rs/canvas` + `chart.js` renderer described above), `newReportWorkbook`/`styleHeaderRow`/
+    `addChartSheet` (ExcelJS workbook + styling helpers, including a fix for a real bug: assigning
+    `.columns` with a `header` property on a chart sheet auto-writes row 1, which collides with the
+    image anchored there — the header row on a chart sheet is now written manually a fixed number of
+    rows below the image instead), `safeFilenamePart`/`excelResponse` (filename sanitizing +
+    `Content-Disposition` response headers), and the hardcoded `PASS_THRESHOLD_FRACTION = 0.5` (score
+    >= 50% of total questions counts as a pass — not currently configurable per test, flagged as the
+    one place to change it if that's ever needed). Also brand-matched the chart colors to this app's
+    actual tokens (`--success` is gold, not green; `--warn` is a flux orange-red, not literal red).
+  - **Proctored Tests** — `GET /api/proctored-tests/[id]/report`: Summary (pass/fail pie + a table of
+    student/score/total/violation count/status/time taken), Detailed Answers (one row per student per
+    question: prompt, selected option, correct option, correct/incorrect, points applied accounting
+    for negative marking), Violations (one row per logged violation: student, type, timestamp).
+    Button added to `components/ProctoredTestsPanel.tsx`'s existing "Release results" header row.
+    Filename: `{class_name}_{test_name}_proctored_report.xlsx`.
+  - **Aptitude Test Mode** — `GET /api/aptitude/tests/[id]/report?classId=xxx`: same Summary +
+    Detailed Answers shape, no Violations sheet (not proctored). Since one aptitude test can in
+    principle be assigned to more than one class, `classId` disambiguates which assignment the report
+    is for, and attempts are filtered strictly to that class's members even if the test happens to be
+    assigned elsewhere too. Button added to `components/AptitudeTestsPanel.tsx` next to its release
+    toggle. Filename: `{class_name}_{test_name}_aptitude_report.xlsx`.
+  - **DSA completion** — there was no existing "per-class assignment rollup view" to add a button
+    to (confirmed by searching, not assumed — `app/teacher/assign` is only the assignment-creation
+    form, and `progress` has no `assignment_id` tying a completion row back to a specific assignment).
+    Built one: `components/DsaAssignmentsPanel.tsx`, added to the same class-detail page Proctored
+    Tests and Aptitude Tests already live on, listing this class's assignments and expanding into a
+    per-student completion table (completed/attempted/not-started counts, %) via a new
+    `GET /api/assign/[id]/rollup` route, plus a `GET /api/assign?classId=` list route. Report
+    (`GET /api/assign/[id]/report`): Summary (completion-status pie across the whole class + the
+    per-student table), Detailed Status (one row per student per question: title, platform link,
+    status). No pass/fail here — DSA has no correct/wrong, just a completion checkbox. Filename:
+    `{class_name}_{question_set_name}_dsa_report.xlsx`.
+  - **Build fix**: `@napi-rs/canvas` ships a native `.node` binary; webpack tried to parse it as
+    JavaScript and the whole app 500'd on first request after adding the dependency. Fixed by adding
+    it to `next.config.js`'s `experimental.serverComponentsExternalPackages`, which tells Next.js to
+    leave that package unbundled or the native file simply won't load.
+- **Verification (live, not traced)** — a fresh class with two students, an owner teacher, an
+  outsider teacher, and real (deliberately lopsided) data: Student Alpha answered every proctored
+  question correctly and 2/3 aptitude questions correctly with 2/3 DSA questions completed; Student
+  Beta answered every proctored and aptitude question wrong (with 3 logged violations) and had only
+  1/3 DSA questions completed:
+  - **All three reports downloaded successfully** (200, correct `Content-Type`, correct
+    `Content-Disposition` filename matching the specified pattern exactly) as the owning teacher; the
+    **outsider teacher got 403 "Forbidden" on all three**, not a report.
+  - **Every number in every sheet was spot-checked against the database and matched exactly**, not
+    just eyeballed: Proctored Summary showed Alpha `4/4, 0 violations, submitted` and Beta
+    `-2/4, 3 violations, auto_submitted_violation` — Beta's score verified by hand (`4 wrong ×
+    -0.5 negative marking = -2`, matching `negative_marking_fraction = 0.5`, matching the Detailed
+    Answers sheet's per-question `-0.5` points on every row). Aptitude Summary showed Alpha `1/3
+    submitted` and Beta `-3/3 expired` — Beta's `-3` verified as `3 wrong × -1` against
+    `negative_marking_fraction = 1`. DSA Summary showed Alpha `2 completed/1 attempted/0 not
+    started/67%` and Beta `1/0/2/33%`, matching the seeded `progress` rows exactly (including that
+    two of Beta's questions correctly defaulted to "not started" from having no `progress` row at
+    all, not a stored value). The Violations sheet listed exactly the 3 rows seeded for Beta with the
+    right type labels.
+  - **Pie chart images inspected directly** (extracted the embedded PNGs from each `.xlsx`'s zip
+    archive, not just trusted that `addImage` ran without erroring): Proctored showed an exact 50/50
+    gold/orange split (1 pass, 1 fail, matching 2 finished attempts); Aptitude showed ~100% "Fail"
+    (both students scored below the 50% threshold — the thin white seam at 0% "Pass" is Chart.js's
+    slice-border rendering at a zero-value boundary, not a data error); DSA showed gold ~50%
+    (3 completed), orange ~17% (1 attempted), blue-gray ~33% (2 not started) — all matching the
+    6-cell (2 students × 3 questions) matrix exactly.
+  - **Buttons confirmed in the actual rendered UI**, not just via direct API calls: all three
+    "Download Report" buttons screenshotted next to their respective "Release results" toggles (DSA's
+    panel has no toggle, so its button stands alone next to "Per-student completion for this
+    assignment"), in both light and dark mode, all three panels coexisting correctly on the same
+    class page.
+  - A dev server crash caused by the webpack/native-binary issue above was hit and fixed mid-task
+    (confirmed via the actual browser response body, not guessed); `tsc --noEmit` clean throughout.
+    All test accounts, class, questions, and generated files deleted afterward.
+- Files touched: `app/api/assign/route.ts` (added GET list), `app/teacher/dashboard/page.tsx`,
+  `components/AptitudeTestsPanel.tsx`, `components/ProctoredTestsPanel.tsx`, `next.config.js`,
+  `package.json`. New: `lib/reports.ts`, `components/DsaAssignmentsPanel.tsx`,
+  `app/api/proctored-tests/[id]/report/route.ts`, `app/api/aptitude/tests/[id]/report/route.ts`,
+  `app/api/assign/[id]/rollup/route.ts`, `app/api/assign/[id]/report/route.ts`.
+- Why: a class-scoped report only earns trust if its numbers are provably right, not just
+  plausible-looking — every sheet here is computed directly from the same tables the app itself
+  scores against (never a second, parallel calculation that could drift), and the verification pass
+  deliberately checked the underlying database, not just "did a file download."
+

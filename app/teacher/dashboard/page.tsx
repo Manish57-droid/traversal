@@ -9,6 +9,7 @@ import StudentDrawer from "@/components/analytics/StudentDrawer";
 import ClassAccessPanel from "@/components/analytics/ClassAccessPanel";
 import ProctoredTestsPanel from "@/components/ProctoredTestsPanel";
 import AptitudeTestsPanel from "@/components/AptitudeTestsPanel";
+import DsaAssignmentsPanel from "@/components/DsaAssignmentsPanel";
 import type { ClassAnalyticsSummary, StudentAnalyticsRow } from "@/types";
 
 interface ClassRow {
@@ -159,6 +160,7 @@ export default function TeacherDashboardPage() {
           <StudentTable students={students} onSelect={setSelectedStudentId} />
           {authorization && (
             <>
+              <DsaAssignmentsPanel classId={selectedClass} />
               <AptitudeTestsPanel classId={selectedClass} />
               <ProctoredTestsPanel classId={selectedClass} />
               <ClassAccessPanel

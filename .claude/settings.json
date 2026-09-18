@@ -19,7 +19,24 @@
       "Bash(node _recapture_teacher_results.mjs)",
       "Bash(node -e ' *)",
       "Bash(rm -f _setup_aptitude_test.mjs _verify_aptitude.mjs _verify_aptitude_student.mjs _verify_apt_timer.mjs _verify_apt_release.mjs _recapture_teacher_results.mjs)",
-      "Bash(rm -rf \"C:/Users/ankit/AppData/Local/Temp/claude/d--FreeLanching-Traversal/aptitude_shots\")"
+      "Bash(rm -rf \"C:/Users/ankit/AppData/Local/Temp/claude/d--FreeLanching-Traversal/aptitude_shots\")",
+      "Bash(npm install *)",
+      "Bash(npm ls *)",
+      "Bash(node -e \"require\\('exceljs'\\); console.log\\('exceljs OK'\\)\")",
+      "Bash(node _test_chart.mjs)",
+      "Bash(grep -n \"#[0-9a-fA-F]\\\\{3,6\\\\}\\\\b\" components/DsaAssignmentsPanel.tsx components/ProctoredTestsPanel.tsx components/AptitudeTestsPanel.tsx)",
+      "Bash(node _setup_report_test.mjs)",
+      "Bash(node _verify_reports.mjs)",
+      "Bash(npx playwright *)",
+      "Bash(curl -s -o /dev/null -w \"3001:%{http_code}\\\\n\" http://localhost:3001/sign-in)",
+      "Bash(curl -s http://localhost:3001/sign-in)",
+      "Bash(taskkill //F //PID 10784)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/sign-in)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/sign-in --max-time 30)",
+      "Bash(node _verify_report_contents.mjs)",
+      "Read(//c/Users/ankit/AppData/Local/Temp/xlsx_extract/proctored/xl/media/**)",
+      "Read(//c/Users/ankit/AppData/Local/Temp/xlsx_extract/aptitude/xl/media/**)",
+      "Read(//c/Users/ankit/AppData/Local/Temp/xlsx_extract/dsa/xl/media/**)"
     ]
   }
 }

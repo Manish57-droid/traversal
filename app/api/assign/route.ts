@@ -3,6 +3,45 @@ import { requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getClassAuthorization, isAuthorized } from "@/lib/classAccess";
 
+// GET /api/assign?classId=xxx -> list this class's DSA assignments
+// (question set + due date + question count), for the class-detail
+// rollup panel. Teacher/admin only, same class-scoped authorization
+// as everywhere else.
+export async function GET(req: Request) {
+  const user = await requireRole(["teacher", "admin"]).catch(() => null);
+  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const { searchParams } = new URL(req.url);
+  const classId = searchParams.get("classId");
+  if (!classId) return NextResponse.json({ error: "classId is required." }, { status: 400 });
+
+  const classAuth = await getClassAuthorization(classId, user.id, user.role);
+  if (!isAuthorized(classAuth)) {
+    return NextResponse.json({ error: "Class not found." }, { status: 404 });
+  }
+
+  const supabase = supabaseAdmin();
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("id, class_id, due_date, created_at, question_sets(id, name, question_set_items(question_id))")
+    .eq("class_id", classId)
+    .order("created_at", { ascending: false });
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const assignments = (data ?? []).map((a: any) => ({
+    id: a.id,
+    class_id: a.class_id,
+    due_date: a.due_date,
+    created_at: a.created_at,
+    question_set_id: a.question_sets?.id ?? null,
+    question_set_name: a.question_sets?.name ?? "Untitled set",
+    question_count: a.question_sets?.question_set_items?.length ?? 0,
+  }));
+
+  return NextResponse.json({ assignments });
+}
+
 // POST /api/assign { question_set_id, class_id, due_date? }
 // Assigns an entire question set to every current member of a class,
 // creating a "not_started" progress row for each (student, question)
