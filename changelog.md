@@ -1254,3 +1254,108 @@
   scores against (never a second, parallel calculation that could drift), and the verification pass
   deliberately checked the underlying database, not just "did a file download."
 
+## [2026-09-19] — DSA question filters, proctored question images, admin delete-user
+- **Step 1 — DSA question filters**: server-side `platform`/`difficulty` query params on
+  `GET /api/questions` (combine with AND), used everywhere questions are picked —
+  `app/teacher/questions/page.tsx` and both pickers on `app/teacher/question-sets/page.tsx`
+  (the "create set" checklist and the "add existing question" dropdown share one filtered fetch).
+  Platform buckets as **LeetCode / HackerRank / CodeChef individually, everything else (Codeforces,
+  GeeksforGeeks, and the catch-all "other") folded into "Others"** — the enum only has 6 values and
+  three are already low-volume, so a 4th bucket reads cleaner than 6 near-empty ones (this was a
+  judgment call, noted as asked). Difficulty filter offers Easy/Intermediate/Hard — the stored enum
+  value stays `'medium'`, only the label changed (`lib/difficulty.ts`'s `DIFFICULTY_LABELS`); rows
+  with `'unknown'` difficulty aren't a filter option and just show up whenever no difficulty filter
+  is set.
+- **Step 2 — proctored question images**: `proctored_questions.image_url` (nullable, optional —
+  most questions won't have one). **Storage bucket creation was fully scriptable** —
+  `supabase.storage.createBucket()` via the service-role client worked directly, no manual
+  Dashboard step needed (confirmed by actually running it, not assumed). No `storage.objects` RLS
+  policy was added for writes: the upload goes through a server API route
+  (`POST /api/proctored-questions/upload-image`) using the service-role client, which bypasses RLS
+  by design — Storage's default-deny RLS already blocks any direct client-side upload attempt with
+  zero policies needed, and public READ works independently via the bucket's own `public: true`
+  flag. "Add Image" button added to the create/edit form (upload + live preview + remove); the
+  image now renders directly above the prompt in all three places a proctored question's prompt is
+  shown: the teacher's question bank list, the student take-screen, and the shared
+  `TestReviewView` component (used by the post-release review page — there's no separate
+  "teacher review" screen in this app beyond the aggregate `ProctoredTestsPanel` results view, so
+  these are the three actual rendering surfaces that exist).
+- **Step 3 — admin delete-user**: a "Delete" action per row on `/admin/users`, gated behind a
+  confirmation dialog showing real blast-radius counts (classes owned, students enrolled in those
+  classes, questions authored across all four banks) fetched fresh from the database, and requiring
+  the target's exact email to be typed before the button enables. Safeguards: can't target the
+  caller's own account (same `id === admin.id` guard pattern as the earlier role-change fix), can't
+  delete the last remaining admin (see finding below), and the deletion itself writes a
+  `user_deletion_log` row (denormalized snapshot — name/email/role/counts — deliberately with no FK
+  to the deleted user's own id, since that row must survive their deletion) BEFORE calling an
+  atomic `admin_delete_user_cascade` Postgres function that deletes their authored content across
+  the four `created_by`-based tables, then their `users` row (which cascades correctly to
+  everything else via FKs that already existed), then finally their Supabase Auth account.
+  - **FK-strategy decision (as requested, documented here for future reference)**: rather than
+    changing the four `created_by ... on delete set null` FKs (questions/aptitude_questions/
+    interview_questions/proctored_questions) to CASCADE — which would change deletion behavior for
+    *every* future path that removes a user, not just this admin flow — the cascade is handled
+    explicitly inside one atomic Postgres function that deletes each table's rows for that user
+    first, then deletes the `users` row. Every other FK to `users(id)` already cascaded correctly
+    on its own (`classes.teacher_id`, `class_members.student_id`, `progress.student_id`, test
+    attempts, etc. — confirmed via a full schema inventory before writing anything), so this was
+    the only gap. This keeps the SET NULL safety net intact for any other deletion path (e.g. if a
+    user is ever removed some other way) and scopes the destructive cascade to only this explicit,
+    confirmed, audit-logged action.
+  - **Real bug found during verification**: the "last remaining admin" count-check is
+    **unreachable dead code** under the current access model. The route requires the caller to
+    already be an admin (`requireRole(["admin"])`), and the self-delete guard immediately above it
+    already rejects `target.id === admin.id` — so any request that reaches the count-check
+    necessarily involves two *distinct* admin accounts (caller + target), meaning the counted total
+    can never be `<= 1` in practice (the caller alone proves a second admin exists). The system is
+    still fully protected from ever reaching zero admins — that guarantee just comes entirely from
+    the self-delete guard, not the count-check. Confirmed live: attempting to delete a distinct
+    admin while 2+ existed succeeded correctly; genuinely reaching a 1-admin state and testing the
+    block required temporarily (and reversibly, with the user's explicit permission) flipping the
+    real admin account's role in the database for the duration of one API call, then restoring it
+    immediately — restore confirmed. Left the check in as explicit defense-in-depth (a code
+    comment now explains why it's currently unreachable, in case the self-delete guard is ever
+    loosened or this logic gets reused from a different context) rather than removing it.
+- **Verification (live, not traced)**:
+  - **Filters**: every combination checked — `leetcode` (5), `hackerrank` (2), `codechef` (1),
+    `others` (449), `easy` (7), `hard` (2), and the combined-AND cases `leetcode`+`hard` (1) and
+    `others`+`easy` (1) — **every API count matched a direct database count exactly**, including
+    the 457-row unfiltered baseline.
+  - **Images**: uploaded a real (non-trivial, visibly-labeled) test image through the actual edit
+    form; confirmed it renders correctly above the prompt in the question bank list, the live
+    take-test screen, and the release-gated review page — all three, in both light and dark mode.
+  - **Delete**: created a disposable teacher owning a class (with a student enrolled), an authored
+    DSA question (with a student `progress` row against it), and an authored proctored question
+    wired into a real test with a real student attempt. Deleted the teacher through the actual
+    `/admin/users` UI (blast-radius dialog → typed-email confirmation → delete). Directly queried
+    the database before and after: **the class, the enrollment, the DSA question, the student's
+    progress row, the proctored question, the proctored test, and the student's attempt were all
+    confirmed gone** (0 rows each); the teacher's `users` row and Supabase Auth account were both
+    confirmed gone; the enrolled student's own account was confirmed **still present** (only the
+    teacher was deleted). The `user_deletion_log` row's captured counts (1 class, 1 student
+    enrolled, 1 DSA question, 1 proctored question, 0 aptitude/interview) matched the seeded data
+    exactly, and `deleted_by` correctly recorded the acting admin's id. Self-delete was confirmed
+    blocked (button disabled on the admin's own row). Typing the wrong email kept the delete button
+    disabled; typing the correct one enabled it.
+  - `tsc --noEmit` clean throughout; a production build hit an unrelated environment limitation
+    (no network access to fetch Google Fonts at build time in this sandbox) rather than a code
+    issue, so live dev-server testing was used for verification instead. All test accounts, classes,
+    questions, uploaded images, and test `user_deletion_log` rows removed afterward.
+- Files touched: `app/api/questions/route.ts`, `app/teacher/questions/page.tsx`,
+  `app/teacher/question-sets/page.tsx`, `app/api/proctored-questions/route.ts`,
+  `app/teacher/proctored-questions/page.tsx`, `components/TestReviewView.tsx`,
+  `app/api/proctored-tests/[id]/review/route.ts`, `app/api/proctored-tests/[id]/attempts/route.ts`,
+  `app/student/proctored-tests/[testId]/take/page.tsx`, `app/admin/users/page.tsx`,
+  `app/api/admin/users/route.ts`, `types/index.ts`, `lib/supabase/schema.sql`. New:
+  `lib/difficulty.ts`, `app/api/proctored-questions/upload-image/route.ts`,
+  `app/api/admin/users/[id]/route.ts`, `app/api/admin/users/[id]/blast-radius/route.ts`,
+  `supabase/migrations/0011_images_and_user_deletion.sql`.
+- Why: server-side filtering (not client-side trimming of an already-fetched list) is what actually
+  scales as the question bank grows past what fits on one page. Question images give teachers a way
+  to ask about diagrams/code snippets that plain text can't express. The delete-user flow's real
+  design pressure was making an irreversible, wide-blast-radius action require *proof the caller
+  understands what they're about to destroy* (real counts, typed confirmation) rather than a single
+  click — and treating the audit log as the one thing that must survive the destruction it's
+  recording, which is why it's written before anything else happens and deliberately carries no FK
+  back to the account it's describing.
+

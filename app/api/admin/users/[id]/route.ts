@@ -36,6 +36,21 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     .maybeSingle();
   if (!target) return NextResponse.json({ error: "User not found." }, { status: 404 });
 
+  // Belt-and-suspenders: under the current access model this branch
+  // can never actually fire. This whole route requires the caller to
+  // already be an admin (requireRole above), and the self-delete guard
+  // just above already rejects target.id === admin.id — so any request
+  // that reaches this point necessarily involves two DISTINCT admin
+  // accounts (the caller and the target), meaning the count below can
+  // never be <= 1 in practice (the caller alone proves a second admin
+  // exists). Zero admins is already impossible via this endpoint
+  // purely from the self-delete guard. This check stays in as explicit
+  // defense-in-depth — e.g. if the self-delete guard is ever loosened,
+  // or this logic is reused from a context without that check — rather
+  // than relying on one guard alone to hold forever. Confirmed live:
+  // deleting one of two admins succeeds (correct); deleting the sole
+  // admin is only reachable by self-delete, which the earlier guard
+  // already blocks.
   if (target.role === "admin") {
     const { count: adminCount } = await supabase
       .from("users")
