@@ -38,6 +38,26 @@
                                  test palette's 6th state) */
   --review-2: 124 92 220;    /* #7C5CDC deeper indigo-violet — "answered
                                  and marked for review", the 6th palette state */
+
+  /* Leaderboard medal colors (ProctoredLeaderboardWidget) — a fixed,
+     universal gold/silver/bronze association, not one of the semantic
+     success/warn/review states above, so it gets its own tokens rather
+     than reusing --success (which is gold-ish here purely by
+     coincidence of the PCB theme). */
+  --gold: 255 213 74;    /* #FFD54A */
+  --silver: 199 203 209; /* #C7CBD1 */
+  --bronze: 224 138 79;  /* #E08A4F */
+
+  /* Proctored test-taking palette (SectionQuestionPalette) — kept
+     separate from --success/--warn/--review above because those are
+     reused for unrelated meanings across 40+ other files; repainting
+     them would repaint buttons and badges site-wide that have nothing
+     to do with this screen. not-visited intentionally keeps using the
+     existing --line/--surface-2 tokens (the current brown-ish neutral). */
+  --pq-attempted: 34 197 94;      /* #22C55E dark-ish green — "answered" */
+  --pq-not-attempted: 239 68 68;  /* #EF4444 red — "not answered" */
+  --pq-marked: 96 165 250;        /* #60A5FA blue — "marked for review" */
+  --pq-marked-2: 59 130 246;      /* #3B82F6 deeper blue — "answered and marked" */
 }
 
 /* Dark palette, applied by next-themes as a class on <html> — site-wide,
@@ -59,6 +79,13 @@
   --warn-2: 255 148 120;
   --review: 168 140 255;
   --review-2: 124 92 220;
+  --gold: 255 213 74;
+  --silver: 199 203 209;
+  --bronze: 224 138 79;
+  --pq-attempted: 34 197 94;
+  --pq-not-attempted: 239 68 68;
+  --pq-marked: 96 165 250;
+  --pq-marked-2: 59 130 246;
 }
 
 /* Light palette — same "circuit board" family, same token names,
@@ -84,6 +111,13 @@
   --warn-2: 156 50 28;       /* #9C321C flux, darker (hover) */
   --review: 124 58 217;      /* #7C3AD9 violet, deepened for contrast on paper */
   --review-2: 76 41 145;     /* #4C2991 deep indigo-violet, darker still */
+  --gold: 161 111 15;        /* #A16F0F gold, deepened for contrast on paper */
+  --silver: 100 106 114;     /* #646A72 slate silver, deepened */
+  --bronze: 176 103 43;      /* #B0672B bronze, deepened */
+  --pq-attempted: 21 128 61;    /* #15803D dark green, deepened for paper */
+  --pq-not-attempted: 185 28 28; /* #B91C1C red, deepened for paper */
+  --pq-marked: 29 78 216;        /* #1D4ED8 dark blue, deepened for paper */
+  --pq-marked-2: 30 58 138;      /* #1E3A8A deeper navy blue */
 }
 
 html {

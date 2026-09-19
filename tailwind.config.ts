@@ -32,6 +32,15 @@ const config: Config = {
           DEFAULT: "rgb(var(--review) / <alpha-value>)",
           2: "rgb(var(--review-2) / <alpha-value>)",
         },
+        gold: "rgb(var(--gold) / <alpha-value>)",
+        silver: "rgb(var(--silver) / <alpha-value>)",
+        bronze: "rgb(var(--bronze) / <alpha-value>)",
+        "pq-attempted": "rgb(var(--pq-attempted) / <alpha-value>)",
+        "pq-not-attempted": "rgb(var(--pq-not-attempted) / <alpha-value>)",
+        "pq-marked": {
+          DEFAULT: "rgb(var(--pq-marked) / <alpha-value>)",
+          2: "rgb(var(--pq-marked-2) / <alpha-value>)",
+        },
       },
       fontFamily: {
         display: ["var(--font-display)", "serif"],

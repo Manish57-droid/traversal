@@ -165,9 +165,11 @@ export default function TeacherDashboardPage() {
               <ProctoredTestsPanel classId={selectedClass} />
               <ClassAccessPanel
                 classId={selectedClass}
+                className={activeClass?.name ?? ""}
                 authorization={authorization}
                 currentUserId={currentUserId}
                 onLeft={handleLeftClass}
+                onDeleted={handleLeftClass}
               />
             </>
           )}

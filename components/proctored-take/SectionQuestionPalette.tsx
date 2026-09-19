@@ -8,13 +8,14 @@
 // semantic remap, not just an extra color, so reusing one component
 // for both would have silently changed Aptitude's meaning too).
 //
-// Colors are adapted from the reference image's blue/green/red/purple
-// onto this app's existing token system rather than hardcoded: blue
-// (current) -> accent, green (answered) -> success, red (not answered)
-// -> warn (already a red/orange-red in this palette), gray (not
-// visited) -> the neutral surface/line tokens, purple (marked for
-// review) -> the new --review token, navy (answered & marked) -> the
-// new --review-2 token (see app/globals.css).
+// Colors use dedicated --pq-* tokens (app/globals.css) rather than the
+// app's success/warn/review tokens: those are reused for unrelated
+// meanings in 40+ other files, so repainting them would repaint
+// buttons and badges site-wide that have nothing to do with this
+// screen. current -> accent, answered -> pq-attempted (green),
+// not-answered -> pq-not-attempted (red), not-visited -> the existing
+// neutral surface/line tokens (unchanged), marked -> pq-marked (blue),
+// answered-marked -> pq-marked-2 (deeper blue).
 import type { ProctoredAttemptQuestion, ProctoredQuestionStatus } from "@/types";
 
 interface SectionInfo {
@@ -26,11 +27,11 @@ type PaletteState = "current" | "answered" | "not-answered" | "not-visited" | "m
 
 const STATE_STYLE: Record<PaletteState, string> = {
   current: "border-accent bg-accent/15 text-accent ring-2 ring-accent",
-  answered: "border-success/60 bg-success/15 text-success",
-  "not-answered": "border-warn/60 bg-warn/15 text-warn",
+  answered: "border-pq-attempted/60 bg-pq-attempted/20 text-pq-attempted",
+  "not-answered": "border-pq-not-attempted/60 bg-pq-not-attempted/20 text-pq-not-attempted",
   "not-visited": "border-line bg-surface-2 text-fg-subtle",
-  marked: "border-review/60 bg-review/15 text-review",
-  "answered-marked": "border-review-2/60 bg-review-2/20 text-review-2",
+  marked: "border-pq-marked/60 bg-pq-marked/20 text-pq-marked",
+  "answered-marked": "border-pq-marked-2/60 bg-pq-marked-2/25 text-pq-marked-2",
 };
 
 const LEGEND: { state: PaletteState; label: string }[] = [

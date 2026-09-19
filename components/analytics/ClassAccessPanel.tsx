@@ -9,19 +9,25 @@ import type { ClassAccessRequest, ClassCollaborator } from "@/types";
 // class" button instead of "Remove" on their own row.
 export default function ClassAccessPanel({
   classId,
+  className,
   authorization,
   currentUserId,
   onLeft,
+  onDeleted,
 }: {
   classId: string;
+  className: string;
   authorization: "owner" | "collaborator" | "admin";
   currentUserId: string | null;
   onLeft: () => void;
+  onDeleted: () => void;
 }) {
   const [collaborators, setCollaborators] = useState<ClassCollaborator[]>([]);
   const [requests, setRequests] = useState<ClassAccessRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const canDecide = authorization === "owner" || authorization === "admin";
 
@@ -68,6 +74,27 @@ export default function ClassAccessPanel({
     if (!confirm("Leave this class? You'll lose access until re-approved.")) return;
     await fetch(`/api/classes/${classId}/collaborators/${currentUserId}`, { method: "DELETE" });
     onLeft();
+  }
+
+  async function handleDeleteClass() {
+    const typed = prompt(
+      `This permanently deletes "${className}" — every student, assignment, and test result in it. This can't be undone.\n\nType the class name to confirm.`
+    );
+    if (typed === null) return;
+    if (typed.trim() !== className) {
+      alert("Class name didn't match — nothing was deleted.");
+      return;
+    }
+    setDeleteError(null);
+    setDeleting(true);
+    const res = await fetch(`/api/classes/${classId}`, { method: "DELETE" });
+    if (res.ok) {
+      onDeleted();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setDeleteError(data.error || "Failed to delete class.");
+      setDeleting(false);
+    }
   }
 
   if (loading) return null;
@@ -136,6 +163,23 @@ export default function ClassAccessPanel({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {(authorization === "owner" || authorization === "admin") && (
+        <div className="rounded-lg border border-warn/30 p-4">
+          <p className="text-sm font-medium text-warn">Danger zone</p>
+          <p className="mt-1 text-xs text-fg-muted">
+            Permanently delete this class, its students, and all of their assignments and results. This can't be undone.
+          </p>
+          <button
+            onClick={handleDeleteClass}
+            disabled={deleting}
+            className="mt-3 rounded-lg border border-warn/50 px-3 py-1.5 text-xs text-warn transition-colors hover:bg-warn/10 disabled:opacity-50"
+          >
+            {deleting ? "Deleting..." : "Delete class"}
+          </button>
+          {deleteError && <p className="mt-2 text-xs text-warn">{deleteError}</p>}
         </div>
       )}
     </div>
