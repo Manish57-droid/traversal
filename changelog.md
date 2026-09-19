@@ -1359,3 +1359,82 @@
   recording, which is why it's written before anything else happens and deliberately carries no FK
   back to the account it's describing.
 
+## [2026-09-19] — Proctored question bank: Subject -> Set structure, bulk paste importer, export
+- **Step 1 — schema**: `proctored_subjects` and `proctored_sets` (subject_id FK, cascade), plus a
+  nullable `set_id` FK on `proctored_questions` and a `needs_categorization` boolean flag — same
+  pattern as DSA's `needs_link_curation` (a CHECK constraint ties the flag to the nullable field so
+  the two states can't drift apart). Existing questions predate the structure, so the migration
+  backfills `needs_categorization = true` for all of them rather than forcing an assignment.
+  Deleting a Set cascades `set_id -> NULL` on its questions via the FK, which would violate that
+  CHECK constraint unless the flag flips first — a `before delete` trigger on `proctored_sets`
+  handles this (flags the set's questions before the cascade runs), also covering a Subject delete
+  since that cascades through its Sets. This is bank organization only — the test-creation flow
+  (picking subjects/sets into sections) is a separate follow-up, per the task's scope.
+- **Step 2/3 — Subject/Set management + question bank update**: integrated into the existing
+  `app/teacher/proctored-questions/page.tsx` rather than a separate route (my call, noted per
+  instruction) — a collapsible `SubjectSetManager` section above the question form handles CRUD for
+  both levels (any teacher/admin, shared bank, not class-scoped — same spirit as DSA/Aptitude). The
+  question create/edit form now has a required cascading Subject -> Set picker; the list view
+  filters by Subject/Set and has a "Needs categorization only" toggle with a warn-colored badge, so
+  legacy questions are surfaced rather than lost in the bank.
+- **Step 4 — Bulk Add from Paste**: `lib/proctoredBulkParse.ts`, a pure client-side parser (nothing
+  is sent anywhere until the review screen is confirmed). Question boundaries ("Q1.", "1)", "1.")
+  and options ("A)"/"a."/"1)"-"4)") share numbering shapes, which makes a bare "N)" line ambiguous —
+  resolved with two running counters (expected next option number vs. expected next question
+  number, option-match checked first) rather than any lookahead/backtracking. A plain-prose line
+  encountered after a block's options have already started closes that block on the spot instead of
+  merging into the previous option's text, so malformed input becomes its own flagged block ("no
+  options detected") rather than corrupting a real question — see verification below for a caught
+  regression where the first version of this heuristic did exactly that. `BulkImportPanel.tsx` is
+  the review screen: every parsed question is individually editable (prompt/options/correct
+  answer), with a bulk Subject/Set target plus a per-question override checkbox, a live "X ready to
+  import" count, and nothing reaches the DB until "Confirm and add" — `POST
+  /api/proctored-questions/bulk-import` re-validates every row server-side and inserts all-or-nothing.
+- **Step 5 — export**: `GET /api/proctored-questions/export?setId=`or `?subjectId=` reuses
+  `lib/reports.ts`'s `newReportWorkbook`/`styleHeaderRow`/`excelResponse` helpers (same ones the
+  earlier results-report feature uses) — one sheet, dynamic `Option A..N` columns sized to the
+  widest question in the export, a `Correct option` column with the actual answer text (not just an
+  index), explanation, difficulty, and the Subject/Set it belongs to. "Download"/"Export" buttons on
+  both the Subject row and each Set row in `SubjectSetManager`.
+- **Verification**: no browser-automation tool is available in this environment, so the UI itself
+  wasn't clicked through — instead verified the two riskiest layers directly. **DB layer**: a script
+  using the same `supabaseAdmin` client the API routes use confirmed all 20 pre-existing questions
+  came back `needs_categorization = true` with `set_id = null`; created a real Subject with two
+  Sets; inserted a categorized question; confirmed the CHECK constraint rejects
+  `set_id = null, needs_categorization = false`; deleted a Set and confirmed the trigger correctly
+  flipped its question back to `needs_categorization = true, set_id = null` instead of erroring.
+  **Parser**: ran a realistic mixed-format paste (see below) through `parseBulkQuestions` directly.
+  **Export**: built a workbook through the export route's exact column/row logic with sample data
+  and read it back with exceljs — confirmed `Correct option` held the actual answer text ("Paris",
+  not an index) and short rows were correctly blank-padded next to a 4-option row. All scratch test
+  data/files removed afterward. `tsc --noEmit` and `next build` both clean.
+  - **Parser test paste** (4 questions, mixed "A)" and "1)" styles, one intentionally malformed
+    paragraph dropped in the middle):
+    ```
+    Q1. What is the time complexity of binary search...?  A)-D) options, "Answer: B"
+    2) Which data structure uses FIFO order?               1)-4) options, "Ans: 2"
+    Q3. What does CPU stand for?                           a.-d. options, "Answer: b"
+    [a rambling unrelated paragraph, no markers at all]
+    4) Which of these is NOT a JS primitive type?           A)-D) options, "*C) array" inline marker
+    ```
+    **Result**: all 4 real questions parsed correctly — prompt, all options, and the correct
+    answer index all matched (including the inline `*` marker on option C of Q4, and both the
+    letter- and number-style answer lines). The rambling paragraph was correctly split into its own
+    block and flagged (`"Only 0 options detected — need at least 2."`) rather than being silently
+    absorbed into Q3's last option, which is what an earlier version of the heuristic actually did
+    (caught by this test, not assumed correct) before the block-splitting logic was reworked to
+    close a block as soon as stray prose follows its options.
+- Files touched: `types/index.ts`, `app/teacher/proctored-questions/page.tsx`,
+  `app/api/proctored-questions/route.ts`, `lib/supabase/schema.sql`. New:
+  `supabase/migrations/0012_proctored_subject_sets.sql`, `app/api/proctored-subjects/route.ts`,
+  `app/api/proctored-sets/route.ts`, `app/api/proctored-questions/bulk-import/route.ts`,
+  `app/api/proctored-questions/export/route.ts`, `lib/proctoredBulkParse.ts`,
+  `components/proctored-bank/SubjectSetManager.tsx`, `components/proctored-bank/BulkImportPanel.tsx`.
+- Why: the flat proctored question bank had no way to organize or bulk-populate questions, making
+  it impractical to build out real content at volume ahead of the (separate, future) test-creation
+  flow that will pick from Subjects/Sets. The paste-and-parse importer exists because teachers
+  already have MCQs in whatever format their source material used, not this app's schema — forcing
+  the review screen and blocking DB writes until explicit confirmation was a hard requirement
+  precisely because the parsing heuristic is fallible by nature (proven true during this task's own
+  verification pass).
+

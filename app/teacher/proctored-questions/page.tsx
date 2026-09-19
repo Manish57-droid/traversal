@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { ImagePlus, X } from "lucide-react";
-import type { ProctoredQuestion } from "@/types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, Download, ImagePlus, X } from "lucide-react";
+import type { ProctoredQuestion, ProctoredSubjectWithSets } from "@/types";
+import SubjectSetManager from "@/components/proctored-bank/SubjectSetManager";
+import BulkImportPanel from "@/components/proctored-bank/BulkImportPanel";
 
 const EMPTY_FORM = {
   prompt: "",
@@ -11,9 +13,12 @@ const EMPTY_FORM = {
   explanation: "",
   difficulty: "unknown",
   image_url: "" as string | null,
+  subject_id: "",
+  set_id: "",
 };
 
 export default function ProctoredQuestionsPage() {
+  const [subjects, setSubjects] = useState<ProctoredSubjectWithSets[]>([]);
   const [questions, setQuestions] = useState<ProctoredQuestion[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -24,17 +29,46 @@ export default function ProctoredQuestionsPage() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  async function load() {
+  const [showBulkImport, setShowBulkImport] = useState(false);
+
+  // Filters for the list view.
+  const [filterSubjectId, setFilterSubjectId] = useState("");
+  const [filterSetId, setFilterSetId] = useState("");
+  const [showUncategorizedOnly, setShowUncategorizedOnly] = useState(false);
+
+  async function loadSubjects() {
+    const res = await fetch("/api/proctored-subjects");
+    const data = await res.json();
+    setSubjects(data.subjects ?? []);
+  }
+
+  async function loadQuestions() {
     setLoading(true);
-    const res = await fetch("/api/proctored-questions");
+    const params = new URLSearchParams();
+    if (showUncategorizedOnly) {
+      params.set("needsCategorization", "true");
+    } else {
+      if (filterSetId) params.set("setId", filterSetId);
+      else if (filterSubjectId) params.set("subjectId", filterSubjectId);
+    }
+    const res = await fetch(`/api/proctored-questions?${params.toString()}`);
     const data = await res.json();
     setQuestions(data.questions ?? []);
     setLoading(false);
   }
 
   useEffect(() => {
-    load();
+    loadSubjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    loadQuestions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterSubjectId, filterSetId, showUncategorizedOnly]);
+
+  const formSets = useMemo(() => subjects.find((s) => s.id === form.subject_id)?.sets ?? [], [subjects, form.subject_id]);
+  const filterSets = useMemo(() => subjects.find((s) => s.id === filterSubjectId)?.sets ?? [], [subjects, filterSubjectId]);
 
   function updateOption(index: number, value: string) {
     setForm((f) => ({ ...f, options: f.options.map((o, i) => (i === index ? value : o)) }));
@@ -61,6 +95,8 @@ export default function ProctoredQuestionsPage() {
       explanation: q.explanation ?? "",
       difficulty: q.difficulty,
       image_url: q.image_url,
+      subject_id: q.subject_id ?? "",
+      set_id: q.set_id ?? "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -94,10 +130,15 @@ export default function ProctoredQuestionsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!form.set_id) {
+      setError("Pick a Subject and Set for this question.");
+      return;
+    }
     setSubmitting(true);
     try {
       const cleanOptions = form.options.map((o) => o.trim()).filter(Boolean);
-      const payload = { ...form, options: cleanOptions };
+      const { subject_id, ...rest } = form;
+      const payload = { ...rest, options: cleanOptions };
       const res = await fetch("/api/proctored-questions", {
         method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -106,7 +147,7 @@ export default function ProctoredQuestionsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       cancelEdit();
-      await load();
+      await Promise.all([loadQuestions(), loadSubjects()]);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -122,17 +163,37 @@ export default function ProctoredQuestionsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     });
+    await loadSubjects();
+  }
+
+  async function handleReload() {
+    await Promise.all([loadSubjects(), loadQuestions()]);
   }
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-display text-2xl text-fg sm:text-3xl">Proctored test question bank</h1>
-        <p className="mt-1 text-sm text-fg-muted">
-          MCQs here, kept separate from Aptitude and DSA — build a proctored test from this bank
-          on a class's page.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl text-fg sm:text-3xl">Proctored test question bank</h1>
+          <p className="mt-1 text-sm text-fg-muted">
+            MCQs organized by Subject and Set, kept separate from Aptitude and DSA — build a proctored test from this
+            bank on a class's page.
+          </p>
+        </div>
+        <button type="button" className="btn-secondary" onClick={() => setShowBulkImport((v) => !v)}>
+          {showBulkImport ? "Close bulk import" : "Bulk Add from Paste"}
+        </button>
       </div>
+
+      <SubjectSetManager subjects={subjects} onReload={loadSubjects} />
+
+      {showBulkImport && (
+        <BulkImportPanel
+          subjects={subjects}
+          onImported={handleReload}
+          onClose={() => setShowBulkImport(false)}
+        />
+      )}
 
       <form onSubmit={handleSubmit} className="card space-y-4 p-4">
         {editingId && (
@@ -145,7 +206,34 @@ export default function ProctoredQuestionsPage() {
         )}
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="sm:col-span-2" />
+          <div>
+            <label className="mb-1 block text-xs text-fg-muted">Subject</label>
+            <select
+              className="input"
+              value={form.subject_id}
+              onChange={(e) => setForm((f) => ({ ...f, subject_id: e.target.value, set_id: "" }))}
+            >
+              <option value="">Select subject…</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-fg-muted">Set</label>
+            <select
+              className="input"
+              value={form.set_id}
+              onChange={(e) => setForm((f) => ({ ...f, set_id: e.target.value }))}
+              disabled={!form.subject_id}
+            >
+              <option value="">Select set…</option>
+              {formSets.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            {!subjects.length && <p className="mt-1 text-xs text-fg-subtle">Add a Subject and Set above first.</p>}
+          </div>
           <div>
             <label className="mb-1 block text-xs text-fg-muted">Difficulty</label>
             <select
@@ -260,17 +348,88 @@ export default function ProctoredQuestionsPage() {
         {error && <p className="text-sm text-red-400">{error}</p>}
       </form>
 
+      {/* ---------- Filters ---------- */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[180px]">
+          <label className="mb-1 block text-xs text-fg-muted">Filter by Subject</label>
+          <select
+            className="input"
+            value={filterSubjectId}
+            onChange={(e) => {
+              setFilterSubjectId(e.target.value);
+              setFilterSetId("");
+              setShowUncategorizedOnly(false);
+            }}
+          >
+            <option value="">All subjects</option>
+            {subjects.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="min-w-[180px]">
+          <label className="mb-1 block text-xs text-fg-muted">Filter by Set</label>
+          <select
+            className="input"
+            value={filterSetId}
+            onChange={(e) => {
+              setFilterSetId(e.target.value);
+              setShowUncategorizedOnly(false);
+            }}
+            disabled={!filterSubjectId}
+          >
+            <option value="">All sets</option>
+            {filterSets.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+        {filterSetId && (
+          <a
+            href={`/api/proctored-questions/export?setId=${filterSetId}`}
+            target="_blank"
+            rel="noreferrer"
+            className="btn-secondary flex items-center gap-1.5 py-2.5 text-xs"
+          >
+            <Download className="h-3.5 w-3.5" /> Download this set
+          </a>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setShowUncategorizedOnly((v) => !v);
+            setFilterSubjectId("");
+            setFilterSetId("");
+          }}
+          className={`flex items-center gap-1.5 rounded-lg border px-3 py-2.5 text-xs transition-colors ${
+            showUncategorizedOnly ? "border-warn/50 bg-warn/10 text-warn" : "border-line text-fg-muted hover:text-fg"
+          }`}
+        >
+          <AlertTriangle className="h-3.5 w-3.5" />
+          Needs categorization only
+        </button>
+      </div>
+
       <div className="space-y-3">
         {loading && <p className="text-sm text-fg-muted">Loading…</p>}
         {!loading && questions.length === 0 && (
           <p className="card p-6 text-center text-sm text-fg-muted">
-            No questions yet — add one above.
+            No questions match these filters.
           </p>
         )}
         {questions.map((q) => (
           <div key={q.id} className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
+                {q.needs_categorization ? (
+                  <span className="flex items-center gap-1 rounded-full bg-warn/10 px-2 py-0.5 text-xs text-warn">
+                    <AlertTriangle className="h-3 w-3" /> Needs categorization
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent">
+                    {q.subject_name} / {q.set_name}
+                  </span>
+                )}
                 {q.difficulty !== "unknown" && (
                   <span className="text-xs capitalize text-fg-muted">{q.difficulty}</span>
                 )}

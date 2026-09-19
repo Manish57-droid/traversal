@@ -197,6 +197,42 @@ export interface ProctoredQuestion {
   created_at: string;
   /** Optional — most questions won't have one. */
   image_url: string | null;
+  /** Null only for legacy questions predating the Subject -> Set
+   * structure, or a set that was later deleted — see needs_categorization. */
+  set_id: string | null;
+  set_name: string | null;
+  subject_id: string | null;
+  subject_name: string | null;
+  /** True when set_id is null and this question is awaiting a teacher
+   * to assign it a set — same pattern as DSA's needs_link_curation. */
+  needs_categorization: boolean;
+}
+
+// ---------- Proctored question bank: Subjects & Sets ----------
+// Shared bank, not class-scoped — any teacher/admin can create and
+// manage these, same spirit as the DSA/Aptitude banks.
+
+export interface ProctoredSubject {
+  id: string;
+  name: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface ProctoredSet {
+  id: string;
+  subject_id: string;
+  name: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface ProctoredSetWithCount extends ProctoredSet {
+  question_count: number;
+}
+
+export interface ProctoredSubjectWithSets extends ProctoredSubject {
+  sets: ProctoredSetWithCount[];
 }
 
 export interface ProctoredTest {
