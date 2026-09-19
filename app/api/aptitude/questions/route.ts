@@ -43,19 +43,38 @@ function validateOptions(options: unknown, correct_option: unknown) {
   return null;
 }
 
+// A topic is mandatory (aptitude_questions.topic is NOT NULL) and
+// scoped to its category — resolves the pair together so `topic` (the
+// denormalized display text every other reader relies on) can never
+// point at a topic from a different category than the question.
+async function resolveTopic(
+  category: AptitudeCategory,
+  topicId: unknown
+): Promise<{ topic_id: string; topic: string } | { error: string }> {
+  if (!topicId || typeof topicId !== "string") return { error: "A topic is required." };
+  const supabase = supabaseAdmin();
+  const { data: topicRow } = await supabase
+    .from("aptitude_topics")
+    .select("name")
+    .eq("id", topicId)
+    .eq("category", category)
+    .maybeSingle();
+  if (!topicRow) return { error: "Topic not found for this category." };
+  return { topic_id: topicId, topic: topicRow.name };
+}
+
 export async function POST(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { category, topic, prompt, options, correct_option, explanation, difficulty } = body ?? {};
+  const { category, topic_id, prompt, options, correct_option, explanation, difficulty } = body ?? {};
 
   if (!category || !VALID_CATEGORIES.includes(category)) {
     return NextResponse.json({ error: "A valid category is required." }, { status: 400 });
   }
-  if (!topic?.trim()) {
-    return NextResponse.json({ error: "Topic is required." }, { status: 400 });
-  }
+  const topicResult = await resolveTopic(category, topic_id);
+  if ("error" in topicResult) return NextResponse.json({ error: topicResult.error }, { status: 400 });
   if (!prompt?.trim()) {
     return NextResponse.json({ error: "Prompt is required." }, { status: 400 });
   }
@@ -67,7 +86,7 @@ export async function POST(req: Request) {
     .from("aptitude_questions")
     .insert({
       category,
-      topic: topic.trim(),
+      ...topicResult,
       prompt: prompt.trim(),
       options: (options as string[]).map((o) => o.trim()),
       correct_option: Number(correct_option),
@@ -87,7 +106,7 @@ export async function PATCH(req: Request) {
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { id, category, topic, prompt, options, correct_option, explanation, difficulty } = body ?? {};
+  const { id, category, topic_id, prompt, options, correct_option, explanation, difficulty } = body ?? {};
 
   if (!id) return NextResponse.json({ error: "id is required." }, { status: 400 });
   if (category && !VALID_CATEGORIES.includes(category)) {
@@ -98,12 +117,24 @@ export async function PATCH(req: Request) {
     if (optionsError) return NextResponse.json({ error: optionsError }, { status: 400 });
   }
 
+  // A category change must carry its new topic along — a topic_id
+  // from the old category would otherwise silently point nowhere.
+  let topicUpdate: { topic_id: string; topic: string } | Record<string, never> = {};
+  if (category || topic_id !== undefined) {
+    if (!category) {
+      return NextResponse.json({ error: "category is required when changing topic_id." }, { status: 400 });
+    }
+    const topicResult = await resolveTopic(category, topic_id);
+    if ("error" in topicResult) return NextResponse.json({ error: topicResult.error }, { status: 400 });
+    topicUpdate = topicResult;
+  }
+
   const supabase = supabaseAdmin();
   const { data: question, error } = await supabase
     .from("aptitude_questions")
     .update({
       ...(category ? { category } : {}),
-      ...(topic?.trim() ? { topic: topic.trim() } : {}),
+      ...topicUpdate,
       ...(prompt?.trim() ? { prompt: prompt.trim() } : {}),
       ...(options ? { options: (options as string[]).map((o) => o.trim()) } : {}),
       ...(correct_option !== undefined ? { correct_option: Number(correct_option) } : {}),

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { AptitudeCategory, AptitudeQuestion } from "@/types";
+import type { AptitudeCategory, AptitudeQuestion, AptitudeTopicWithCount } from "@/types";
+import FolderSection from "@/components/FolderSection";
 import { APTITUDE_TOPIC_SUGGESTIONS } from "@/lib/aptitudeTopics";
 
 const CATEGORIES: AptitudeCategory[] = ["quant", "logical", "verbal"];
@@ -13,7 +14,7 @@ const CATEGORY_LABELS: Record<AptitudeCategory, string> = {
 
 const EMPTY_FORM = {
   category: "quant" as AptitudeCategory,
-  topic: "",
+  topic_id: "",
   prompt: "",
   options: ["", "", "", ""],
   correct_option: 0,
@@ -23,14 +24,18 @@ const EMPTY_FORM = {
 
 export default function TeacherAptitudeQuestionsPage() {
   const [questions, setQuestions] = useState<AptitudeQuestion[]>([]);
+  const [topics, setTopics] = useState<AptitudeTopicWithCount[]>([]);
   const [loading, setLoading] = useState(true);
-  const [categoryFilter, setCategoryFilter] = useState<"all" | AptitudeCategory>("all");
-  const [topicFilter, setTopicFilter] = useState("");
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const [creatingTopic, setCreatingTopic] = useState(false);
+  const [newTopicName, setNewTopicName] = useState("");
+  const [savingNewTopic, setSavingNewTopic] = useState(false);
+  const [newTopicError, setNewTopicError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -40,20 +45,37 @@ export default function TeacherAptitudeQuestionsPage() {
     setLoading(false);
   }
 
+  async function loadTopics() {
+    const res = await fetch("/api/aptitude-topics");
+    const data = await res.json();
+    setTopics(data.topics ?? []);
+  }
+
   useEffect(() => {
     load();
+    loadTopics();
   }, []);
 
-  const topics = useMemo(
-    () => Array.from(new Set(questions.map((q) => q.topic))).sort(),
-    [questions]
+  const topicsForFormCategory = useMemo(
+    () => topics.filter((t) => t.category === form.category),
+    [topics, form.category]
   );
 
-  const filtered = questions.filter(
-    (q) =>
-      (categoryFilter === "all" || q.category === categoryFilter) &&
-      (!topicFilter || q.topic === topicFilter)
-  );
+  const groupsByCategory = useMemo(() => {
+    const result = new Map<AptitudeCategory, { byTopic: Map<string, AptitudeQuestion[]>; uncategorized: AptitudeQuestion[] }>();
+    for (const c of CATEGORIES) result.set(c, { byTopic: new Map(), uncategorized: [] });
+    for (const q of questions) {
+      const bucket = result.get(q.category)!;
+      if (q.topic_id) {
+        const list = bucket.byTopic.get(q.topic_id) ?? [];
+        list.push(q);
+        bucket.byTopic.set(q.topic_id, list);
+      } else {
+        bucket.uncategorized.push(q);
+      }
+    }
+    return result;
+  }, [questions]);
 
   function updateOption(index: number, value: string) {
     setForm((f) => ({ ...f, options: f.options.map((o, i) => (i === index ? value : o)) }));
@@ -75,7 +97,7 @@ export default function TeacherAptitudeQuestionsPage() {
     setEditingId(q.id);
     setForm({
       category: q.category,
-      topic: q.topic,
+      topic_id: q.topic_id ?? "",
       prompt: q.prompt,
       options: q.options,
       correct_option: q.correct_option,
@@ -91,9 +113,36 @@ export default function TeacherAptitudeQuestionsPage() {
     setError(null);
   }
 
+  async function handleCreateTopic() {
+    if (!newTopicName.trim()) return;
+    setNewTopicError(null);
+    setSavingNewTopic(true);
+    try {
+      const res = await fetch("/api/aptitude-topics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category: form.category, name: newTopicName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      await loadTopics();
+      setForm((f) => ({ ...f, topic_id: data.topic.id }));
+      setNewTopicName("");
+      setCreatingTopic(false);
+    } catch (err: any) {
+      setNewTopicError(err.message);
+    } finally {
+      setSavingNewTopic(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!form.topic_id) {
+      setError("Pick a topic for this question (or create a new one).");
+      return;
+    }
     setSubmitting(true);
     try {
       const cleanOptions = form.options.map((o) => o.trim()).filter(Boolean);
@@ -106,7 +155,7 @@ export default function TeacherAptitudeQuestionsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       cancelEdit();
-      await load();
+      await Promise.all([load(), loadTopics()]);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -122,6 +171,53 @@ export default function TeacherAptitudeQuestionsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     });
+    await loadTopics();
+  }
+
+  async function handleDeleteTopic(id: string, name: string) {
+    if (!confirm(`Delete topic "${name}"? This only works while it has no questions.`)) return;
+    const res = await fetch("/api/aptitude-topics", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error);
+      return;
+    }
+    await loadTopics();
+  }
+
+  function QuestionCard({ q }: { q: AptitudeQuestion }) {
+    return (
+      <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            {q.difficulty !== "unknown" && (
+              <span className="text-xs capitalize text-fg-muted">{q.difficulty}</span>
+            )}
+          </div>
+          <p className="mt-1 font-medium text-fg">{q.prompt}</p>
+          <ul className="mt-2 space-y-0.5 text-xs text-fg-muted">
+            {q.options.map((opt, i) => (
+              <li key={i} className={i === q.correct_option ? "text-success" : ""}>
+                {i === q.correct_option ? "✓ " : "· "}
+                {opt}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="flex shrink-0 gap-3 text-xs">
+          <button onClick={() => startEdit(q)} className="text-fg-muted hover:text-fg">
+            Edit
+          </button>
+          <button onClick={() => handleDelete(q.id)} className="text-fg-subtle hover:text-red-400">
+            Delete
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -149,7 +245,7 @@ export default function TeacherAptitudeQuestionsPage() {
             <select
               className="input"
               value={form.category}
-              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value as AptitudeCategory }))}
+              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value as AptitudeCategory, topic_id: "" }))}
             >
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
@@ -158,20 +254,69 @@ export default function TeacherAptitudeQuestionsPage() {
           </div>
           <div>
             <label className="mb-1 block text-xs text-fg-muted">Topic</label>
-            <input
-              className="input"
-              list="aptitude-topic-suggestions"
-              placeholder="Time & Work"
-              value={form.topic}
-              onChange={(e) => setForm((f) => ({ ...f, topic: e.target.value }))}
-            />
-            {/* Suggestions only — topic stays free text, so a name not in
-                this starting taxonomy is still accepted. */}
-            <datalist id="aptitude-topic-suggestions">
-              {APTITUDE_TOPIC_SUGGESTIONS[form.category].map((t) => (
-                <option key={t} value={t} />
-              ))}
-            </datalist>
+            {creatingTopic ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  autoFocus
+                  className="input"
+                  list="aptitude-topic-suggestions"
+                  placeholder="New topic name"
+                  value={newTopicName}
+                  onChange={(e) => setNewTopicName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleCreateTopic();
+                    }
+                  }}
+                />
+                {/* Suggestions only — a name not in this starting
+                    taxonomy is still accepted as a new topic. */}
+                <datalist id="aptitude-topic-suggestions">
+                  {APTITUDE_TOPIC_SUGGESTIONS[form.category].map((t) => (
+                    <option key={t} value={t} />
+                  ))}
+                </datalist>
+                <button
+                  type="button"
+                  onClick={handleCreateTopic}
+                  disabled={savingNewTopic || !newTopicName.trim()}
+                  className="btn-secondary shrink-0 py-2.5 text-xs"
+                >
+                  {savingNewTopic ? "Saving..." : "Create"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreatingTopic(false);
+                    setNewTopicName("");
+                    setNewTopicError(null);
+                  }}
+                  className="shrink-0 text-xs text-fg-subtle hover:text-fg"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <select
+                className="input"
+                value={form.topic_id}
+                onChange={(e) => {
+                  if (e.target.value === "__new__") {
+                    setCreatingTopic(true);
+                    return;
+                  }
+                  setForm((f) => ({ ...f, topic_id: e.target.value }));
+                }}
+              >
+                <option value="">Select topic…</option>
+                {topicsForFormCategory.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+                <option value="__new__">+ Create new topic…</option>
+              </select>
+            )}
+            {newTopicError && <p className="mt-1 text-xs text-red-400">{newTopicError}</p>}
           </div>
           <div>
             <label className="mb-1 block text-xs text-fg-muted">Difficulty</label>
@@ -250,71 +395,55 @@ export default function TeacherAptitudeQuestionsPage() {
         {error && <p className="text-sm text-red-400">{error}</p>}
       </form>
 
-      <div className="flex flex-wrap items-center gap-2">
-        {(["all", ...CATEGORIES] as const).map((c) => (
-          <button
-            key={c}
-            onClick={() => setCategoryFilter(c)}
-            className={`rounded-full border px-3 py-1.5 text-xs capitalize transition-colors ${
-              categoryFilter === c
-                ? "border-success/60 bg-success/10 text-success"
-                : "border-line/70 text-fg-muted hover:border-line"
-            }`}
-          >
-            {c === "all" ? "All" : CATEGORY_LABELS[c]}
-          </button>
-        ))}
-        {topics.length > 0 && (
-          <select className="input w-auto py-1.5 text-xs" value={topicFilter} onChange={(e) => setTopicFilter(e.target.value)}>
-            <option value="">All topics</option>
-            {topics.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-        )}
-      </div>
-
       <div className="space-y-3">
         {loading && <p className="text-sm text-fg-muted">Loading…</p>}
-        {!loading && filtered.length === 0 && (
+        {!loading && questions.length === 0 && (
           <p className="card p-6 text-center text-sm text-fg-muted">
             No questions yet — add one above.
           </p>
         )}
-        {filtered.map((q) => (
-          <div key={q.id} className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded border border-line/70 px-2 py-0.5 text-xs capitalize text-fg-muted">
-                  {CATEGORY_LABELS[q.category]}
-                </span>
-                <span className="rounded border border-line/70 px-2 py-0.5 text-xs text-fg-muted">
-                  {q.topic}
-                </span>
-                {q.difficulty !== "unknown" && (
-                  <span className="text-xs capitalize text-fg-muted">{q.difficulty}</span>
-                )}
-              </div>
-              <p className="mt-1 font-medium text-fg">{q.prompt}</p>
-              <ul className="mt-2 space-y-0.5 text-xs text-fg-muted">
-                {q.options.map((opt, i) => (
-                  <li key={i} className={i === q.correct_option ? "text-success" : ""}>
-                    {i === q.correct_option ? "✓ " : "· "}
-                    {opt}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="flex shrink-0 gap-3 text-xs">
-              <button onClick={() => startEdit(q)} className="text-fg-muted hover:text-fg">
-                Edit
-              </button>
-              <button onClick={() => handleDelete(q.id)} className="text-fg-subtle hover:text-red-400">
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
+        {!loading && CATEGORIES.map((category) => {
+          const bucket = groupsByCategory.get(category)!;
+          const categoryTopics = topics.filter((t) => t.category === category);
+          const total = Array.from(bucket.byTopic.values()).reduce((s, l) => s + l.length, 0) + bucket.uncategorized.length;
+          if (categoryTopics.length === 0 && total === 0) return null;
+          return (
+            <FolderSection key={category} label={CATEGORY_LABELS[category]} count={total} defaultOpen>
+              {categoryTopics.map((t) => {
+                const list = bucket.byTopic.get(t.id) ?? [];
+                return (
+                  <FolderSection
+                    key={t.id}
+                    label={t.name}
+                    count={list.length}
+                    depth={1}
+                    actions={
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTopic(t.id, t.name)}
+                        className="text-xs text-fg-subtle hover:text-red-400"
+                      >
+                        Delete
+                      </button>
+                    }
+                  >
+                    {list.length === 0 && <p className="text-xs text-fg-subtle">No questions here yet.</p>}
+                    {list.map((q) => (
+                      <QuestionCard key={q.id} q={q} />
+                    ))}
+                  </FolderSection>
+                );
+              })}
+              {bucket.uncategorized.length > 0 && (
+                <FolderSection label="Uncategorized" count={bucket.uncategorized.length} variant="uncategorized" depth={1} defaultOpen>
+                  {bucket.uncategorized.map((q) => (
+                    <QuestionCard key={q.id} q={q} />
+                  ))}
+                </FolderSection>
+              )}
+            </FolderSection>
+          );
+        })}
       </div>
     </div>
   );

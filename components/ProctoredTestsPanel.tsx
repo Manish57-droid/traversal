@@ -66,6 +66,13 @@ function TestDetail({ testId }: { testId: string }) {
             <Download className="h-3.5 w-3.5" />
             Download Report
           </a>
+          <a
+            href={`/api/proctored-tests/${testId}/questions-export`}
+            className="btn-secondary flex items-center gap-1.5 py-1.5 text-xs"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download Question Bank
+          </a>
           <button onClick={toggleRelease} disabled={busy || released === null} className="btn-secondary py-1.5 text-xs">
             {busy ? "Saving..." : released ? "Unrelease results" : "Release results"}
           </button>

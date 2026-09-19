@@ -5,6 +5,7 @@ import { AlertTriangle, Download, ImagePlus, X } from "lucide-react";
 import type { ProctoredQuestion, ProctoredSubjectWithSets } from "@/types";
 import SubjectSetManager from "@/components/proctored-bank/SubjectSetManager";
 import BulkImportPanel from "@/components/proctored-bank/BulkImportPanel";
+import FolderSection from "@/components/FolderSection";
 
 const EMPTY_FORM = {
   prompt: "",
@@ -74,6 +75,25 @@ export default function ProctoredQuestionsPage() {
 
   const formSets = useMemo(() => subjects.find((s) => s.id === form.subject_id)?.sets ?? [], [subjects, form.subject_id]);
   const filterSets = useMemo(() => subjects.find((s) => s.id === filterSubjectId)?.sets ?? [], [subjects, filterSubjectId]);
+
+  const filtersActive = Boolean(filterSubjectId || filterSetId || showUncategorizedOnly);
+
+  const questionGroups = useMemo(() => {
+    const bySubject = new Map<string, Map<string, ProctoredQuestion[]>>();
+    const uncategorized: ProctoredQuestion[] = [];
+    for (const q of questions) {
+      if (q.needs_categorization || !q.subject_id || !q.set_id) {
+        uncategorized.push(q);
+        continue;
+      }
+      const setsMap = bySubject.get(q.subject_id) ?? new Map<string, ProctoredQuestion[]>();
+      const list = setsMap.get(q.set_id) ?? [];
+      list.push(q);
+      setsMap.set(q.set_id, list);
+      bySubject.set(q.subject_id, setsMap);
+    }
+    return { bySubject, uncategorized };
+  }, [questions]);
 
   function updateOption(index: number, value: string) {
     setForm((f) => ({ ...f, options: f.options.map((o, i) => (i === index ? value : o)) }));
@@ -196,6 +216,49 @@ export default function ProctoredQuestionsPage() {
 
   async function handleReload() {
     await Promise.all([loadSubjects(), loadQuestions()]);
+  }
+
+  function QuestionCard({ q }: { q: ProctoredQuestion }) {
+    return (
+      <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            {q.needs_categorization && (
+              <span className="flex items-center gap-1 rounded-full bg-warn/10 px-2 py-0.5 text-xs text-warn">
+                <AlertTriangle className="h-3 w-3" /> Needs categorization
+              </span>
+            )}
+            {q.difficulty !== "unknown" && (
+              <span className="text-xs capitalize text-fg-muted">{q.difficulty}</span>
+            )}
+          </div>
+          {q.image_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={q.image_url} alt="" className="mt-1 max-h-40 rounded-lg border border-line/70 object-contain" />
+          )}
+          <p className="mt-1 font-medium text-fg">{q.prompt}</p>
+          <ul className="mt-2 space-y-0.5 text-xs text-fg-muted">
+            {q.options.map((opt, i) => (
+              <li key={i} className={i === q.correct_option ? "text-success" : ""}>
+                {i === q.correct_option ? "✓ " : "· "}
+                {opt}
+              </li>
+            ))}
+          </ul>
+          {q.created_by_name && (
+            <p className="mt-2 text-xs text-fg-subtle">Added by {q.created_by_name}</p>
+          )}
+        </div>
+        <div className="flex shrink-0 gap-3 text-xs">
+          <button onClick={() => startEdit(q)} className="text-fg-muted hover:text-fg">
+            Edit
+          </button>
+          <button onClick={() => handleDelete(q.id)} className="text-fg-subtle hover:text-red-400">
+            Delete
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -490,50 +553,35 @@ export default function ProctoredQuestionsPage() {
             No questions match these filters.
           </p>
         )}
-        {questions.map((q) => (
-          <div key={q.id} className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                {q.needs_categorization ? (
-                  <span className="flex items-center gap-1 rounded-full bg-warn/10 px-2 py-0.5 text-xs text-warn">
-                    <AlertTriangle className="h-3 w-3" /> Needs categorization
-                  </span>
-                ) : (
-                  <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent">
-                    {q.subject_name} / {q.set_name}
-                  </span>
-                )}
-                {q.difficulty !== "unknown" && (
-                  <span className="text-xs capitalize text-fg-muted">{q.difficulty}</span>
-                )}
-              </div>
-              {q.image_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={q.image_url} alt="" className="mt-1 max-h-40 rounded-lg border border-line/70 object-contain" />
-              )}
-              <p className="mt-1 font-medium text-fg">{q.prompt}</p>
-              <ul className="mt-2 space-y-0.5 text-xs text-fg-muted">
-                {q.options.map((opt, i) => (
-                  <li key={i} className={i === q.correct_option ? "text-success" : ""}>
-                    {i === q.correct_option ? "✓ " : "· "}
-                    {opt}
-                  </li>
-                ))}
-              </ul>
-              {q.created_by_name && (
-                <p className="mt-2 text-xs text-fg-subtle">Added by {q.created_by_name}</p>
-              )}
-            </div>
-            <div className="flex shrink-0 gap-3 text-xs">
-              <button onClick={() => startEdit(q)} className="text-fg-muted hover:text-fg">
-                Edit
-              </button>
-              <button onClick={() => handleDelete(q.id)} className="text-fg-subtle hover:text-red-400">
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
+        {!loading && subjects.map((subject) => {
+          const setsMap = questionGroups.bySubject.get(subject.id);
+          const subjectTotal = setsMap ? Array.from(setsMap.values()).reduce((s, l) => s + l.length, 0) : 0;
+          if (filtersActive && subjectTotal === 0) return null;
+          return (
+            <FolderSection key={subject.id} label={subject.name} count={subjectTotal} defaultOpen>
+              {subject.sets.map((set) => {
+                const list = setsMap?.get(set.id) ?? [];
+                if (filtersActive && list.length === 0) return null;
+                return (
+                  <FolderSection key={set.id} label={set.name} count={list.length} depth={1}>
+                    {list.length === 0 && <p className="text-xs text-fg-subtle">No questions here yet.</p>}
+                    {list.map((q) => (
+                      <QuestionCard key={q.id} q={q} />
+                    ))}
+                  </FolderSection>
+                );
+              })}
+            </FolderSection>
+          );
+        })}
+
+        {!loading && questionGroups.uncategorized.length > 0 && (
+          <FolderSection label="Uncategorized" count={questionGroups.uncategorized.length} variant="uncategorized" defaultOpen>
+            {questionGroups.uncategorized.map((q) => (
+              <QuestionCard key={q.id} q={q} />
+            ))}
+          </FolderSection>
+        )}
       </div>
     </div>
   );

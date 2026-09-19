@@ -48,16 +48,30 @@ export async function GET(req: Request) {
   return NextResponse.json({ questions: data });
 }
 
+// Resolves a topic_id into its current name (or null for "leave
+// uncategorized"), so `topic` (the denormalized display text every
+// other reader in the app relies on) never drifts from topic_id.
+async function resolveTopicName(topicId: string | null): Promise<{ topic_id: string | null; topic: string | null } | { error: string }> {
+  if (!topicId) return { topic_id: null, topic: null };
+  const supabase = supabaseAdmin();
+  const { data: topicRow } = await supabase.from("dsa_topics").select("name").eq("id", topicId).maybeSingle();
+  if (!topicRow) return { error: "Topic not found." };
+  return { topic_id: topicId, topic: topicRow.name };
+}
+
 export async function POST(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { url, title, topic, difficulty } = body ?? {};
+  const { url, title, topic_id, difficulty } = body ?? {};
 
   if (!url || !isValidUrl(url)) {
     return NextResponse.json({ error: "A valid URL is required." }, { status: 400 });
   }
+
+  const topicResult = await resolveTopicName(topic_id || null);
+  if ("error" in topicResult) return NextResponse.json({ error: topicResult.error }, { status: 400 });
 
   const supabase = supabaseAdmin();
   const { data: question, error } = await supabase
@@ -66,7 +80,7 @@ export async function POST(req: Request) {
       url,
       title: title?.trim() || guessTitleFromUrl(url),
       platform: detectPlatform(url),
-      topic: topic || null,
+      ...topicResult,
       difficulty: difficulty || "unknown",
       created_by: user.id,
     })
@@ -77,22 +91,45 @@ export async function POST(req: Request) {
   return NextResponse.json({ question }, { status: 201 });
 }
 
-// PATCH /api/questions { id, url } -> fill in the real link for a
-// bulk-seeded question that was flagged `needs_link_curation` (or fix
-// a wrong one on any question). Clears the flag once a valid url is set.
+// PATCH /api/questions { id, url? , topic_id? } -> partial update.
+// `url` fills in the real link for a bulk-seeded question flagged
+// `needs_link_curation` (or fixes a wrong one on any question) and
+// clears that flag. `topic_id` (a topic's id, or null) moves the
+// question into a different folder — omit the key entirely to leave
+// it untouched; pass it explicitly as null to uncategorize.
 export async function PATCH(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { id, url } = await req.json();
-  if (!id || !url || !isValidUrl(url)) {
-    return NextResponse.json({ error: "id and a valid url are required." }, { status: 400 });
+  const body = await req.json();
+  const { id, url } = body ?? {};
+  if (!id) return NextResponse.json({ error: "id is required." }, { status: 400 });
+
+  const update: Record<string, unknown> = {};
+
+  if (url !== undefined) {
+    if (!url || !isValidUrl(url)) {
+      return NextResponse.json({ error: "A valid url is required." }, { status: 400 });
+    }
+    update.url = url;
+    update.platform = detectPlatform(url);
+    update.needs_link_curation = false;
+  }
+
+  if ("topic_id" in body) {
+    const topicResult = await resolveTopicName(body.topic_id || null);
+    if ("error" in topicResult) return NextResponse.json({ error: topicResult.error }, { status: 400 });
+    Object.assign(update, topicResult);
+  }
+
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
   }
 
   const supabase = supabaseAdmin();
   const { data: question, error } = await supabase
     .from("questions")
-    .update({ url, platform: detectPlatform(url), needs_link_curation: false })
+    .update(update)
     .eq("id", id)
     .select()
     .single();

@@ -32,11 +32,32 @@ export interface Question {
   url: string | null;
   platform: QuestionPlatform;
   difficulty: QuestionDifficulty;
+  /** Denormalized display copy of the linked topic's name (or the
+   * legacy free-text value for a row that predates topics) — always
+   * kept in sync with topic_id server-side. Every reader outside the
+   * teacher bank page should keep using this, not topic_id. */
   topic: string | null;
+  /** The folder this question lives in, for the teacher bank page's
+   * grouped view. Null = "Uncategorized". */
+  topic_id: string | null;
   notes: string | null;
   created_by: string | null;
   created_at: string;
   needs_link_curation: boolean;
+}
+
+/** A DSA question-bank "folder" (app/teacher/questions). Shared/
+ * unscoped, same spirit as proctored_subjects — any teacher/admin can
+ * create one, any signed-in role can read the list. */
+export interface DsaTopic {
+  id: string;
+  name: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface DsaTopicWithCount extends DsaTopic {
+  question_count: number;
 }
 
 export interface ProgressRow {
@@ -97,7 +118,15 @@ export type AptitudeAttemptStatus = "in_progress" | "submitted" | "expired";
 export interface AptitudeQuestion {
   id: string;
   category: AptitudeCategory;
+  /** Denormalized display copy of the linked topic's name, always kept
+   * in sync with topic_id server-side — every reader outside the
+   * teacher bank page (practice, analytics, the random-test builder)
+   * should keep using this, not topic_id. */
   topic: string;
+  /** The folder this question lives in, for the teacher bank page's
+   * grouped view. Always set — a topic is required at creation, same
+   * as `topic` always has been. */
+  topic_id: string | null;
   prompt: string;
   options: string[];
   correct_option: number;
@@ -105,6 +134,20 @@ export interface AptitudeQuestion {
   difficulty: QuestionDifficulty;
   created_by: string | null;
   created_at: string;
+}
+
+/** An Aptitude question-bank "folder" (app/teacher/aptitude/questions),
+ * scoped to one category — mirrors DsaTopic. */
+export interface AptitudeTopic {
+  id: string;
+  category: AptitudeCategory;
+  name: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface AptitudeTopicWithCount extends AptitudeTopic {
+  question_count: number;
 }
 
 export interface AptitudePracticeHistory {
