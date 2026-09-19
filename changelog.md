@@ -1438,3 +1438,266 @@
   precisely because the parsing heuristic is fallible by nature (proven true during this task's own
   verification pass).
 
+## [2026-09-19] — Proctored Tests: multi-section restructuring (Subject/Set-driven sections, per-section timer/negative marking)
+- **Step 1 — schema**: `proctored_test_sections` (test_id, name, subject_id nullable, position,
+  time_limit_minutes nullable = "uses the combined timer", negative_marking_fraction nullable =
+  "inherit the test-level value", calculator_enabled) and `proctored_test_section_sets`
+  (section_id, set_id — which Sets are enabled for a section). `proctored_tests` gained
+  `timer_mode` ('combined'/'per_section') and `allow_free_section_navigation`.
+  `proctored_section_attempts` (attempt_id, section_id, started_at, submitted_at, status
+  'not_started'/'in_progress'/'completed') makes per-section timers/locking enforceable
+  server-side — a separate follow-up task builds the actual take-screen UI against it.
+  **Design decision, confirmed with the user before writing code**: a section's questions are
+  resolved **dynamically** from its enabled Sets (matches "all questions from each enabled Set are
+  included" literally, always reflects the Set's current contents) rather than snapshotted into
+  `proctored_test_questions` at creation time — so new tests never write question-level rows at
+  all, only `proctored_test_section_sets`. `proctored_test_questions` is kept, but only as the
+  **legacy path**: migration 0013 wraps every existing test's real question rows in one
+  auto-created default section (`subject_id = null`, since legacy questions predate Subject/Set
+  and may span several subjects or none — see 0012's `needs_categorization`) and backfills a new
+  `section_id` column on `proctored_test_questions` to point at it, moving its unique constraint
+  from `(test_id, position)` to `(section_id, position)`. A shared resolver
+  (`lib/proctoredSections.ts`) merges both paths into one ordered list wherever the app needs
+  questions (scoring, attempt-start, review, the Excel report), so neither path needs special-casing
+  outside that one module. Deleting a set/subject mid-flight doesn't corrupt a section silently —
+  `proctored_test_section_sets` rows cascade-delete with the Set (`on delete cascade`), so a
+  section just resolves to fewer questions, same as any other Set edit.
+- **Step 2 — multi-section creation UI**: `components/ProctoredTestsPanel.tsx`'s create-test form
+  replaces the old flat "check questions from the whole bank" picker entirely with a section
+  builder — "+ Add section" (name, Subject picker → that subject's Sets appear as toggle chips,
+  optional per-section time limit/negative-marking override, calculator toggle), reorder via
+  up/down buttons (no drag-and-drop library — matches this codebase's "don't add a new library
+  without checking the stack first" convention), and a live "`N` questions total" count computed
+  client-side from the already-fetched Subject/Set `question_count`s as Sets are toggled (no extra
+  round trip). Test-level: `timer_mode` radio (Combined/Per-section) and
+  `allow_free_section_navigation` toggle sit above the overall time limit, which is now labeled as
+  a fallback when per-section timing is chosen (the column stays required — a per-section test
+  still needs *some* value there today, since Prompt 25's take-screen work is what will actually
+  stop reading it for timing in that mode).
+- **Step 3 — scoring**: `lib/proctoredScoring.ts`'s `finalizeAttempt` now sums score across every
+  section, using each section's `negative_marking_fraction` override when set, else the
+  test-level value — verified end-to-end (see below) with a 2-section attempt where one section
+  inherits and the other overrides, confirming both fractions were actually applied where expected
+  rather than one leaking into the other. `getClassAuthorization` still governs the whole test;
+  no other authorization changes, per the task's scope.
+- **Step 4 — section-aware attempt API**: starting an attempt now creates a
+  `proctored_section_attempts` row for **every** section up front (status `not_started`), not just
+  the first one — chosen over "only the first section, create more as the student reaches them"
+  because it's one consistent code path regardless of `timer_mode`/navigation mode, rather than two
+  different creation strategies to keep in sync (noted here since the task left this as an open
+  call). New `PATCH /api/proctored-tests/[id]/attempts/[attemptId]/sections/[sectionId]`
+  (`{action: "enter"|"submit"}`) moves a section between `not_started` → `in_progress` →
+  `completed`; under locked navigation (`allow_free_section_navigation = false`) it rejects
+  entering a section before every earlier-position section is `completed`, enforced server-side (a
+  direct API call can't skip the lock even without the future UI). `GET`/`POST
+  /api/proctored-tests/[id]/attempts` now also return `sections` and `section_attempts` alongside
+  the existing flat `questions` array (unchanged shape, each question now additionally tagged
+  `section_id`/`section_name` so today's flat take screen keeps working untouched while a future
+  section-aware UI has what it needs without another round trip). This task intentionally stops at
+  the API/data layer — the take-screen UI itself (palette, timer display, lock enforcement) is a
+  separate follow-up (Prompt 25).
+- **Verification (real data, not traced)**:
+  - **Migration**: all 5 existing `proctored_tests` rows now have exactly 1 section each,
+    `timer_mode='combined'`. **"Mock Placement Drive 1"** (found to have 0 questions during this
+    task's research, i.e. an orphaned/empty test) still got its section correctly — `subject_id:
+    null`, 0 questions, no error. Both **"Technical Test-1"** rows (different classes, same name,
+    20 questions each) kept their exact original `position` ordering under the new `section_id`
+    column — sampled the first 3 positions of each directly from the DB and confirmed the
+    `question_id`s and order matched what existed before the migration.
+  - **Legacy scoring still works**: fetched a legacy test's questions via the new
+    `section_id`-scoped join (the same query path `finalizeAttempt` now uses) and confirmed
+    `correct_option` resolved correctly for real sampled rows.
+  - **New 2-section test, real stored structure** (Quantitative → Subject A, Technical → Subject
+    B, `timer_mode='per_section'`, `allow_free_section_navigation=false`, Technical overrides
+    negative marking to 0.5 while Quantitative inherits):
+    ```json
+    "sections": [
+      { "name": "Quantitative", "subject_id": "8b40f331-…", "position": 0,
+        "time_limit_minutes": 20, "negative_marking_fraction": null, "calculator_enabled": true },
+      { "name": "Technical", "subject_id": "20df521a-…", "position": 1,
+        "time_limit_minutes": 40, "negative_marking_fraction": 0.5, "calculator_enabled": false }
+    ]
+    ```
+    Each section correctly resolved (dynamically, via `proctored_test_section_sets` → each
+    question's `set_id`) to exactly its own Subject's question — no cross-contamination between
+    sections built on different Subjects.
+  - **Scoring, end-to-end, real `finalizeAttempt` call**: built a 2-section attempt by hand
+    (Quant: 1 correct + 1 wrong, no override → inherits the test's 0.25; Technical: 1 wrong + 1
+    unanswered, override 0.5) and called the actual scoring function. Expected
+    `(1 - 0.25) + (0 - 0.5) = 0.25` across 4 total questions — **got exactly `{ score: 0.25,
+    total_questions: 4 }`**, confirming the per-section override is applied to the section it
+    belongs to and nowhere else. All scratch test data (subjects/sets/questions/tests/attempts)
+    removed afterward; `tsc --noEmit` and `next build` both clean throughout.
+- Files touched: `types/index.ts`, `lib/proctoredScoring.ts`, `lib/supabase/schema.sql`,
+  `components/ProctoredTestsPanel.tsx`, `app/api/proctored-tests/route.ts`,
+  `app/api/proctored-tests/[id]/route.ts`, `app/api/proctored-tests/[id]/attempts/route.ts`,
+  `app/api/proctored-tests/[id]/review/route.ts`, `app/api/proctored-tests/[id]/report/route.ts`.
+  New: `supabase/migrations/0013_proctored_test_sections.sql`, `lib/proctoredSections.ts`,
+  `app/api/proctored-tests/[id]/attempts/[attemptId]/sections/[sectionId]/route.ts`.
+- Why: a real placement-drive-style test (e.g. TCS) is never one flat question list — it's
+  distinct timed sections pulling from different subject areas, sometimes with different
+  penalty rules per section. The dynamic-from-Sets design (confirmed with the user rather than
+  assumed) keeps the question bank as the single source of truth for a section's content instead
+  of letting a snapshot silently drift from the Set a teacher keeps curating. Wrapping every
+  existing test in a default section — rather than requiring a manual re-categorization pass —
+  was the only way to satisfy "existing single-section tests must keep working after migration"
+  without asking anyone to touch already-working data.
+
+## [2026-09-19] — Proctored take-screen overhaul: 6-state palette, NEET-style sections, per-section timer/lock, calculator
+- **Step 1 — per-question state**: `proctored_test_attempts.question_status` (new jsonb column,
+  migration `0014`) persists `{visited, marked_for_review}` per question — `answered` stays
+  derived (`answers[question_id] !== undefined`), matching how `answers` itself already works, so
+  the palette survives a resync/resume/violation-auto-submit exactly like answers do. The 6 palette
+  states are a pure function of these three booleans plus "is this the on-screen question" —
+  `questionPaletteState()` in `components/proctored-take/SectionQuestionPalette.tsx`, unit-tested
+  directly (not traced) against all 6 combinations, see verification below.
+  **Colors adapted to the token system, not hardcoded**: blue(current)->`accent`,
+  green(answered)->`success`, red(not answered)->`warn` (already a red/orange-red in this app's
+  palette), gray(not visited)->the existing neutral `surface-2`/`line`/`fg-subtle` tokens, and two
+  *new* tokens added to `app/globals.css` (light+dark) and `tailwind.config.ts` following the exact
+  `DEFAULT`/`-2` pattern every other semantic color already uses: `--review` (purple, "marked for
+  review") and `--review-2` (deeper indigo, "answered & marked for review") — this app had no
+  purple/violet precedent anywhere, so these are genuinely new, not a reuse.
+  **Deliberately forked, not extended, `components/QuestionPalette.tsx`**: that component is
+  shared with Aptitude Test Mode, where red currently means "not visited" — flipping red to mean
+  "not answered" (this task's spec) inside the same component would have silently changed
+  Aptitude's meaning too. `SectionQuestionPalette` is a new component instead, grouped by section
+  with its own legend.
+- **Step 2 — answer controls**: the take screen now holds a question's selection as a *local
+  draft* (a radio pick is provisional, not autosaved on click) — persistence happens only via the
+  three buttons, matching the reference flow and this task's literal spec ("Save & Next: saves the
+  selected option..."). `PATCH .../attempts/[attemptId]` extended to accept
+  `selected_option: number | null` (`null` clears the answer — Clear Response) and
+  `visited`/`marked_for_review` booleans that merge into `question_status`, alongside the answer in
+  the same request. **Design call**: "Mark for Review & Next" also persists whatever option is
+  currently drafted (not just "keeps whatever answered state already exists" as literally read) —
+  otherwise the 6th palette state (answered + marked) would be unreachable through the natural
+  single-click flow a student would actually use; this matches how the real NEET software behaves
+  too. Plain navigation (Previous/palette jump/landing on a question) still silently pings
+  `visited: true` without touching the answer, independent of the three buttons.
+- **Step 3 — section tabs + timer**: a NEET-style tab row above the question card, each tab
+  showing the section's name and live question count. Header timer now branches on `timer_mode`:
+  combined mode is the unchanged single whole-attempt countdown; per-section mode shows the
+  *current* section's countdown, computed the same server-authoritative way as before
+  (`proctored_section_attempts.started_at` + that section's `time_limit_minutes`, via the existing
+  `lib/testTiming.ts` — confirmed pure enough to import client-side, no server-only code in it).
+  **A section's clock only starts on first entry, not at attempt start** — matches
+  `started_at`'s existing "set when the student first enters this section" semantics from the
+  prior task, so switching directly to section 2 under free navigation gives it a full fresh
+  timer rather than one that's been silently running in the background. On expiry: the expired
+  section is submitted (`completed`) and the screen auto-advances to the next incomplete section
+  (or finalizes the whole attempt if that was the last one) — never just freezes.
+- **Step 4 — section lock**: under `allow_free_section_navigation = false`, clicking another tab
+  is blocked client-side (a toast explains why) and the only way forward is "Submit Section &
+  Continue", which calls the prior task's `PATCH .../sections/[sectionId] {action:"submit"}` then
+  auto-enters the next incomplete section. **A completed section can never be re-entered, in
+  either navigation mode** — enforced by the `sections/[sectionId]` endpoint itself (unchanged
+  from the prior task, it already rejected `action:"enter"` on a `completed` section), not just by
+  the new UI, so a direct API call can't bypass it either — confirmed directly, see verification.
+- **Step 5 — calculator**: `components/proctored-take/BasicCalculator.tsx`, a toggleable floating
+  panel (+ − × ÷, decimal, clear) shown only when the *current* section's `calculator_enabled` is
+  true — hidden entirely, not just disabled, for sections without it. Deliberately no
+  `eval()`/`Function()` — a small running-total state machine instead, so it can't execute
+  arbitrary input as code.
+- **Step 6 — rules screen**: `GET /api/proctored-tests/[id]` now also returns a student-facing
+  `sections` summary (`ProctoredTestSectionSummary`) with *resolved* values — the actual negative
+  marking number that applies (section override or the inherited test-level value, already
+  resolved server-side), not "inherited". The rules screen states a rule once if every section
+  shares it (e.g. "-0.25 per wrong answer, in every section") and breaks it out per-section only
+  where they actually differ — a judgment call per the task's own "use judgment" instruction.
+- **Verification — real evidence, API/logic-level (no browser tool available here; the user is
+  separately doing the in-browser click-through in both themes)**: built a real 2-section test
+  (`per_section` timer, locked navigation) against the live Supabase project and exercised the
+  exact server-side operations each control performs.
+  - **Palette states — all 6, via the actual `questionPaletteState()` function, not reimplemented
+    for the test**: not-visited -> visiting (not-answered) -> Save&Next (answered) -> Clear
+    Response (back to not-answered) -> Mark for Review with no answer (marked) -> answer + Mark for
+    Review (answered-marked) -> the on-screen question (current, overriding all else) — every
+    transition matched expectations exactly.
+  - **Section lock**: entering section B before section A was submitted was rejected
+    (`{"ok":false,"reason":"earlier sections not completed"}`); after submitting section A it was
+    allowed (`{"ok":true}`); re-entering the now-completed section A was rejected
+    (`{"ok":false,"reason":"already completed"}`) — same guard the real endpoint runs, confirmed
+    against real rows, not traced by reading the code.
+  - **Scoring with only one section completed**: answered 1 of section A's 4 questions correctly,
+    left section B's 1 question untouched, called the real `finalizeAttempt` — got
+    `{score: 1, total_questions: 5}`, confirming a partially-completed multi-section attempt scores
+    correctly (the untouched section's question costs nothing, doesn't block scoring).
+  - `tsc --noEmit` and `next build` both clean throughout; all scratch test data removed afterward.
+- Files touched: `types/index.ts`, `app/globals.css`, `tailwind.config.ts`,
+  `app/api/proctored-tests/[id]/attempts/[attemptId]/route.ts`,
+  `app/api/proctored-tests/[id]/attempts/route.ts`, `app/api/proctored-tests/[id]/route.ts`,
+  `app/student/proctored-tests/[testId]/take/page.tsx`,
+  `app/student/proctored-tests/[testId]/start/page.tsx`, `lib/supabase/schema.sql`. New:
+  `supabase/migrations/0014_proctored_question_status.sql`,
+  `components/proctored-take/SectionQuestionPalette.tsx`,
+  `components/proctored-take/BasicCalculator.tsx`.
+- Why: the prior task built the section data model and API but explicitly left the take screen
+  flat/single-list — this is the follow-up that makes a multi-section test (e.g. a real TCS-style
+  drive with Quant + Technical) actually *takeable* the way the reference NEET-style UI shows,
+  with the palette states, section navigation, and per-section timing all backed by the same
+  server-authoritative principle the rest of Proctored Tests already relies on: the client only
+  ever reflects state, nothing about scoring, timing, or lock enforcement is trusted from the
+  browser.
+
+## [2026-09-19] — Proctored Tests: leaderboards (student dashboard + teacher results view)
+- **Step 1 — shared ranking**: `lib/leaderboard.ts`'s `getTestLeaderboard(testId)` — the one place
+  attempts get ranked, so the student dashboard and the teacher's results view can't drift into
+  disagreeing about who's ranked where. Only `submitted`/`auto_submitted_violation`/`expired`
+  attempts with a non-null `score` are ranked (`in_progress` never has one). **Sorting is a real
+  PostgREST `.order("score", desc).order("submitted_at", asc)` call — an actual SQL `ORDER BY`,
+  not a `.sort()` over an unsorted fetch** — confirmed to scale with attempt count rather than a
+  client-side sort. Rank numbers are then assigned with a single O(n) pass over that
+  already-sorted sequence (labeling a sorted list, not a second sort) using competition ranking
+  (1, 1, 3 — not 1, 2, 3): two rows share a rank only if **both** score and `submitted_at` are
+  identical down to microsecond precision — vanishingly rare, but handled rather than picking an
+  arbitrary winner between them. The task's literal tie-break rule ("tied scores broken by
+  earlier submission time") is exactly what makes two equal-score rows get *different*, not
+  shared, ranks in the normal case — confirmed against real data below.
+- **Step 2 — student dashboard history**: `app/student/dashboard/page.tsx` gained a "My Proctored
+  Tests" table (test, class, status, score, rank, submission date) plus a "Total tests taken"
+  count, backed by `GET /api/student/proctored-tests` extended with `submitted_at` and `rank`.
+  **`rank` (and, per the task's explicit pairing, `score`/`total_questions` too) are `null` from
+  the server whenever `results_released` is false — not hidden in the UI, never computed or sent
+  in the first place**, same discipline as the existing review endpoint's 403 gate. Noted
+  behavior change: this endpoint is shared with the pre-existing `/student/proctored-tests` list
+  page, which previously showed a student's own score regardless of release — it's now gated too,
+  since the task explicitly grouped score with rank under the same release condition and this was
+  the natural single place to enforce it consistently rather than duplicating the check.
+- **Step 3 — Top 5 widget**: new `GET /api/student/proctored-tests/leaderboard`, gated the same
+  way — it never even reaches the ranking step for a test that isn't released. Picks the
+  student's most recently completed **and released** test (by their own `submitted_at`) across
+  their classes, returns its top 5 plus the student's own row if they're outside it (`me: null`
+  when their row is already inside `top`, to avoid showing it twice). Renders an explicit "no
+  released results yet" empty state, not nothing/an error, when no such test exists.
+- **Step 4 — teacher leaderboard**: `GET /api/proctored-tests/[id]/attempts`'s teacher branch now
+  also returns `leaderboard` (calling the same shared function) alongside its existing attempt
+  list — **independent of `results_released`**, since a teacher can always see full rankings for
+  their own test. Rendered as a collapsible table inside `TestDetail`
+  (`components/ProctoredTestsPanel.tsx`) with an explicit note that this visibility doesn't
+  depend on release status, so it's not mistaken for what students currently see.
+- **Verification (real data, not traced)**: created a disposable class with 3 real student
+  accounts and a real proctored test, inserted attempts with a deliberate tie — **student A and B
+  both scored 8/10; A submitted at `10:54:52.326Z`, B one minute later at `10:55:52.326Z`; C
+  scored 5/10** — and called the actual `getTestLeaderboard()`. Result: **A ranked #1, B ranked
+  #2 (same score, but later submission), C ranked #3** — the tie-break worked exactly as
+  specified, giving the earlier submitter the better rank rather than a shared one.
+  **Release-gating**, checked against the real `results_released` column value fetched fresh from
+  the DB each time (not assumed): before release, the student-route's exact inclusion filter
+  evaluated to "don't compute rank for this test"; after flipping `results_released` to `true`,
+  the same filter included it and `getTestLeaderboard()` returned A at rank 1 as expected; the
+  teacher-side call was confirmed to return all 3 ranked rows **while `results_released` was still
+  false**, proving the teacher view is genuinely unconditional. All test data (including any
+  disposable auth accounts, none were needed since 3 real student accounts already existed)
+  cleaned up afterward. `tsc --noEmit` and `next build` both clean throughout.
+- Files touched: `types/index.ts`, `app/api/proctored-tests/[id]/attempts/route.ts`,
+  `app/api/student/proctored-tests/route.ts`, `app/student/dashboard/page.tsx`,
+  `components/ProctoredTestsPanel.tsx`. New: `lib/leaderboard.ts`,
+  `app/api/student/proctored-tests/leaderboard/route.ts`,
+  `components/ProctoredLeaderboardWidget.tsx`.
+- Why: a proctored test's score means more in context — "8/10" is a lot more informative next to
+  "and you were 2nd out of 30" — and teachers already had the raw attempt list but no ranked view
+  of it. The release-gating discipline matters most here specifically because a leaderboard, unlike
+  a student's own score, inherently exposes *other* students' standing — worth being as strict
+  about as the full per-question review already is.
+

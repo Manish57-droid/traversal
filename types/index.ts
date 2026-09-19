@@ -185,6 +185,10 @@ export type ProctoredAttemptStatus = "in_progress" | "submitted" | "auto_submitt
 
 export type ProctoredViolationType = "tab_switch" | "fullscreen_exit" | "copy_attempt" | "camera_off";
 
+export type ProctoredTimerMode = "combined" | "per_section";
+
+export type ProctoredSectionAttemptStatus = "not_started" | "in_progress" | "completed";
+
 export interface ProctoredQuestion {
   id: string;
   prompt: string;
@@ -240,6 +244,8 @@ export interface ProctoredTest {
   class_id: string;
   name: string;
   description: string | null;
+  /** Used as the overall exam timer when timer_mode = 'combined';
+   * ignored (but still a required, meaningful fallback) otherwise. */
   time_limit_minutes: number;
   negative_marking_fraction: number;
   max_violations_before_autosubmit: number;
@@ -248,10 +254,59 @@ export interface ProctoredTest {
   created_by: string;
   created_at: string;
   results_released: boolean;
+  timer_mode: ProctoredTimerMode;
+  allow_free_section_navigation: boolean;
 }
 
 export interface ProctoredTestWithQuestions extends ProctoredTest {
   question_count: number;
+}
+
+// ---------- Proctored test sections ----------
+// A test is always one or more sections (every test, including
+// pre-restructure ones, has at least one — see migration 0013's
+// legacy-wrap backfill). A section's questions come from whichever
+// Sets are enabled for it (ProctoredTestSectionSets), resolved live —
+// see lib/proctoredSections.ts.
+
+export interface ProctoredTestSection {
+  id: string;
+  test_id: string;
+  name: string;
+  /** Null for a legacy default section (predates Subject/Set); a
+   * section created through the section-aware flow always sets this. */
+  subject_id: string | null;
+  position: number;
+  /** Null = uses the test's combined timer, not its own. */
+  time_limit_minutes: number | null;
+  /** Null = inherit proctored_tests.negative_marking_fraction. */
+  negative_marking_fraction: number | null;
+  calculator_enabled: boolean;
+}
+
+export interface ProctoredTestSectionWithMeta extends ProctoredTestSection {
+  subject_name: string | null;
+  set_ids: string[];
+  question_count: number;
+}
+
+export interface ProctoredSectionAttempt {
+  id: string;
+  attempt_id: string;
+  section_id: string;
+  started_at: string | null;
+  submitted_at: string | null;
+  status: ProctoredSectionAttemptStatus;
+}
+
+/** Per-question `visited`/`marked_for_review` — the only two booleans
+ * that don't already live somewhere else (`answered` is derived from
+ * `answers[question_id] !== undefined`). Persisted so the take
+ * screen's 6-state palette survives a resync, a resumed attempt, or a
+ * violation-triggered auto-submit, same reasoning as `answers` itself. */
+export interface ProctoredQuestionStatus {
+  visited: boolean;
+  marked_for_review: boolean;
 }
 
 export interface ProctoredTestAttempt {
@@ -260,6 +315,7 @@ export interface ProctoredTestAttempt {
   student_id: string;
   status: ProctoredAttemptStatus;
   answers: Record<string, number>;
+  question_status: Record<string, ProctoredQuestionStatus>;
   score: number | null;
   total_questions: number | null;
   violation_count: number;
@@ -268,15 +324,33 @@ export interface ProctoredTestAttempt {
   submitted_at: string | null;
 }
 
+/** A section's rules as the student needs them — resolved values (the
+ * actual negative-marking number that applies, not "inherited"), for
+ * the pre-test rules screen and the take screen's section tabs. */
+export interface ProctoredTestSectionSummary {
+  id: string;
+  name: string;
+  position: number;
+  time_limit_minutes: number | null;
+  resolved_negative_marking_fraction: number;
+  calculator_enabled: boolean;
+  question_count: number;
+}
+
 /** Sanitized for the student while an attempt is in progress — never
  * includes `correct_option`/`explanation` (see the review endpoint,
- * which is the only place those are ever sent, and only post-release). */
+ * which is the only place those are ever sent, and only post-release).
+ * Flat across all sections (see lib/proctoredSections.ts) — each
+ * question tags its own section so a section-aware take screen can
+ * group them without another round trip. */
 export interface ProctoredAttemptQuestion {
   id: string;
   prompt: string;
   options: string[];
   difficulty: QuestionDifficulty;
   image_url: string | null;
+  section_id: string;
+  section_name: string;
 }
 
 export interface ProctoredViolationBreakdown {
@@ -291,6 +365,52 @@ export interface ProctoredViolationBreakdown {
   started_at: string;
   submitted_at: string | null;
   violations_by_type: Partial<Record<ProctoredViolationType, number>>;
+}
+
+// ---------- Proctored Tests: leaderboards ----------
+
+/** One ranked row — score DESC, submitted_at ASC tiebreak (see
+ * lib/leaderboard.ts). Two rows share a `rank` only if both score AND
+ * submitted_at are identical (competition ranking: 1, 1, 3 — not 1, 2, 3). */
+export interface ProctoredLeaderboardRow {
+  rank: number;
+  attempt_id: string;
+  student_id: string;
+  student_name: string;
+  student_email: string;
+  score: number;
+  total_questions: number | null;
+  time_taken_seconds: number | null;
+  submitted_at: string;
+}
+
+/** One row of a student's own proctored-test history — rank/score are
+ * only ever non-null when the test's results_released is true; the
+ * server never sends them otherwise (not just a UI hide). */
+export interface StudentProctoredTestRow {
+  id: string;
+  name: string;
+  description: string | null;
+  class_name: string;
+  time_limit_minutes: number;
+  results_released: boolean;
+  attempt_status: ProctoredAttemptStatus | "not_started";
+  score: number | null;
+  total_questions: number | null;
+  submitted_at: string | null;
+  rank: number | null;
+}
+
+/** The student dashboard's "Top 5" widget for their most recently
+ * completed AND released test. `test` is null when no such test exists
+ * yet. `me` is null when the student's own row is already inside `top`
+ * (no need to show it twice — see `me_in_top`); otherwise it's their
+ * row, always present once `test` is non-null. */
+export interface ProctoredLeaderboardWidget {
+  test: { id: string; name: string; class_name: string } | null;
+  top: ProctoredLeaderboardRow[];
+  me: ProctoredLeaderboardRow | null;
+  me_in_top: boolean;
 }
 
 // ---------- Teacher analytics dashboard ----------

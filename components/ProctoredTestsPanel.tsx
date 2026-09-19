@@ -1,8 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Camera, ChevronDown, Download, Mic, ShieldAlert } from "lucide-react";
-import type { ProctoredQuestion, ProctoredTestWithQuestions, ProctoredViolationBreakdown } from "@/types";
+import { useEffect, useMemo, useState } from "react";
+import { Camera, ChevronDown, ChevronUp, Download, Mic, ShieldAlert, Trash2, Trophy } from "lucide-react";
+import type {
+  ProctoredLeaderboardRow,
+  ProctoredSubjectWithSets,
+  ProctoredTestWithQuestions,
+  ProctoredViolationBreakdown,
+} from "@/types";
+
+function formatDuration(seconds: number | null) {
+  if (seconds === null) return "—";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}m ${s}s`;
+}
 
 const VIOLATION_LABEL: Record<string, string> = {
   tab_switch: "Tab switch",
@@ -13,8 +25,10 @@ const VIOLATION_LABEL: Record<string, string> = {
 
 function TestDetail({ testId }: { testId: string }) {
   const [attempts, setAttempts] = useState<ProctoredViolationBreakdown[] | null>(null);
+  const [leaderboard, setLeaderboard] = useState<ProctoredLeaderboardRow[] | null>(null);
   const [released, setReleased] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -22,6 +36,7 @@ function TestDetail({ testId }: { testId: string }) {
       fetch(`/api/proctored-tests/${testId}`).then((r) => r.json()),
     ]).then(([attemptsData, testData]) => {
       setAttempts(attemptsData.attempts ?? []);
+      setLeaderboard(attemptsData.leaderboard ?? []);
       setReleased(testData.test?.results_released ?? false);
     });
   }, [testId]);
@@ -55,6 +70,55 @@ function TestDetail({ testId }: { testId: string }) {
             {busy ? "Saving..." : released ? "Unrelease results" : "Release results"}
           </button>
         </div>
+      </div>
+
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowLeaderboard((v) => !v)}
+          className="flex items-center gap-1.5 text-xs font-medium text-fg hover:text-accent"
+        >
+          <Trophy className="h-3.5 w-3.5" />
+          Leaderboard ({leaderboard?.length ?? 0})
+          <ChevronDown className={`h-3 w-3 transition-transform ${showLeaderboard ? "rotate-180" : ""}`} />
+        </button>
+        <p className="mt-1 text-xs text-fg-subtle">
+          Always visible to you regardless of release status — students only see this once you release results.
+        </p>
+
+        {showLeaderboard && (
+          <div className="mt-2 overflow-x-auto">
+            {leaderboard?.length === 0 ? (
+              <p className="text-xs text-fg-subtle">No finished attempts to rank yet.</p>
+            ) : (
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-line/70 text-xs text-fg-subtle">
+                    <th className="pb-2 pr-3 font-medium">Rank</th>
+                    <th className="pb-2 pr-3 font-medium">Student</th>
+                    <th className="pb-2 pr-3 font-medium">Score</th>
+                    <th className="pb-2 pr-3 font-medium">Time taken</th>
+                    <th className="pb-2 font-medium">Submitted</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leaderboard?.map((row) => (
+                    <tr key={row.attempt_id} className="border-b border-line/40 text-fg last:border-0">
+                      <td className="py-2 pr-3 font-display">#{row.rank}</td>
+                      <td className="py-2 pr-3">{row.student_name}</td>
+                      <td className="py-2 pr-3">
+                        {row.score}
+                        {row.total_questions !== null && `/${row.total_questions}`}
+                      </td>
+                      <td className="py-2 pr-3 text-fg-muted">{formatDuration(row.time_taken_seconds)}</td>
+                      <td className="py-2 text-fg-muted">{new Date(row.submitted_at).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
       </div>
 
       {attempts === null && <p className="text-xs text-fg-subtle">Loading attempts…</p>}
@@ -93,6 +157,30 @@ function TestDetail({ testId }: { testId: string }) {
   );
 }
 
+interface SectionForm {
+  clientId: string;
+  name: string;
+  subject_id: string;
+  set_ids: string[];
+  time_limit_minutes: string;
+  negative_marking_fraction: string;
+  calculator_enabled: boolean;
+}
+
+let sectionIdCounter = 0;
+function newSection(): SectionForm {
+  sectionIdCounter += 1;
+  return {
+    clientId: `section-${sectionIdCounter}`,
+    name: "",
+    subject_id: "",
+    set_ids: [],
+    time_limit_minutes: "",
+    negative_marking_fraction: "",
+    calculator_enabled: false,
+  };
+}
+
 const EMPTY_FORM = {
   name: "",
   description: "",
@@ -101,7 +189,142 @@ const EMPTY_FORM = {
   max_violations_before_autosubmit: 3,
   require_camera: false,
   require_mic: false,
+  timer_mode: "combined" as "combined" | "per_section",
+  allow_free_section_navigation: true,
 };
+
+function SectionEditor({
+  section,
+  index,
+  total,
+  subjects,
+  timerMode,
+  onChange,
+  onRemove,
+  onMove,
+}: {
+  section: SectionForm;
+  index: number;
+  total: number;
+  subjects: ProctoredSubjectWithSets[];
+  timerMode: "combined" | "per_section";
+  onChange: (patch: Partial<SectionForm>) => void;
+  onRemove: () => void;
+  onMove: (dir: -1 | 1) => void;
+}) {
+  const subject = subjects.find((s) => s.id === section.subject_id);
+  const questionCount = (subject?.sets ?? [])
+    .filter((s) => section.set_ids.includes(s.id))
+    .reduce((sum, s) => sum + s.question_count, 0);
+
+  function toggleSet(setId: string) {
+    onChange({ set_ids: section.set_ids.includes(setId) ? section.set_ids.filter((id) => id !== setId) : [...section.set_ids, setId] });
+  }
+
+  return (
+    <div className="rounded-lg border border-line/70 p-3">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-xs font-medium text-fg-subtle">Section {index + 1}</span>
+        <div className="flex items-center gap-2 text-xs">
+          <button type="button" onClick={() => onMove(-1)} disabled={index === 0} className="text-fg-muted hover:text-fg disabled:opacity-30" aria-label="Move up">
+            <ChevronUp className="h-3.5 w-3.5" />
+          </button>
+          <button type="button" onClick={() => onMove(1)} disabled={index === total - 1} className="text-fg-muted hover:text-fg disabled:opacity-30" aria-label="Move down">
+            <ChevronDown className="h-3.5 w-3.5" />
+          </button>
+          <button type="button" onClick={onRemove} className="text-fg-subtle hover:text-red-400" aria-label="Remove section">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs text-fg-muted">Section name</label>
+          <input
+            className="input"
+            placeholder="e.g. Quantitative"
+            value={section.name}
+            onChange={(e) => onChange({ name: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-fg-muted">Subject</label>
+          <select
+            className="input"
+            value={section.subject_id}
+            onChange={(e) => onChange({ subject_id: e.target.value, set_ids: [] })}
+          >
+            <option value="">Select subject…</option>
+            {subjects.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {section.subject_id && (
+        <div className="mt-2">
+          <label className="mb-1 block text-xs text-fg-muted">Sets to include</label>
+          {(subject?.sets ?? []).length === 0 && <p className="text-xs text-fg-subtle">This subject has no Sets yet.</p>}
+          <div className="flex flex-wrap gap-2">
+            {(subject?.sets ?? []).map((s) => (
+              <label
+                key={s.id}
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors ${
+                  section.set_ids.includes(s.id) ? "border-accent/60 bg-accent/10 text-accent" : "border-line text-fg-muted"
+                }`}
+              >
+                <input type="checkbox" className="sr-only" checked={section.set_ids.includes(s.id)} onChange={() => toggleSet(s.id)} />
+                {s.name} ({s.question_count})
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className="mt-2 text-xs text-fg-subtle">
+        {questionCount} question{questionCount === 1 ? "" : "s"} in this section
+        {questionCount === 0 && section.set_ids.length > 0 && " — enabled Sets are empty"}
+      </p>
+
+      <div className="mt-2 grid gap-2 sm:grid-cols-3">
+        <div>
+          <label className="mb-1 block text-xs text-fg-muted">
+            Time limit (min){timerMode === "combined" && " — ignored (Combined)"}
+          </label>
+          <input
+            type="number"
+            min={1}
+            className="input"
+            placeholder="Inherit"
+            value={section.time_limit_minutes}
+            onChange={(e) => onChange({ time_limit_minutes: e.target.value })}
+            disabled={timerMode === "combined"}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-fg-muted">Negative marking override</label>
+          <input
+            type="number"
+            step="0.05"
+            min={0}
+            className="input"
+            placeholder="Inherit test value"
+            value={section.negative_marking_fraction}
+            onChange={(e) => onChange({ negative_marking_fraction: e.target.value })}
+          />
+        </div>
+        <div className="flex items-end pb-2.5">
+          <label className="flex items-center gap-2 text-sm text-fg">
+            <input type="checkbox" checked={section.calculator_enabled} onChange={(e) => onChange({ calculator_enabled: e.target.checked })} />
+            Calculator allowed
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Only rendered for a class where the caller already has
 // owner/collaborator/admin authorization (gated by the parent, same
@@ -109,26 +332,25 @@ const EMPTY_FORM = {
 // authorization server-side, this just controls visibility.
 export default function ProctoredTestsPanel({ classId }: { classId: string }) {
   const [tests, setTests] = useState<ProctoredTestWithQuestions[]>([]);
-  const [bank, setBank] = useState<ProctoredQuestion[]>([]);
+  const [subjects, setSubjects] = useState<ProctoredSubjectWithSets[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [randomCount, setRandomCount] = useState(5);
+  const [sections, setSections] = useState<SectionForm[]>([newSection()]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedTestId, setExpandedTestId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
-    const [testsRes, bankRes] = await Promise.all([
+    const [testsRes, subjectsRes] = await Promise.all([
       fetch(`/api/proctored-tests?classId=${classId}`),
-      fetch("/api/proctored-questions"),
+      fetch("/api/proctored-subjects"),
     ]);
     const testsData = await testsRes.json();
-    const bankData = await bankRes.json();
+    const subjectsData = await subjectsRes.json();
     setTests(testsData.tests ?? []);
-    setBank(bankData.questions ?? []);
+    setSubjects(subjectsData.subjects ?? []);
     setLoading(false);
   }
 
@@ -137,30 +359,67 @@ export default function ProctoredTestsPanel({ classId }: { classId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId]);
 
-  function toggleQuestion(id: string) {
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((q) => q !== id) : [...prev, id]));
+  function updateSection(clientId: string, patch: Partial<SectionForm>) {
+    setSections((prev) => prev.map((s) => (s.clientId === clientId ? { ...s, ...patch } : s)));
   }
 
-  function pickRandom() {
-    const shuffled = [...bank].sort(() => Math.random() - 0.5);
-    setSelectedIds(shuffled.slice(0, Math.min(randomCount, bank.length)).map((q) => q.id));
+  function removeSection(clientId: string) {
+    setSections((prev) => (prev.length > 1 ? prev.filter((s) => s.clientId !== clientId) : prev));
+  }
+
+  function moveSection(clientId: string, dir: -1 | 1) {
+    setSections((prev) => {
+      const idx = prev.findIndex((s) => s.clientId === clientId);
+      const swapWith = idx + dir;
+      if (swapWith < 0 || swapWith >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[swapWith]] = [next[swapWith], next[idx]];
+      return next;
+    });
+  }
+
+  const totalQuestionCount = useMemo(() => {
+    return sections.reduce((sum, section) => {
+      const subject = subjects.find((s) => s.id === section.subject_id);
+      const count = (subject?.sets ?? [])
+        .filter((s) => section.set_ids.includes(s.id))
+        .reduce((n, s) => n + s.question_count, 0);
+      return sum + count;
+    }, 0);
+  }, [sections, subjects]);
+
+  function resetForm() {
+    setForm(EMPTY_FORM);
+    setSections([newSection()]);
+    setError(null);
   }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim() || selectedIds.length === 0) return;
+    if (!form.name.trim()) return;
     setSubmitting(true);
     setError(null);
     try {
+      const payload = {
+        class_id: classId,
+        ...form,
+        sections: sections.map((s) => ({
+          name: s.name,
+          subject_id: s.subject_id,
+          set_ids: s.set_ids,
+          time_limit_minutes: s.time_limit_minutes === "" ? null : Number(s.time_limit_minutes),
+          negative_marking_fraction: s.negative_marking_fraction === "" ? null : Number(s.negative_marking_fraction),
+          calculator_enabled: s.calculator_enabled,
+        })),
+      };
       const res = await fetch("/api/proctored-tests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ class_id: classId, ...form, question_ids: selectedIds }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setForm(EMPTY_FORM);
-      setSelectedIds([]);
+      resetForm();
       setShowForm(false);
       await load();
     } catch (err: any) {
@@ -177,7 +436,7 @@ export default function ProctoredTestsPanel({ classId }: { classId: string }) {
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-fg">Proctored tests</p>
-          <p className="text-xs text-fg-muted">Timed MCQ exams for this class, from a dedicated question bank.</p>
+          <p className="text-xs text-fg-muted">Timed, multi-section MCQ exams for this class, built from the question bank.</p>
         </div>
         <button onClick={() => setShowForm((v) => !v)} className="btn-secondary py-1.5 text-xs">
           {showForm ? "Cancel" : "Create test"}
@@ -196,7 +455,8 @@ export default function ProctoredTestsPanel({ classId }: { classId: string }) {
               <div className="min-w-0">
                 <p className="truncate text-sm text-fg">{t.name}</p>
                 <p className="text-xs text-fg-muted">
-                  {t.question_count} question{t.question_count === 1 ? "" : "s"} · {t.time_limit_minutes} min
+                  {t.question_count} question{t.question_count === 1 ? "" : "s"} ·{" "}
+                  {t.timer_mode === "per_section" ? "Per-section timer" : `${t.time_limit_minutes} min`}
                   {t.negative_marking_fraction > 0 && ` · -${t.negative_marking_fraction} per wrong`}
                 </p>
               </div>
@@ -224,7 +484,7 @@ export default function ProctoredTestsPanel({ classId }: { classId: string }) {
               <label className="mb-1 block text-xs text-fg-muted">Test name</label>
               <input
                 className="input"
-                placeholder="Mock Placement Drive 1"
+                placeholder="TCS Preparation"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 required
@@ -240,9 +500,47 @@ export default function ProctoredTestsPanel({ classId }: { classId: string }) {
             </div>
           </div>
 
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs text-fg-muted">Timer mode</label>
+              <div className="flex gap-4 pt-2">
+                <label className="flex items-center gap-2 text-sm text-fg">
+                  <input
+                    type="radio"
+                    name="timer_mode"
+                    checked={form.timer_mode === "combined"}
+                    onChange={() => setForm((f) => ({ ...f, timer_mode: "combined" }))}
+                  />
+                  Combined
+                </label>
+                <label className="flex items-center gap-2 text-sm text-fg">
+                  <input
+                    type="radio"
+                    name="timer_mode"
+                    checked={form.timer_mode === "per_section"}
+                    onChange={() => setForm((f) => ({ ...f, timer_mode: "per_section" }))}
+                  />
+                  Per-section
+                </label>
+              </div>
+            </div>
+            <div className="flex items-end pb-2.5">
+              <label className="flex items-center gap-2 text-sm text-fg">
+                <input
+                  type="checkbox"
+                  checked={form.allow_free_section_navigation}
+                  onChange={(e) => setForm((f) => ({ ...f, allow_free_section_navigation: e.target.checked }))}
+                />
+                Allow free navigation between sections
+              </label>
+            </div>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
-              <label className="mb-1 block text-xs text-fg-muted">Time limit (minutes)</label>
+              <label className="mb-1 block text-xs text-fg-muted">
+                Overall time limit (minutes){form.timer_mode === "per_section" && " — used as a fallback"}
+              </label>
               <input
                 type="number"
                 min={1}
@@ -297,44 +595,35 @@ export default function ProctoredTestsPanel({ classId }: { classId: string }) {
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs text-fg-muted">
-                Pick questions from the bank ({selectedIds.length} selected)
+                Sections — <span className={totalQuestionCount > 0 ? "text-success" : "text-warn"}>{totalQuestionCount} question{totalQuestionCount === 1 ? "" : "s"} total</span>
               </p>
-              {bank.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={1}
-                    className="input w-16 py-1 text-xs"
-                    value={randomCount}
-                    onChange={(e) => setRandomCount(Number(e.target.value))}
-                  />
-                  <button type="button" onClick={pickRandom} className="text-xs text-success hover:underline">
-                    Pick N random
-                  </button>
-                </div>
-              )}
+              <button type="button" onClick={() => setSections((prev) => [...prev, newSection()])} className="text-xs text-success hover:underline">
+                + Add section
+              </button>
             </div>
-            {bank.length === 0 && (
-              <p className="text-xs text-fg-subtle">
-                No questions in the proctored bank yet — add some from the Proctored Questions page first.
+            {subjects.length === 0 && (
+              <p className="mb-2 text-xs text-fg-subtle">
+                No Subjects in the proctored bank yet — add some from the Proctored Questions page first.
               </p>
             )}
-            <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-              {bank.map((q) => (
-                <label key={q.id} className="flex items-start gap-2 rounded-lg border border-line/70 px-3 py-2 text-sm hover:border-line">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={selectedIds.includes(q.id)}
-                    onChange={() => toggleQuestion(q.id)}
-                  />
-                  <span className="text-fg">{q.prompt}</span>
-                </label>
+            <div className="space-y-2">
+              {sections.map((section, i) => (
+                <SectionEditor
+                  key={section.clientId}
+                  section={section}
+                  index={i}
+                  total={sections.length}
+                  subjects={subjects}
+                  timerMode={form.timer_mode}
+                  onChange={(patch) => updateSection(section.clientId, patch)}
+                  onRemove={() => removeSection(section.clientId)}
+                  onMove={(dir) => moveSection(section.clientId, dir)}
+                />
               ))}
             </div>
           </div>
 
-          <button type="submit" className="btn-primary" disabled={submitting || selectedIds.length === 0}>
+          <button type="submit" className="btn-primary" disabled={submitting || totalQuestionCount === 0}>
             {submitting ? "Creating..." : "Create test"}
           </button>
           {error && <p className="text-sm text-red-400">{error}</p>}

@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ShieldAlert, Video } from "lucide-react";
+import { Calculator, ListChecks, ShieldAlert, Video } from "lucide-react";
+import type { ProctoredTestSectionSummary, ProctoredTimerMode } from "@/types";
 
 interface TestDetail {
   id: string;
@@ -12,6 +13,7 @@ interface TestDetail {
   max_violations_before_autosubmit: number;
   require_camera: boolean;
   require_mic: boolean;
+  timer_mode: ProctoredTimerMode;
 }
 
 interface MyAttempt {
@@ -28,6 +30,7 @@ export default function ProctoredTestStartPage() {
   const streamRef = useRef<MediaStream | null>(null);
 
   const [test, setTest] = useState<TestDetail | null>(null);
+  const [sections, setSections] = useState<ProctoredTestSectionSummary[]>([]);
   const [myAttempt, setMyAttempt] = useState<MyAttempt | null>(null);
   const [loading, setLoading] = useState(true);
   const [mediaGranted, setMediaGranted] = useState(false);
@@ -40,6 +43,7 @@ export default function ProctoredTestStartPage() {
       .then((r) => r.json())
       .then((d) => {
         setTest(d.test ?? null);
+        setSections((d.sections ?? []).slice().sort((a: ProctoredTestSectionSummary, b: ProctoredTestSectionSummary) => a.position - b.position));
         setMyAttempt(d.my_attempt ?? null);
       })
       .finally(() => setLoading(false));
@@ -123,6 +127,12 @@ export default function ProctoredTestStartPage() {
     );
   }
 
+  const allSameNegativeMarking = sections.every(
+    (s) => s.resolved_negative_marking_fraction === sections[0]?.resolved_negative_marking_fraction
+  );
+  const allSameCalculator = sections.every((s) => s.calculator_enabled === sections[0]?.calculator_enabled);
+  const anyCalculator = sections.some((s) => s.calculator_enabled);
+
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div>
@@ -136,7 +146,11 @@ export default function ProctoredTestStartPage() {
           <p className="text-sm text-fg">Before you begin, here's exactly what this test checks:</p>
         </div>
         <ul className="ml-6 list-disc space-y-1.5 text-sm text-fg-muted">
-          <li>The test runs in fullscreen for {test.time_limit_minutes} minutes.</li>
+          {test.timer_mode === "combined" ? (
+            <li>The test runs in fullscreen for {test.time_limit_minutes} minutes total, across all sections.</li>
+          ) : (
+            <li>The test runs in fullscreen with a separate timer for each section — see the section breakdown below.</li>
+          )}
           <li>Exiting fullscreen, switching tabs/windows, or attempting to copy question text is logged as a violation.</li>
           <li>
             After <strong className="text-fg">{test.max_violations_before_autosubmit}</strong> violations, the test
@@ -156,6 +170,55 @@ export default function ProctoredTestStartPage() {
           )}
         </ul>
       </div>
+
+      {sections.length > 0 && (
+        <div className="card space-y-3 p-5">
+          <div className="flex items-center gap-2">
+            <ListChecks className="h-4 w-4 text-fg-muted" />
+            <p className="text-sm font-medium text-fg">
+              {sections.length} section{sections.length === 1 ? "" : "s"}
+            </p>
+          </div>
+
+          <ul className="ml-6 list-disc space-y-1 text-sm text-fg-muted">
+            {allSameNegativeMarking && (
+              <li>
+                Negative marking:{" "}
+                {sections[0]?.resolved_negative_marking_fraction > 0
+                  ? `-${sections[0].resolved_negative_marking_fraction} per wrong answer, in every section.`
+                  : "off, in every section."}
+              </li>
+            )}
+            {allSameCalculator && (
+              <li>{anyCalculator ? "A calculator is available in every section." : "No section has a calculator."}</li>
+            )}
+          </ul>
+
+          <div className="space-y-2">
+            {sections.map((s) => (
+              <div key={s.id} className="flex items-center justify-between rounded-lg border border-line/70 px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate text-fg">{s.name}</p>
+                  <p className="text-xs text-fg-muted">
+                    {s.question_count} question{s.question_count === 1 ? "" : "s"}
+                    {test.timer_mode === "per_section" &&
+                      (s.time_limit_minutes !== null
+                        ? ` · ${s.time_limit_minutes} min`
+                        : " · shares the combined timer")}
+                    {!allSameNegativeMarking &&
+                      ` · ${s.resolved_negative_marking_fraction > 0 ? `-${s.resolved_negative_marking_fraction}/wrong` : "no negative marking"}`}
+                  </p>
+                </div>
+                {!allSameCalculator && s.calculator_enabled && (
+                  <span className="flex shrink-0 items-center gap-1 text-xs text-fg-subtle">
+                    <Calculator className="h-3.5 w-3.5" /> Calculator
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {needsMedia && (
         <div className="card space-y-3 p-5">

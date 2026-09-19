@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentAppUser } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { getFlatQuestionsForTest } from "@/lib/proctoredSections";
 
 // GET /api/proctored-tests/[id]/review -> full per-question right/
 // wrong + explanation for the signed-in student's own attempt.
@@ -32,24 +33,19 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     return NextResponse.json({ error: "No completed attempt found." }, { status: 404 });
   }
 
-  const { data: testQuestions } = await supabase
-    .from("proctored_test_questions")
-    .select("position, proctored_questions(id, prompt, options, correct_option, explanation, image_url)")
-    .eq("test_id", params.id)
-    .order("position", { ascending: true });
+  const resolvedQuestions = await getFlatQuestionsForTest(params.id);
 
-  const questions = (testQuestions ?? [])
-    .map((row: any) => row.proctored_questions)
-    .filter(Boolean)
-    .map((q: any) => ({
-      id: q.id,
-      prompt: q.prompt,
-      options: q.options,
-      correct_option: q.correct_option,
-      explanation: q.explanation,
-      selected_option: attempt.answers?.[q.id] ?? null,
-      image_url: q.image_url ?? null,
-    }));
+  const questions = resolvedQuestions.map((q) => ({
+    id: q.id,
+    prompt: q.prompt,
+    options: q.options,
+    correct_option: q.correct_option,
+    explanation: q.explanation,
+    selected_option: attempt.answers?.[q.id] ?? null,
+    image_url: q.image_url ?? null,
+    section_id: q.section_id,
+    section_name: q.section_name,
+  }));
 
   return NextResponse.json({
     questions,

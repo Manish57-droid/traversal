@@ -1,9 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import QuestionPalette from "@/components/QuestionPalette";
-import type { ProctoredAttemptQuestion, ProctoredViolationType } from "@/types";
+import { Lock } from "lucide-react";
+import SectionQuestionPalette from "@/components/proctored-take/SectionQuestionPalette";
+import BasicCalculator from "@/components/proctored-take/BasicCalculator";
+import { remainingSeconds as computeRemaining } from "@/lib/testTiming";
+import type {
+  ProctoredAttemptQuestion,
+  ProctoredQuestionStatus,
+  ProctoredSectionAttempt,
+  ProctoredTestSection,
+  ProctoredTimerMode,
+  ProctoredViolationType,
+} from "@/types";
 
 interface TestConfig {
   id: string;
@@ -13,15 +23,18 @@ interface TestConfig {
   max_violations_before_autosubmit: number;
   require_camera: boolean;
   require_mic: boolean;
+  timer_mode: ProctoredTimerMode;
+  allow_free_section_navigation: boolean;
 }
 
 const RESYNC_INTERVAL_MS = 30_000;
 const VIOLATION_DEBOUNCE_MS = 1500;
 
 function formatClock(totalSeconds: number) {
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  const s = Math.max(0, totalSeconds);
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
 export default function ProctoredTestTakePage() {
@@ -35,9 +48,13 @@ export default function ProctoredTestTakePage() {
   const [test, setTest] = useState<TestConfig | null>(null);
   const [studentName, setStudentName] = useState("");
   const [questions, setQuestions] = useState<ProctoredAttemptQuestion[]>([]);
+  const [sections, setSections] = useState<ProctoredTestSection[]>([]);
+  const [sectionAttempts, setSectionAttempts] = useState<ProctoredSectionAttempt[]>([]);
   const [answers, setAnswers] = useState<Record<string, number>>({});
-  const [visited, setVisited] = useState<Set<string>>(new Set());
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [questionStatus, setQuestionStatus] = useState<Record<string, ProctoredQuestionStatus>>({});
+  const [currentSectionId, setCurrentSectionId] = useState<string | null>(null);
+  const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
+  const [draftOption, setDraftOption] = useState<number | null>(null);
   const [remaining, setRemaining] = useState(0);
   const [violationCount, setViolationCount] = useState(0);
   const [toast, setToast] = useState<{ text: string; key: number } | null>(null);
@@ -49,9 +66,13 @@ export default function ProctoredTestTakePage() {
   // being retriggered by every render (closures registered once).
   const attemptIdRef = useRef<string | null>(null);
   const testRef = useRef<TestConfig | null>(null);
+  const sectionsRef = useRef<ProctoredTestSection[]>([]);
+  const sectionAttemptsRef = useRef<ProctoredSectionAttempt[]>([]);
+  const currentSectionIdRef = useRef<string | null>(null);
   const finishedRef = useRef(false);
   const lastViolationAtRef = useRef(0);
   const fullscreenExitLoggedRef = useRef(false);
+  const advancingSectionRef = useRef(false);
 
   function showToast(text: string) {
     setToast({ text, key: Date.now() });
@@ -77,6 +98,31 @@ export default function ProctoredTestTakePage() {
     [params.testId, router]
   );
 
+  const sortedSections = useMemo(() => [...sections].sort((a, b) => a.position - b.position), [sections]);
+
+  function sectionAttemptFor(sectionId: string): ProctoredSectionAttempt | undefined {
+    return sectionAttempts.find((sa) => sa.section_id === sectionId);
+  }
+
+  function questionsInSection(sectionId: string) {
+    return questions.filter((q) => q.section_id === sectionId);
+  }
+
+  // Picks where to resume: the first section that isn't complete, and
+  // within it, the first not-visited question (or its first question
+  // if every question there has already been visited).
+  const pickResumePoint = useCallback(
+    (secs: ProctoredTestSection[], secAttempts: ProctoredSectionAttempt[], qs: ProctoredAttemptQuestion[], qStatus: Record<string, ProctoredQuestionStatus>) => {
+      const ordered = [...secs].sort((a, b) => a.position - b.position);
+      const target = ordered.find((s) => secAttempts.find((sa) => sa.section_id === s.id)?.status !== "completed") ?? ordered[0];
+      if (!target) return { sectionId: null, questionId: null };
+      const sectionQs = qs.filter((q) => q.section_id === target.id);
+      const firstUnvisited = sectionQs.find((q) => !qStatus[q.id]?.visited);
+      return { sectionId: target.id, questionId: (firstUnvisited ?? sectionQs[0])?.id ?? null };
+    },
+    []
+  );
+
   const applyLoadResponse = useCallback(
     (d: any) => {
       if (d.attempt.status !== "in_progress") {
@@ -89,11 +135,29 @@ export default function ProctoredTestTakePage() {
       testRef.current = d.test;
       setStudentName(d.student_name);
       setQuestions(d.questions);
+      setSections(d.sections ?? []);
+      sectionsRef.current = d.sections ?? [];
+      setSectionAttempts(d.section_attempts ?? []);
+      sectionAttemptsRef.current = d.section_attempts ?? [];
       setAnswers(d.attempt.answers ?? {});
+      setQuestionStatus(d.attempt.question_status ?? {});
       setViolationCount(d.attempt.violation_count ?? 0);
-      setRemaining(d.remaining_seconds);
+
+      const { sectionId, questionId } = pickResumePoint(d.sections ?? [], d.section_attempts ?? [], d.questions, d.attempt.question_status ?? {});
+      setCurrentSectionId(sectionId);
+      currentSectionIdRef.current = sectionId;
+      setCurrentQuestionId(questionId);
+
+      if (d.test.timer_mode === "per_section") {
+        const section = (d.sections ?? []).find((s: ProctoredTestSection) => s.id === sectionId);
+        const sa = (d.section_attempts ?? []).find((x: ProctoredSectionAttempt) => x.section_id === sectionId);
+        const limit = section?.time_limit_minutes ?? d.test.time_limit_minutes;
+        setRemaining(sa?.started_at ? computeRemaining(sa.started_at, limit) : limit * 60);
+      } else {
+        setRemaining(d.remaining_seconds);
+      }
     },
-    [goToResult]
+    [goToResult, pickResumePoint]
   );
 
   // Initial load.
@@ -114,12 +178,52 @@ export default function ProctoredTestTakePage() {
     if (notFound) router.replace(`/student/proctored-tests/${params.testId}/start`);
   }, [notFound, params.testId, router]);
 
-  // Mark the currently-shown question as visited.
+  // Enter the resumed/initial section server-side (idempotent — sets
+  // started_at only the first time) once we know which one it is.
   useEffect(() => {
-    const q = questions[currentIndex];
-    if (!q) return;
-    setVisited((prev) => (prev.has(q.id) ? prev : new Set(prev).add(q.id)));
-  }, [currentIndex, questions]);
+    if (!attemptId || !currentSectionId) return;
+    fetch(`/api/proctored-tests/${params.testId}/attempts/${attemptId}/sections/${currentSectionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "enter" }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.section_attempt) return;
+        setSectionAttempts((prev) => {
+          const next = prev.filter((sa) => sa.section_id !== d.section_attempt.section_id).concat(d.section_attempt);
+          sectionAttemptsRef.current = next;
+          return next;
+        });
+        if (testRef.current?.timer_mode === "per_section") {
+          const section = sectionsRef.current.find((s) => s.id === currentSectionId);
+          const limit = section?.time_limit_minutes ?? testRef.current.time_limit_minutes;
+          setRemaining(computeRemaining(d.section_attempt.started_at, limit));
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attemptId, currentSectionId]);
+
+  // Reset the draft option + mark visited whenever the displayed
+  // question changes. Selecting an option is LOCAL/provisional until
+  // one of the three buttons persists it — matches the reference
+  // NEET-style flow, where a selection isn't "saved" until Save & Next
+  // (or Mark for Review & Next) is pressed.
+  useEffect(() => {
+    if (!currentQuestionId) return;
+    setDraftOption(answers[currentQuestionId] ?? null);
+
+    if (!questionStatus[currentQuestionId]?.visited && attemptIdRef.current) {
+      setQuestionStatus((prev) => ({ ...prev, [currentQuestionId]: { visited: true, marked_for_review: prev[currentQuestionId]?.marked_for_review ?? false } }));
+      fetch(`/api/proctored-tests/${params.testId}/attempts/${attemptIdRef.current}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question_id: currentQuestionId, visited: true }),
+      }).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentQuestionId]);
 
   const submitNow = useCallback(async () => {
     if (finishedRef.current || !attemptIdRef.current) return;
@@ -137,27 +241,92 @@ export default function ProctoredTestTakePage() {
     }
   }, [params.testId, goToResult]);
 
+  // Moves to the next section that isn't complete, or finishes the
+  // whole attempt if none remain — shared by "Submit Section &
+  // Continue" and a section timer expiring.
+  const advanceToNextSection = useCallback(
+    async (fromSectionId: string) => {
+      if (advancingSectionRef.current) return;
+      advancingSectionRef.current = true;
+      try {
+        const ordered = [...sectionsRef.current].sort((a, b) => a.position - b.position);
+        const fromPos = ordered.find((s) => s.id === fromSectionId)?.position ?? -1;
+        const next = ordered.find(
+          (s) => s.position > fromPos && sectionAttemptsRef.current.find((sa) => sa.section_id === s.id)?.status !== "completed"
+        );
+        if (!next) {
+          await submitNow();
+          return;
+        }
+        const sectionQs = questions.filter((q) => q.section_id === next.id);
+        setCurrentSectionId(next.id);
+        currentSectionIdRef.current = next.id;
+        setCurrentQuestionId(sectionQs[0]?.id ?? null);
+        showToast(`Moved to the next section: ${next.name}`);
+      } finally {
+        advancingSectionRef.current = false;
+      }
+    },
+    [questions, submitNow]
+  );
+
+  const submitSection = useCallback(
+    async (sectionId: string) => {
+      if (!attemptIdRef.current) return null;
+      try {
+        const res = await fetch(`/api/proctored-tests/${params.testId}/attempts/${attemptIdRef.current}/sections/${sectionId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "submit" }),
+        });
+        const data = await res.json();
+        if (data.section_attempt) {
+          setSectionAttempts((prev) => {
+            const next = prev.filter((sa) => sa.section_id !== sectionId).concat(data.section_attempt);
+            sectionAttemptsRef.current = next;
+            return next;
+          });
+        }
+        return data.section_attempt ?? null;
+      } catch {
+        return null;
+      }
+    },
+    [params.testId]
+  );
+
+  async function handleSubmitSectionAndContinue() {
+    if (!currentSectionId) return;
+    await submitSection(currentSectionId);
+    await advanceToNextSection(currentSectionId);
+  }
+
   // Client-visible countdown — purely cosmetic, ticks down from the
-  // server-given remaining_seconds. The server (not this timer)
-  // decides when time is actually up: every write endpoint re-checks
-  // elapsed time against started_at and force-closes the attempt if
-  // it's overdue, so even a paused/suspended tab gets caught on its
-  // next request. This client tick only decides when to *proactively*
-  // call submit so the student doesn't have to make another move first.
+  // server-given remaining_seconds (combined mode: whole attempt;
+  // per-section mode: the current section only). The server always
+  // re-derives the real deadline from started_at on every write, so
+  // even a paused/suspended tab gets caught on its next request; this
+  // client tick only decides when to *proactively* act so the student
+  // doesn't have to make another move first.
   useEffect(() => {
     if (!test || finishedRef.current) return;
     const tick = setInterval(() => {
       setRemaining((r) => {
         if (r <= 1) {
           clearInterval(tick);
-          submitNow();
+          if (test.timer_mode === "per_section" && currentSectionIdRef.current) {
+            const sectionId = currentSectionIdRef.current;
+            submitSection(sectionId).then(() => advanceToNextSection(sectionId));
+          } else {
+            submitNow();
+          }
           return 0;
         }
         return r - 1;
       });
     }, 1000);
     return () => clearInterval(tick);
-  }, [test, submitNow]);
+  }, [test, submitNow, submitSection, advanceToNextSection, currentSectionId]);
 
   // Periodic resync with the server clock, in case of drift or a
   // suspended tab — replaces the local countdown's baseline outright.
@@ -173,12 +342,26 @@ export default function ProctoredTestTakePage() {
             goToResult(d.attempt.status, d.attempt.score, d.attempt.total_questions);
             return;
           }
-          if (typeof d.remaining_seconds === "number") setRemaining(d.remaining_seconds);
+          setSectionAttempts(d.section_attempts ?? []);
+          sectionAttemptsRef.current = d.section_attempts ?? [];
+          if (test.timer_mode === "per_section" && currentSectionIdRef.current) {
+            const section = sectionsRef.current.find((s) => s.id === currentSectionIdRef.current);
+            const sa = (d.section_attempts ?? []).find((x: ProctoredSectionAttempt) => x.section_id === currentSectionIdRef.current);
+            if (sa?.status === "completed") {
+              // Completed elsewhere (e.g. another tab) — move on.
+              advanceToNextSection(currentSectionIdRef.current);
+              return;
+            }
+            const limit = section?.time_limit_minutes ?? d.test.time_limit_minutes;
+            if (sa?.started_at) setRemaining(computeRemaining(sa.started_at, limit));
+          } else if (typeof d.remaining_seconds === "number") {
+            setRemaining(d.remaining_seconds);
+          }
         })
         .catch(() => {});
     }, RESYNC_INTERVAL_MS);
     return () => clearInterval(resync);
-  }, [test, params.testId, goToResult]);
+  }, [test, params.testId, goToResult, advanceToNextSection]);
 
   const logViolation = useCallback(
     async (type: ProctoredViolationType) => {
@@ -300,23 +483,99 @@ export default function ProctoredTestTakePage() {
     };
   }, [test?.require_camera, test?.require_mic, logViolation]);
 
-  async function selectOption(questionId: string, optionIndex: number) {
-    setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
-    if (!attemptId) return;
+  async function persistAnswer(questionId: string, selectedOption: number | null, markedForReview?: boolean) {
+    if (!attemptIdRef.current) return;
     try {
-      const res = await fetch(`/api/proctored-tests/${params.testId}/attempts/${attemptId}`, {
+      const res = await fetch(`/api/proctored-tests/${params.testId}/attempts/${attemptIdRef.current}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question_id: questionId, selected_option: optionIndex }),
+        body: JSON.stringify({
+          question_id: questionId,
+          selected_option: selectedOption,
+          visited: true,
+          ...(markedForReview !== undefined ? { marked_for_review: markedForReview } : {}),
+        }),
       });
       if (res.status === 409) {
         const data = await res.json();
         goToResult(data.status, data.score, data.total_questions);
       }
     } catch {
-      // Best-effort autosave — the next successful selection (or the
-      // final submit) will still carry the latest client-known answer.
+      // Best-effort — the next successful action (or the final submit)
+      // still carries the latest client-known state.
     }
+  }
+
+  function goToNextQuestionInSection() {
+    if (!currentSectionId || !currentQuestionId) return;
+    const sectionQs = questionsInSection(currentSectionId);
+    const idx = sectionQs.findIndex((q) => q.id === currentQuestionId);
+    if (idx >= 0 && idx < sectionQs.length - 1) setCurrentQuestionId(sectionQs[idx + 1].id);
+  }
+
+  async function handleSaveAndNext() {
+    if (!currentQuestionId) return;
+    if (draftOption !== null) {
+      setAnswers((prev) => ({ ...prev, [currentQuestionId]: draftOption }));
+      await persistAnswer(currentQuestionId, draftOption);
+    }
+    goToNextQuestionInSection();
+  }
+
+  async function handleClearResponse() {
+    if (!currentQuestionId) return;
+    setDraftOption(null);
+    setAnswers((prev) => {
+      const next = { ...prev };
+      delete next[currentQuestionId];
+      return next;
+    });
+    await persistAnswer(currentQuestionId, null);
+  }
+
+  async function handleMarkForReviewAndNext() {
+    if (!currentQuestionId) return;
+    if (draftOption !== null) {
+      setAnswers((prev) => ({ ...prev, [currentQuestionId]: draftOption }));
+    }
+    setQuestionStatus((prev) => ({ ...prev, [currentQuestionId]: { visited: true, marked_for_review: true } }));
+    await persistAnswer(currentQuestionId, draftOption, true);
+    goToNextQuestionInSection();
+  }
+
+  // Shared eligibility check — a section can be switched into only if
+  // it isn't already completed (never revisitable, regardless of nav
+  // mode) and, under locked navigation, only if it's already current.
+  // Returns whether the switch actually happened, so callers that also
+  // want to land on a specific question don't do so after a blocked switch.
+  function trySwitchSection(sectionId: string): boolean {
+    if (sectionId === currentSectionId) return true;
+    const targetAttempt = sectionAttemptFor(sectionId);
+    if (targetAttempt?.status === "completed") {
+      showToast("That section has already been submitted and can't be revisited.");
+      return false;
+    }
+    if (!test?.allow_free_section_navigation) {
+      showToast("Free navigation is off for this test — use \"Submit Section & Continue\" to move on.");
+      return false;
+    }
+    setCurrentSectionId(sectionId);
+    currentSectionIdRef.current = sectionId;
+    return true;
+  }
+
+  function jumpToQuestion(questionId: string) {
+    const q = questions.find((x) => x.id === questionId);
+    if (!q) return;
+    if (q.section_id !== currentSectionId) {
+      if (!trySwitchSection(q.section_id)) return;
+    }
+    setCurrentQuestionId(questionId);
+  }
+
+  function handleSectionTabClick(sectionId: string) {
+    if (!trySwitchSection(sectionId)) return;
+    setCurrentQuestionId(questionsInSection(sectionId)[0]?.id ?? null);
   }
 
   async function resumeFullscreen() {
@@ -332,8 +591,13 @@ export default function ProctoredTestTakePage() {
   if (loading) return <p className="text-sm text-fg-muted">Loading…</p>;
   if (notFound || !test) return <p className="text-sm text-fg-muted">Redirecting…</p>;
 
-  const current = questions[currentIndex];
+  const current = questions.find((q) => q.id === currentQuestionId);
+  const currentSection = sortedSections.find((s) => s.id === currentSectionId);
+  const currentSectionQs = currentSectionId ? questionsInSection(currentSectionId) : [];
+  const currentQIndex = current ? currentSectionQs.findIndex((q) => q.id === current.id) : -1;
   const max = test.max_violations_before_autosubmit;
+  const currentSectionCompleted = currentSectionId ? sectionAttemptFor(currentSectionId)?.status === "completed" : false;
+  const isLastSection = currentSection ? sortedSections[sortedSections.length - 1]?.id === currentSection.id : true;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-bg">
@@ -343,22 +607,62 @@ export default function ProctoredTestTakePage() {
           <p className="truncate text-xs text-fg-muted">{test.class_name}</p>
         </div>
         <div className="text-right">
-          <p className={`font-display text-xl tabular-nums ${remaining < 60 ? "text-red-400" : "text-fg"}`}>
+          <p className={`font-display text-xl tabular-nums ${remaining < 60 ? "text-warn" : "text-fg"}`}>
             {formatClock(remaining)}
           </p>
           <p className="text-xs text-fg-subtle">
+            {test.timer_mode === "per_section" ? `${currentSection?.name ?? ""} timer` : "Total time"} ·{" "}
             {violationCount}/{max} violations
           </p>
         </div>
       </div>
 
+      {/* Section tabs — NEET-style row above the question area. */}
+      <div className="flex gap-1.5 overflow-x-auto border-b border-line/70 bg-surface-2/60 px-4 py-2 sm:px-6">
+        {sortedSections.map((s) => {
+          const sa = sectionAttemptFor(s.id);
+          const completed = sa?.status === "completed";
+          const isCurrent = s.id === currentSectionId;
+          const locked = !isCurrent && !completed && !test.allow_free_section_navigation;
+          const count = questionsInSection(s.id).length;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => handleSectionTabClick(s.id)}
+              disabled={completed}
+              className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                isCurrent
+                  ? "border-accent bg-accent/15 text-accent"
+                  : completed
+                    ? "border-line/50 bg-surface text-fg-subtle opacity-60"
+                    : "border-line text-fg-muted hover:text-fg"
+              }`}
+              title={locked ? "Submit the current section first" : undefined}
+            >
+              {locked && <Lock className="h-3 w-3" />}
+              {s.name} ({count})
+              {completed && " ✓"}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4 sm:flex-row sm:gap-6 sm:p-6">
-        <div ref={contentRef} className="min-w-0 flex-1 select-none">
-          {current && (
+        <div ref={contentRef} className="min-w-0 flex-1 select-none space-y-4">
+          {currentSectionCompleted && (
+            <div className="card p-5 text-center text-sm text-fg-muted">
+              This section has been submitted. {!isLastSection ? "Use the tabs above to move to another section." : "Submit the test when you're ready."}
+            </div>
+          )}
+          {!currentSectionCompleted && current && (
             <div className="card space-y-4 p-5">
-              <p className="text-xs text-fg-subtle">
-                Question {currentIndex + 1} of {questions.length}
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-fg-subtle">
+                  {currentSection?.name} — Question {currentQIndex + 1} of {currentSectionQs.length}
+                </p>
+                {currentSection?.calculator_enabled && <BasicCalculator />}
+              </div>
               {current.image_url && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -370,12 +674,12 @@ export default function ProctoredTestTakePage() {
               <p className="text-lg font-medium text-fg">{current.prompt}</p>
               <div className="space-y-2">
                 {current.options.map((opt, i) => {
-                  const selected = answers[current.id] === i;
+                  const selected = draftOption === i;
                   return (
                     <button
                       key={i}
                       type="button"
-                      onClick={() => selectOption(current.id, i)}
+                      onClick={() => setDraftOption(i)}
                       className={`flex w-full items-center gap-3 rounded-lg border px-4 py-2.5 text-left text-sm transition-colors ${
                         selected ? "border-success/60 bg-success/10 text-success" : "border-line/70 hover:border-line text-fg"
                       }`}
@@ -393,35 +697,37 @@ export default function ProctoredTestTakePage() {
                 })}
               </div>
 
-              <div className="flex items-center justify-between pt-2">
-                <button
-                  type="button"
-                  disabled={currentIndex === 0}
-                  onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
-                  className="btn-secondary py-1.5 text-xs disabled:opacity-40"
-                >
-                  Previous
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                <button type="button" onClick={handleSaveAndNext} className="btn-primary py-1.5 text-xs">
+                  Save &amp; Next
                 </button>
-                <button
-                  type="button"
-                  disabled={currentIndex === questions.length - 1}
-                  onClick={() => setCurrentIndex((i) => Math.min(questions.length - 1, i + 1))}
-                  className="btn-secondary py-1.5 text-xs disabled:opacity-40"
-                >
-                  Next
+                <button type="button" onClick={handleClearResponse} className="btn-secondary py-1.5 text-xs">
+                  Clear Response
+                </button>
+                <button type="button" onClick={handleMarkForReviewAndNext} className="btn-secondary py-1.5 text-xs">
+                  Mark for Review &amp; Next
                 </button>
               </div>
+
+              {!test.allow_free_section_navigation && (
+                <div className="flex justify-end border-t border-line/70 pt-3">
+                  <button type="button" onClick={handleSubmitSectionAndContinue} className="btn-secondary py-1.5 text-xs">
+                    {isLastSection ? "Submit Section" : "Submit Section & Continue"}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
 
         <div className="flex shrink-0 flex-col gap-4 sm:w-56">
-          <QuestionPalette
+          <SectionQuestionPalette
+            sections={sortedSections}
             questions={questions}
             answers={answers}
-            visited={visited}
-            currentIndex={currentIndex}
-            onJump={setCurrentIndex}
+            questionStatus={questionStatus}
+            currentQuestionId={currentQuestionId ?? undefined}
+            onJump={jumpToQuestion}
           />
 
           <button

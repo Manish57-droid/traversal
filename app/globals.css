@@ -32,6 +32,12 @@
   --success-2: 245 212 136;  /* #F5D488 gold, lighter */
   --warn: 255 107 74;        /* #FF6B4A flux orange-red */
   --warn-2: 255 148 120;     /* #FF9478 flux, lighter */
+  --review: 168 140 255;     /* #A88CFF violet — "marked for review", the
+                                 one semantic color outside the PCB copper/
+                                 gold/flux family (added for the proctored
+                                 test palette's 6th state) */
+  --review-2: 124 92 220;    /* #7C5CDC deeper indigo-violet — "answered
+                                 and marked for review", the 6th palette state */
 }
 
 /* Dark palette, applied by next-themes as a class on <html> — site-wide,
@@ -51,6 +57,8 @@
   --success-2: 245 212 136;
   --warn: 255 107 74;
   --warn-2: 255 148 120;
+  --review: 168 140 255;
+  --review-2: 124 92 220;
 }
 
 /* Light palette — same "circuit board" family, same token names,
@@ -74,6 +82,8 @@
   --success-2: 120 84 12;    /* #78540C gold, darker (hover) */
   --warn: 194 68 40;         /* #C24428 flux orange-red, deepened */
   --warn-2: 156 50 28;       /* #9C321C flux, darker (hover) */
+  --review: 124 58 217;      /* #7C3AD9 violet, deepened for contrast on paper */
+  --review-2: 76 41 145;     /* #4C2991 deep indigo-violet, darker still */
 }
 
 html {

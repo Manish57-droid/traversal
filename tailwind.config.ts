@@ -28,6 +28,10 @@ const config: Config = {
           DEFAULT: "rgb(var(--warn) / <alpha-value>)",
           2: "rgb(var(--warn-2) / <alpha-value>)",
         },
+        review: {
+          DEFAULT: "rgb(var(--review) / <alpha-value>)",
+          2: "rgb(var(--review-2) / <alpha-value>)",
+        },
       },
       fontFamily: {
         display: ["var(--font-display)", "serif"],

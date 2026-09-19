@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { remainingSeconds } from "@/lib/testTiming";
+import { getSectionsWithQuestions } from "@/lib/proctoredSections";
 import type { ProctoredAttemptStatus } from "@/types";
 
 // Re-exported so existing imports of `remainingSeconds` from this
@@ -38,24 +39,24 @@ export async function finalizeAttempt(attempt: AttemptRow, test: TestRow) {
     return { status: attempt.status, score: null as number | null, total_questions: null as number | null };
   }
 
-  const { data: testQuestions } = await supabase
-    .from("proctored_test_questions")
-    .select("question_id, proctored_questions(correct_option)")
-    .eq("test_id", attempt.test_id);
+  // Sections are the unit of negative marking — each uses its own
+  // override when set, else falls back to the test-level value, so a
+  // section's questions are scored with that section's fraction
+  // regardless of what other sections in the same test use.
+  const sections = await getSectionsWithQuestions(attempt.test_id);
+  const totalQuestions = sections.reduce((sum, s) => sum + s.questions.length, 0);
 
-  const rows = (testQuestions ?? []) as unknown as { question_id: string; proctored_questions: { correct_option: number } | null }[];
-  const totalQuestions = rows.length;
-
-  let correct = 0;
-  let wrong = 0;
-  for (const row of rows) {
-    const selected = attempt.answers?.[row.question_id];
-    if (selected === undefined || selected === null) continue;
-    if (row.proctored_questions && selected === row.proctored_questions.correct_option) correct += 1;
-    else wrong += 1;
+  let netScore = 0;
+  for (const section of sections) {
+    const fraction = section.negative_marking_fraction ?? test.negative_marking_fraction;
+    for (const q of section.questions) {
+      const selected = attempt.answers?.[q.id];
+      if (selected === undefined || selected === null) continue;
+      netScore += selected === q.correct_option ? 1 : -fraction;
+    }
   }
 
-  const score = Math.round((correct - wrong * test.negative_marking_fraction) * 100) / 100;
+  const score = Math.round(netScore * 100) / 100;
   const remaining = remainingSeconds(attempt.started_at, test.time_limit_minutes);
   const timeTakenSeconds = Math.max(0, test.time_limit_minutes * 60 - remaining);
 

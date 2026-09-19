@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { getFlatQuestionsForTest, getSectionsForTest } from "@/lib/proctoredSections";
 import {
   requireReportAccess,
   renderPieChartPng,
@@ -53,15 +54,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
         .order("occurred_at", { ascending: true })
     : { data: [] };
 
-  const { data: testQuestions } = await supabase
-    .from("proctored_test_questions")
-    .select("position, proctored_questions(id, prompt, options, correct_option)")
-    .eq("test_id", params.id)
-    .order("position", { ascending: true });
-
-  const questions = (testQuestions ?? [])
-    .map((row: any) => row.proctored_questions)
-    .filter(Boolean) as { id: string; prompt: string; options: string[]; correct_option: number }[];
+  const questions = await getFlatQuestionsForTest(params.id);
+  const sections = await getSectionsForTest(params.id);
+  const negativeMarkingBySection = new Map(sections.map((s) => [s.id, s.negative_marking_fraction ?? test.negative_marking_fraction]));
 
   const workbook = newReportWorkbook();
 
@@ -127,7 +122,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
       const selectedIdx = a.answers?.[q.id];
       const answered = selectedIdx !== undefined && selectedIdx !== null;
       const isCorrect = answered && selectedIdx === q.correct_option;
-      const points = !answered ? 0 : isCorrect ? 1 : -test.negative_marking_fraction;
+      const points = !answered ? 0 : isCorrect ? 1 : -(negativeMarkingBySection.get(q.section_id) ?? test.negative_marking_fraction);
       detailSheet.addRow([
         studentName,
         q.prompt,

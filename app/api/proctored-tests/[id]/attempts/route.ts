@@ -3,6 +3,8 @@ import { getCurrentAppUser } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getClassAuthorization, isAuthorized, isClassMember } from "@/lib/classAccess";
 import { remainingSeconds, finalizeAttempt } from "@/lib/proctoredScoring";
+import { getFlatQuestionsForTest, getSectionsForTest, sanitizeQuestion, ensureSectionAttempts } from "@/lib/proctoredSections";
+import { getTestLeaderboard } from "@/lib/leaderboard";
 import type { ProctoredViolationType } from "@/types";
 
 async function loadTest(testId: string) {
@@ -15,14 +17,9 @@ async function loadTest(testId: string) {
   return data;
 }
 
-async function questionsForTest(testId: string) {
-  const supabase = supabaseAdmin();
-  const { data } = await supabase
-    .from("proctored_test_questions")
-    .select("position, proctored_questions(id, prompt, options, difficulty, image_url)")
-    .eq("test_id", testId)
-    .order("position", { ascending: true });
-  return (data ?? []).map((r: any) => r.proctored_questions).filter(Boolean);
+async function sanitizedQuestionsForTest(testId: string) {
+  const questions = await getFlatQuestionsForTest(testId);
+  return questions.map(sanitizeQuestion);
 }
 
 // Re-checks expiry every time an attempt is read, so a stale reload
@@ -68,13 +65,18 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     }
 
     const fresh = await refreshIfExpired(attempt, test);
-    const questions = await questionsForTest(test.id);
+    const [questions, sections, sectionAttempts] = await Promise.all([
+      sanitizedQuestionsForTest(test.id),
+      getSectionsForTest(test.id),
+      supabase.from("proctored_section_attempts").select("*").eq("attempt_id", fresh.id),
+    ]);
 
     return NextResponse.json({
       attempt: {
         id: fresh.id,
         status: fresh.status,
         answers: fresh.answers,
+        question_status: fresh.question_status ?? {},
         violation_count: fresh.violation_count,
         score: fresh.score,
         total_questions: fresh.total_questions,
@@ -89,9 +91,13 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
         max_violations_before_autosubmit: test.max_violations_before_autosubmit,
         require_camera: test.require_camera,
         require_mic: test.require_mic,
+        timer_mode: test.timer_mode,
+        allow_free_section_navigation: test.allow_free_section_navigation,
       },
       student_name: user.full_name || user.email,
       questions,
+      sections,
+      section_attempts: sectionAttempts.data ?? [],
     });
   }
 
@@ -131,7 +137,13 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     violations_by_type: breakdownByAttempt[a.id] ?? {},
   }));
 
-  return NextResponse.json({ attempts: shaped });
+  // A teacher can always see full rankings for their own test —
+  // independent of results_released, which only gates what a *student*
+  // sees (see the student-facing leaderboard endpoints, both of which
+  // hard-gate on it before calling this same shared function).
+  const leaderboard = await getTestLeaderboard(test.id);
+
+  return NextResponse.json({ attempts: shaped, leaderboard });
 }
 
 // POST /api/proctored-tests/[id]/attempts -> start a new attempt, or
@@ -170,13 +182,25 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     attempt = await refreshIfExpired(attempt, test);
   }
 
-  const questions = await questionsForTest(test.id);
+  // Every section gets a proctored_section_attempts row up front
+  // (status 'not_started'), regardless of timer_mode/navigation mode —
+  // one consistent code path for section-locking to build against,
+  // rather than conditionally creating rows only for the first section
+  // under locked navigation. Idempotent on resume.
+  await ensureSectionAttempts(attempt.id, test.id);
+
+  const [questions, sections, sectionAttempts] = await Promise.all([
+    sanitizedQuestionsForTest(test.id),
+    getSectionsForTest(test.id),
+    supabase.from("proctored_section_attempts").select("*").eq("attempt_id", attempt.id),
+  ]);
 
   return NextResponse.json({
     attempt: {
       id: attempt.id,
       status: attempt.status,
       answers: attempt.answers,
+      question_status: attempt.question_status ?? {},
       violation_count: attempt.violation_count,
       score: attempt.score,
       total_questions: attempt.total_questions,
@@ -191,8 +215,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       max_violations_before_autosubmit: test.max_violations_before_autosubmit,
       require_camera: test.require_camera,
       require_mic: test.require_mic,
+      timer_mode: test.timer_mode,
+      allow_free_section_navigation: test.allow_free_section_navigation,
     },
     student_name: user.full_name || user.email,
     questions,
+    sections,
+    section_attempts: sectionAttempts.data ?? [],
   });
 }

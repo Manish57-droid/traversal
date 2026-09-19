@@ -3,25 +3,41 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import ProgressBar from "@/components/ProgressBar";
-import type { QuestionStatus } from "@/types";
+import ProctoredLeaderboardWidget from "@/components/ProctoredLeaderboardWidget";
+import type { QuestionStatus, StudentProctoredTestRow } from "@/types";
 
 interface ProgressJoinRow {
   status: QuestionStatus;
   questions: { platform: string; topic: string | null };
 }
 
+const ATTEMPT_STATUS_LABEL: Record<string, string> = {
+  not_started: "Not started",
+  in_progress: "In progress",
+  submitted: "Submitted",
+  auto_submitted_violation: "Auto-submitted",
+  expired: "Expired",
+};
+
 export default function StudentDashboardPage() {
   const [rows, setRows] = useState<ProgressJoinRow[]>([]);
   const [joinCode, setJoinCode] = useState("");
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [proctoredTests, setProctoredTests] = useState<StudentProctoredTestRow[]>([]);
 
   useEffect(() => {
     fetch("/api/progress")
       .then((r) => r.json())
       .then((d) => setRows(d.progress ?? []))
       .finally(() => setLoading(false));
+
+    fetch("/api/student/proctored-tests")
+      .then((r) => r.json())
+      .then((d) => setProctoredTests(d.tests ?? []));
   }, []);
+
+  const attemptedTests = proctoredTests.filter((t) => t.attempt_status !== "not_started");
 
   const total = rows.length;
   const completed = rows.filter((r) => r.status === "completed").length;
@@ -97,6 +113,55 @@ export default function StudentDashboardPage() {
                 <ProgressBar value={(stats.completed / stats.total) * 100} />
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      <ProctoredLeaderboardWidget />
+
+      {attemptedTests.length > 0 && (
+        <div className="card p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-medium text-fg">My Proctored Tests</h2>
+            <p className="text-xs text-fg-muted">
+              Total tests taken: <span className="text-fg">{attemptedTests.length}</span>
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-line/70 text-xs text-fg-subtle">
+                  <th className="pb-2 pr-3 font-medium">Test</th>
+                  <th className="pb-2 pr-3 font-medium">Class</th>
+                  <th className="pb-2 pr-3 font-medium">Status</th>
+                  <th className="pb-2 pr-3 font-medium">Score</th>
+                  <th className="pb-2 pr-3 font-medium">Rank</th>
+                  <th className="pb-2 font-medium">Submitted</th>
+                </tr>
+              </thead>
+              <tbody>
+                {attemptedTests.map((t) => (
+                  <tr key={t.id} className="border-b border-line/40 text-fg last:border-0">
+                    <td className="py-2 pr-3">{t.name}</td>
+                    <td className="py-2 pr-3 text-fg-muted">{t.class_name}</td>
+                    <td className="py-2 pr-3 text-fg-muted">{ATTEMPT_STATUS_LABEL[t.attempt_status] ?? t.attempt_status}</td>
+                    <td className="py-2 pr-3">
+                      {t.results_released ? (
+                        t.score !== null && t.total_questions !== null ? `${t.score}/${t.total_questions}` : "—"
+                      ) : (
+                        <span className="text-fg-subtle">Not released</span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-3">
+                      {t.results_released ? (t.rank !== null ? `#${t.rank}` : "—") : <span className="text-fg-subtle">—</span>}
+                    </td>
+                    <td className="py-2 text-fg-muted">
+                      {t.submitted_at ? new Date(t.submitted_at).toLocaleDateString() : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
