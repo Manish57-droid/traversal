@@ -195,6 +195,8 @@ export interface ProctoredQuestion {
   created_by: string | null;
   created_by_name: string | null;
   created_at: string;
+  /** Optional — most questions won't have one. */
+  image_url: string | null;
 }
 
 export interface ProctoredTest {
@@ -238,6 +240,7 @@ export interface ProctoredAttemptQuestion {
   prompt: string;
   options: string[];
   difficulty: QuestionDifficulty;
+  image_url: string | null;
 }
 
 export interface ProctoredViolationBreakdown {

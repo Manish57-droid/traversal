@@ -364,6 +364,66 @@ create table if not exists role_change_log (
 
 create index if not exists idx_role_change_log_target on role_change_log(target_user_id);
 
+-- ---------- ADMIN USER DELETION ----------
+-- Deliberately has NO foreign key to users(id) for the deleted
+-- person's own identity — those columns are a denormalized snapshot
+-- (name/email/role captured at delete time) precisely because the
+-- real users(id) row is about to be destroyed; an FK there would
+-- cascade this log row away too, defeating the point of an audit
+-- trail. `deleted_by` DOES reference users(id) (on delete set null,
+-- same pattern as role_change_log.changed_by) since the admin
+-- performing the deletion isn't being deleted in this same operation.
+create table if not exists user_deletion_log (
+  id uuid primary key default gen_random_uuid(),
+  deleted_user_id uuid not null,
+  deleted_user_email text not null,
+  deleted_user_name text,
+  deleted_user_role user_role not null,
+  deleted_by uuid references users(id) on delete set null,
+  classes_owned_count int not null default 0,
+  students_enrolled_count int not null default 0,
+  dsa_questions_authored_count int not null default 0,
+  aptitude_questions_authored_count int not null default 0,
+  interview_questions_authored_count int not null default 0,
+  proctored_questions_authored_count int not null default 0,
+  deleted_at timestamptz not null default now()
+);
+
+create index if not exists idx_user_deletion_log_deleted_user on user_deletion_log(deleted_user_id);
+
+-- Four content tables use `created_by ... on delete set null` (by
+-- original design: removing whoever authored a DSA/Aptitude/Interview
+-- Prep/Proctored question shouldn't silently orphan-but-keep it in
+-- every deletion path in the app). This admin-delete-user feature
+-- specifically wants those questions actually gone when an admin
+-- deletes the account through this flow — rather than loosening the
+-- FK constraints themselves (which would change behavior for every
+-- future deletion path, not just this one), this function explicitly
+-- deletes each author's content first, then deletes the users row.
+-- Every other FK to users(id) already cascades correctly on its own
+-- (classes.teacher_id, class_members.student_id, progress.student_id,
+-- test attempts, etc.), so deleting the users row here is what
+-- actually removes everything scoped to their owned classes and their
+-- own enrollment/attempt history — no other constraint changes needed.
+-- Runs as one Postgres transaction (a plpgsql function body is
+-- atomic): if any step fails, everything rolls back and the
+-- already-committed user_deletion_log row (inserted separately, by
+-- the caller, BEFORE invoking this function) is the only trace left.
+create or replace function admin_delete_user_cascade(p_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from questions where created_by = p_user_id;
+  delete from aptitude_questions where created_by = p_user_id;
+  delete from interview_questions where created_by = p_user_id;
+  delete from proctored_questions where created_by = p_user_id;
+  delete from users where id = p_user_id;
+end;
+$$;
+
 -- ---------- INTERVIEW PREPARATION ----------
 -- Categories organized by language/technology (C++, Java, Python,
 -- SQL, DBMS, OS, Networking, System Design, OOP, JavaScript — see
@@ -419,6 +479,10 @@ create table if not exists proctored_questions (
   difficulty question_difficulty not null default 'unknown',
   created_by uuid references users(id) on delete set null,
   created_at timestamptz not null default now(),
+  -- Optional — most questions won't have one. Uploaded to the public
+  -- "proctored-question-images" Storage bucket via a server API route
+  -- (service-role client, so no storage.objects RLS policy is needed).
+  image_url text,
   constraint proctored_questions_options_len check (jsonb_array_length(options) >= 2),
   constraint proctored_questions_correct_option_range
     check (correct_option >= 0 and correct_option < jsonb_array_length(options))
@@ -532,6 +596,7 @@ alter table aptitude_test_attempts enable row level security;
 alter table class_access_requests enable row level security;
 alter table class_collaborators enable row level security;
 alter table role_change_log enable row level security;
+alter table user_deletion_log enable row level security;
 alter table interview_categories enable row level security;
 alter table interview_questions enable row level security;
 alter table proctored_questions enable row level security;

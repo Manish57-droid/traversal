@@ -23,6 +23,7 @@ function mapQuestion(q: any): ProctoredQuestion {
     created_by: q.created_by,
     created_by_name: q.users?.full_name || q.users?.email || null,
     created_at: q.created_at,
+    image_url: q.image_url ?? null,
   };
 }
 
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { prompt, options, correct_option, explanation, difficulty } = body ?? {};
+  const { prompt, options, correct_option, explanation, difficulty, image_url } = body ?? {};
 
   if (!prompt?.trim()) {
     return NextResponse.json({ error: "Prompt is required." }, { status: 400 });
@@ -73,6 +74,7 @@ export async function POST(req: Request) {
       correct_option: Number(correct_option),
       explanation: explanation?.trim() || null,
       difficulty: difficulty || "unknown",
+      image_url: image_url || null,
       created_by: user.id,
     })
     .select("*, users(full_name, email)")
@@ -87,7 +89,7 @@ export async function PATCH(req: Request) {
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { id, prompt, options, correct_option, explanation, difficulty } = body ?? {};
+  const { id, prompt, options, correct_option, explanation, difficulty, image_url } = body ?? {};
 
   if (!id) return NextResponse.json({ error: "id is required." }, { status: 400 });
   if (options !== undefined || correct_option !== undefined) {
@@ -104,6 +106,7 @@ export async function PATCH(req: Request) {
       ...(correct_option !== undefined ? { correct_option: Number(correct_option) } : {}),
       ...(explanation !== undefined ? { explanation: explanation?.trim() || null } : {}),
       ...(difficulty ? { difficulty } : {}),
+      ...(image_url !== undefined ? { image_url: image_url || null } : {}),
     })
     .eq("id", id)
     .select("*, users(full_name, email)")

@@ -34,7 +34,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
   const { data: testQuestions } = await supabase
     .from("proctored_test_questions")
-    .select("position, proctored_questions(id, prompt, options, correct_option, explanation)")
+    .select("position, proctored_questions(id, prompt, options, correct_option, explanation, image_url)")
     .eq("test_id", params.id)
     .order("position", { ascending: true });
 
@@ -48,6 +48,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
       correct_option: q.correct_option,
       explanation: q.explanation,
       selected_option: attempt.answers?.[q.id] ?? null,
+      image_url: q.image_url ?? null,
     }));
 
   return NextResponse.json({

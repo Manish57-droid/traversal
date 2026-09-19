@@ -359,6 +359,14 @@ export default function ProctoredTestTakePage() {
               <p className="text-xs text-fg-subtle">
                 Question {currentIndex + 1} of {questions.length}
               </p>
+              {current.image_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={current.image_url}
+                  alt=""
+                  className="max-h-72 rounded-lg border border-line/70 object-contain"
+                />
+              )}
               <p className="text-lg font-medium text-fg">{current.prompt}</p>
               <div className="space-y-2">
                 {current.options.map((opt, i) => {

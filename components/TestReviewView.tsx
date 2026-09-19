@@ -11,6 +11,8 @@ export interface ReviewQuestion {
   correct_option: number;
   explanation: string | null;
   selected_option: number | null;
+  /** Proctored-only — Aptitude questions never have one. */
+  image_url?: string | null;
 }
 
 export default function TestReviewView({
@@ -41,6 +43,10 @@ export default function TestReviewView({
           const wasCorrect = answered && q.selected_option === q.correct_option;
           return (
             <div key={q.id} className="card space-y-3 p-4">
+              {q.image_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={q.image_url} alt="" className="max-h-64 rounded-lg border border-line/70 object-contain" />
+              )}
               <p className="font-medium text-fg">
                 <span className="mr-2 text-fg-subtle">{i + 1}.</span>
                 {q.prompt}

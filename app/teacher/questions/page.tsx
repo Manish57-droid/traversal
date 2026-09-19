@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PLATFORM_COLORS, PLATFORM_LABELS } from "@/lib/platform";
-import type { Question } from "@/types";
+import { DIFFICULTY_LABELS, FILTERABLE_DIFFICULTIES } from "@/lib/difficulty";
+import type { Question, QuestionDifficulty } from "@/types";
+
+type PlatformFilter = "" | "leetcode" | "hackerrank" | "codechef" | "others";
 
 export default function TeacherQuestionsPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -14,20 +17,29 @@ export default function TeacherQuestionsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [showNeedsLinkOnly, setShowNeedsLinkOnly] = useState(false);
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("");
+  const [difficultyFilter, setDifficultyFilter] = useState<"" | QuestionDifficulty>("");
   const [curatingId, setCuratingId] = useState<string | null>(null);
   const [curationUrl, setCurationUrl] = useState("");
   const [curationError, setCurationError] = useState<string | null>(null);
   const [curating, setCurating] = useState(false);
 
+  // Both filters are sent as query params to the API — filtering
+  // happens server-side (not just on whatever's already loaded on this
+  // page), so counts stay correct as the bank grows.
   async function load() {
-    const res = await fetch("/api/questions");
+    const params = new URLSearchParams();
+    if (platformFilter) params.set("platform", platformFilter);
+    if (difficultyFilter) params.set("difficulty", difficultyFilter);
+    const res = await fetch(`/api/questions${params.toString() ? `?${params}` : ""}`);
     const data = await res.json();
     setQuestions(data.questions ?? []);
   }
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platformFilter, difficultyFilter]);
 
   const needsLinkCount = useMemo(() => questions.filter((q) => q.needs_link_curation).length, [questions]);
   const filtered = showNeedsLinkOnly ? questions.filter((q) => q.needs_link_curation) : questions;
@@ -120,6 +132,36 @@ export default function TeacherQuestionsPage() {
         </button>
         {error && <p className="text-sm text-red-400 lg:col-span-5">{error}</p>}
       </form>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div>
+          <label className="mb-1 block text-xs text-fg-muted">Platform</label>
+          <select
+            className="input w-auto py-1.5 text-xs"
+            value={platformFilter}
+            onChange={(e) => setPlatformFilter(e.target.value as PlatformFilter)}
+          >
+            <option value="">All platforms</option>
+            <option value="leetcode">LeetCode</option>
+            <option value="hackerrank">HackerRank</option>
+            <option value="codechef">CodeChef</option>
+            <option value="others">Others</option>
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-fg-muted">Difficulty</label>
+          <select
+            className="input w-auto py-1.5 text-xs"
+            value={difficultyFilter}
+            onChange={(e) => setDifficultyFilter(e.target.value as "" | QuestionDifficulty)}
+          >
+            <option value="">All difficulties</option>
+            {FILTERABLE_DIFFICULTIES.map((d) => (
+              <option key={d} value={d}>{DIFFICULTY_LABELS[d]}</option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       {needsLinkCount > 0 && (
         <button

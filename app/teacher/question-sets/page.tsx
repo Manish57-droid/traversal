@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { PLATFORM_LABELS } from "@/lib/platform";
-import type { Question } from "@/types";
+import { DIFFICULTY_LABELS, FILTERABLE_DIFFICULTIES } from "@/lib/difficulty";
+import type { Question, QuestionDifficulty } from "@/types";
 
 interface QuestionSetRow {
   id: string;
@@ -10,6 +11,8 @@ interface QuestionSetRow {
   description: string | null;
   question_set_items: { question_id: string; questions: Question }[];
 }
+
+type PlatformFilter = "" | "leetcode" | "hackerrank" | "codechef" | "others";
 
 export default function TeacherQuestionSetsPage() {
   const [sets, setSets] = useState<QuestionSetRow[]>([]);
@@ -20,19 +23,36 @@ export default function TeacherQuestionSetsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [pendingQuestionId, setPendingQuestionId] = useState("");
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("");
+  const [difficultyFilter, setDifficultyFilter] = useState<"" | QuestionDifficulty>("");
+
+  // Both pickers on this page (the "create set" checkbox list and the
+  // "add existing question" dropdown) share this one filtered list —
+  // filtering happens server-side via query params, not by trimming
+  // whatever's already loaded, so it scales as the bank grows.
+  async function loadQuestions() {
+    const params = new URLSearchParams();
+    if (platformFilter) params.set("platform", platformFilter);
+    if (difficultyFilter) params.set("difficulty", difficultyFilter);
+    const res = await fetch(`/api/questions${params.toString() ? `?${params}` : ""}`);
+    setQuestions((await res.json()).questions ?? []);
+  }
 
   async function load() {
-    const [setsRes, questionsRes] = await Promise.all([
-      fetch("/api/question-sets"),
-      fetch("/api/questions"),
-    ]);
+    const setsRes = await fetch("/api/question-sets");
     setSets((await setsRes.json()).question_sets ?? []);
-    setQuestions((await questionsRes.json()).questions ?? []);
+    await loadQuestions();
   }
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    loadQuestions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platformFilter, difficultyFilter]);
 
   function toggleQuestion(id: string) {
     setSelectedQuestionIds((prev) =>
@@ -95,6 +115,36 @@ export default function TeacherQuestionSetsPage() {
           <div>
             <label className="mb-1 block text-xs text-fg-muted">Description (optional)</label>
             <input className="input" value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <div>
+            <label className="mb-1 block text-xs text-fg-muted">Platform</label>
+            <select
+              className="input w-auto py-1.5 text-xs"
+              value={platformFilter}
+              onChange={(e) => setPlatformFilter(e.target.value as PlatformFilter)}
+            >
+              <option value="">All platforms</option>
+              <option value="leetcode">LeetCode</option>
+              <option value="hackerrank">HackerRank</option>
+              <option value="codechef">CodeChef</option>
+              <option value="others">Others</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-fg-muted">Difficulty</label>
+            <select
+              className="input w-auto py-1.5 text-xs"
+              value={difficultyFilter}
+              onChange={(e) => setDifficultyFilter(e.target.value as "" | QuestionDifficulty)}
+            >
+              <option value="">All difficulties</option>
+              {FILTERABLE_DIFFICULTIES.map((d) => (
+                <option key={d} value={d}>{DIFFICULTY_LABELS[d]}</option>
+              ))}
+            </select>
           </div>
         </div>
 

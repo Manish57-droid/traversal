@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ImagePlus, X } from "lucide-react";
 import type { ProctoredQuestion } from "@/types";
 
 const EMPTY_FORM = {
@@ -9,6 +10,7 @@ const EMPTY_FORM = {
   correct_option: 0,
   explanation: "",
   difficulty: "unknown",
+  image_url: "" as string | null,
 };
 
 export default function ProctoredQuestionsPage() {
@@ -19,6 +21,8 @@ export default function ProctoredQuestionsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     setLoading(true);
@@ -56,8 +60,29 @@ export default function ProctoredQuestionsPage() {
       correct_option: q.correct_option,
       explanation: q.explanation ?? "",
       difficulty: q.difficulty,
+      image_url: q.image_url,
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function handleImageSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingImage(true);
+    setError(null);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch("/api/proctored-questions/upload-image", { method: "POST", body });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setForm((f) => ({ ...f, image_url: data.url }));
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
 
   function cancelEdit() {
@@ -137,6 +162,43 @@ export default function ProctoredQuestionsPage() {
         </div>
 
         <div>
+          <label className="mb-1 block text-xs text-fg-muted">Image (optional)</label>
+          {form.image_url ? (
+            <div className="relative inline-block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={form.image_url} alt="" className="max-h-40 rounded-lg border border-line/70 object-contain" />
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, image_url: null }))}
+                aria-label="Remove image"
+                className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-line bg-bg text-fg-muted hover:text-red-400"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                onChange={handleImageSelected}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingImage}
+                className="btn-secondary flex items-center gap-1.5 py-1.5 text-xs"
+              >
+                <ImagePlus className="h-3.5 w-3.5" />
+                {uploadingImage ? "Uploading..." : "Add Image"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div>
           <label className="mb-1 block text-xs text-fg-muted">Prompt</label>
           <textarea
             className="input min-h-[80px]"
@@ -213,6 +275,10 @@ export default function ProctoredQuestionsPage() {
                   <span className="text-xs capitalize text-fg-muted">{q.difficulty}</span>
                 )}
               </div>
+              {q.image_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={q.image_url} alt="" className="mt-1 max-h-40 rounded-lg border border-line/70 object-contain" />
+              )}
               <p className="mt-1 font-medium text-fg">{q.prompt}</p>
               <ul className="mt-2 space-y-0.5 text-xs text-fg-muted">
                 {q.options.map((opt, i) => (

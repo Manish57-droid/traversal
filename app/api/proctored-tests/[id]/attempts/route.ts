@@ -19,7 +19,7 @@ async function questionsForTest(testId: string) {
   const supabase = supabaseAdmin();
   const { data } = await supabase
     .from("proctored_test_questions")
-    .select("position, proctored_questions(id, prompt, options, difficulty)")
+    .select("position, proctored_questions(id, prompt, options, difficulty, image_url)")
     .eq("test_id", testId)
     .order("position", { ascending: true });
   return (data ?? []).map((r: any) => r.proctored_questions).filter(Boolean);
