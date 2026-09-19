@@ -31,6 +31,11 @@ export default function ProctoredQuestionsPage() {
 
   const [showBulkImport, setShowBulkImport] = useState(false);
 
+  const [creatingSet, setCreatingSet] = useState(false);
+  const [newSetName, setNewSetName] = useState("");
+  const [savingNewSet, setSavingNewSet] = useState(false);
+  const [newSetError, setNewSetError] = useState<string | null>(null);
+
   // Filters for the list view.
   const [filterSubjectId, setFilterSubjectId] = useState("");
   const [filterSetId, setFilterSetId] = useState("");
@@ -127,6 +132,29 @@ export default function ProctoredQuestionsPage() {
     setError(null);
   }
 
+  async function handleCreateSet() {
+    if (!form.subject_id || !newSetName.trim()) return;
+    setNewSetError(null);
+    setSavingNewSet(true);
+    try {
+      const res = await fetch("/api/proctored-sets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject_id: form.subject_id, name: newSetName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      await loadSubjects();
+      setForm((f) => ({ ...f, set_id: data.set.id }));
+      setNewSetName("");
+      setCreatingSet(false);
+    } catch (err: any) {
+      setNewSetError(err.message);
+    } finally {
+      setSavingNewSet(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -221,18 +249,63 @@ export default function ProctoredQuestionsPage() {
           </div>
           <div>
             <label className="mb-1 block text-xs text-fg-muted">Set</label>
-            <select
-              className="input"
-              value={form.set_id}
-              onChange={(e) => setForm((f) => ({ ...f, set_id: e.target.value }))}
-              disabled={!form.subject_id}
-            >
-              <option value="">Select set…</option>
-              {formSets.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-            {!subjects.length && <p className="mt-1 text-xs text-fg-subtle">Add a Subject and Set above first.</p>}
+            {creatingSet ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  autoFocus
+                  className="input"
+                  placeholder="New set name"
+                  value={newSetName}
+                  onChange={(e) => setNewSetName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleCreateSet();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleCreateSet}
+                  disabled={savingNewSet || !newSetName.trim()}
+                  className="btn-secondary shrink-0 py-2.5 text-xs"
+                >
+                  {savingNewSet ? "Saving..." : "Create"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreatingSet(false);
+                    setNewSetName("");
+                    setNewSetError(null);
+                  }}
+                  className="shrink-0 text-xs text-fg-subtle hover:text-fg"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <select
+                className="input"
+                value={form.set_id}
+                onChange={(e) => {
+                  if (e.target.value === "__new__") {
+                    setCreatingSet(true);
+                    return;
+                  }
+                  setForm((f) => ({ ...f, set_id: e.target.value }));
+                }}
+                disabled={!form.subject_id}
+              >
+                <option value="">Select set…</option>
+                {formSets.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+                {form.subject_id && <option value="__new__">+ Create new set…</option>}
+              </select>
+            )}
+            {newSetError && <p className="mt-1 text-xs text-red-400">{newSetError}</p>}
+            {!subjects.length && <p className="mt-1 text-xs text-fg-subtle">Add a Subject above first.</p>}
           </div>
           <div>
             <label className="mb-1 block text-xs text-fg-muted">Difficulty</label>
