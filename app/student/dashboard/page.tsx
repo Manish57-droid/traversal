@@ -21,8 +21,6 @@ const ATTEMPT_STATUS_LABEL: Record<string, string> = {
 
 export default function StudentDashboardPage() {
   const [rows, setRows] = useState<ProgressJoinRow[]>([]);
-  const [joinCode, setJoinCode] = useState("");
-  const [joinMessage, setJoinMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [proctoredTests, setProctoredTests] = useState<StudentProctoredTestRow[]>([]);
 
@@ -51,19 +49,6 @@ export default function StudentDashboardPage() {
     if (r.status === "completed") acc[key].completed += 1;
     return acc;
   }, {});
-
-  async function handleJoin(e: React.FormEvent) {
-    e.preventDefault();
-    setJoinMessage(null);
-    const res = await fetch("/api/classes/join", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ join_code: joinCode }),
-    });
-    const data = await res.json();
-    setJoinMessage(res.ok ? "Joined! Your teacher can now assign you questions." : data.error);
-    if (res.ok) setJoinCode("");
-  }
 
   return (
     <div className="space-y-8">
@@ -166,21 +151,14 @@ export default function StudentDashboardPage() {
         </div>
       )}
 
-      <div className="card max-w-md p-5">
-        <h2 className="mb-1 text-sm font-medium text-fg">Join a class</h2>
-        <p className="mb-3 text-xs text-fg-muted">
-          Enter the code your teacher shared so they can assign you questions.
-        </p>
-        <form onSubmit={handleJoin} className="flex gap-2">
-          <input
-            className="input"
-            placeholder="e.g. a1b2c3"
-            value={joinCode}
-            onChange={(e) => setJoinCode(e.target.value)}
-          />
-          <button type="submit" className="btn-secondary">Join</button>
-        </form>
-        {joinMessage && <p className="mt-2 text-xs text-fg-muted">{joinMessage}</p>}
+      <div className="card flex flex-wrap items-center justify-between gap-3 p-5">
+        <div>
+          <h2 className="text-sm font-medium text-fg">Classes</h2>
+          <p className="mt-1 text-xs text-fg-muted">Join a new class with its code, or leave one you're already in.</p>
+        </div>
+        <Link href="/student/classes" className="btn-secondary shrink-0 py-2 text-xs">
+          Manage my classes
+        </Link>
       </div>
     </div>
   );
