@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentAppUser, requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getClassAuthorization, isAuthorized, isClassMember } from "@/lib/classAccess";
+import { notifyClassMembers } from "@/lib/notifications";
 import type { ClassMaterial } from "@/types";
 
 const BUCKET = "class-materials";
@@ -126,6 +127,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     await supabase.storage.from(BUCKET).remove([path]);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // Best-effort — a notification failing shouldn't fail the upload
+  // that already succeeded.
+  await notifyClassMembers(params.id, {
+    type: "class_material",
+    title: `New material: ${material.title}`,
+    href: "/student/study-material",
+  }).catch(() => {});
 
   return NextResponse.json({ material }, { status: 201 });
 }

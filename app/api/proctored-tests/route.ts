@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getClassAuthorization, isAuthorized } from "@/lib/classAccess";
 import { getSectionsWithQuestions } from "@/lib/proctoredSections";
+import { notifyClassMembers } from "@/lib/notifications";
 
 // GET  /api/proctored-tests?classId=xxx -> list proctored tests for a
 //       class, with a question_count summed across every section.
@@ -192,6 +193,14 @@ export async function POST(req: Request) {
     await supabase.from("proctored_tests").delete().eq("id", test.id);
     return NextResponse.json({ error: setLinkError.message }, { status: 500 });
   }
+
+  // Best-effort — a notification failing shouldn't fail test creation
+  // that already succeeded.
+  await notifyClassMembers(class_id, {
+    type: "proctored_test",
+    title: `New test: ${test.name}`,
+    href: `/student/proctored-tests/${test.id}/start`,
+  }).catch(() => {});
 
   return NextResponse.json({ test }, { status: 201 });
 }

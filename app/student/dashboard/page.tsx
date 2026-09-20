@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import ProgressBar from "@/components/ProgressBar";
 import ProctoredLeaderboardWidget from "@/components/ProctoredLeaderboardWidget";
+import StudentNotifications from "@/components/StudentNotifications";
 import type { QuestionStatus, StudentProctoredTestRow } from "@/types";
 
 interface ProgressJoinRow {
@@ -59,6 +60,8 @@ export default function StudentDashboardPage() {
         </div>
         <Link href="/student/dsa" className="btn-primary">Open DSA sheet</Link>
       </div>
+
+      <StudentNotifications />
 
       {!loading && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

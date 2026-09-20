@@ -551,6 +551,19 @@ export interface ClassMaterial {
   created_at: string;
 }
 
+/** A student-facing notification (lib/notifications.ts fans these out
+ * to every member of a class when a teacher uploads material or
+ * creates a proctored test). `href` is where clicking it navigates. */
+export interface StudentNotification {
+  id: string;
+  class_id: string;
+  type: "class_material" | "proctored_test";
+  title: string;
+  href: string;
+  read: boolean;
+  created_at: string;
+}
+
 // ---------- Admin dashboard ----------
 
 export interface AdminOverviewStats {
