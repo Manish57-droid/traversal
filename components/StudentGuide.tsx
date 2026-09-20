@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   BookOpen,
   Brain,
@@ -99,8 +100,16 @@ const STEPS: GuideStep[] = [
 // through what each part of the site does — a lightweight substitute
 // for a real onboarding tour, entirely client-side (no new API/DB).
 export default function StudentGuide() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
+
+  // The take screen goes fullscreen on document.documentElement (see
+  // app/student/proctored-tests/[testId]/take/page.tsx) — since this
+  // widget lives in the layout wrapping every student page, it would
+  // otherwise still float on top of a monitored, supposed-to-be-
+  // distraction-free exam. Everywhere else it's fine.
+  if (pathname.includes("/proctored-tests/") && pathname.endsWith("/take")) return null;
 
   const current = STEPS[step];
   const Icon = current.icon;

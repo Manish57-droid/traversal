@@ -5,7 +5,6 @@ import Link from "next/link";
 import ProgressBar from "@/components/ProgressBar";
 import ProctoredLeaderboardWidget from "@/components/ProctoredLeaderboardWidget";
 import StudentNotifications from "@/components/StudentNotifications";
-import StudentGuide from "@/components/StudentGuide";
 import type { QuestionStatus, StudentProctoredTestRow } from "@/types";
 
 interface ProgressJoinRow {
@@ -164,8 +163,6 @@ export default function StudentDashboardPage() {
           Manage my classes
         </Link>
       </div>
-
-      <StudentGuide />
     </div>
   );
 }
