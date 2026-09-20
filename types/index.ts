@@ -534,6 +534,23 @@ export interface ClassCollaborator {
   email: string;
 }
 
+/** A teacher-uploaded reference document (PDF/Word) attached to a
+ * class — visible to any student who's joined it, view/download only.
+ * `file_path` (the storage object path) is only ever used server-side
+ * to delete the object; the client only needs `file_url`. */
+export interface ClassMaterial {
+  id: string;
+  class_id: string;
+  title: string;
+  file_url: string;
+  file_name: string;
+  file_type: string;
+  file_size: number;
+  uploaded_by: string | null;
+  uploaded_by_name?: string;
+  created_at: string;
+}
+
 // ---------- Admin dashboard ----------
 
 export interface AdminOverviewStats {

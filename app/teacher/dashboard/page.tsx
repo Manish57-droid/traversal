@@ -10,6 +10,7 @@ import ClassAccessPanel from "@/components/analytics/ClassAccessPanel";
 import ProctoredTestsPanel from "@/components/ProctoredTestsPanel";
 import AptitudeTestsPanel from "@/components/AptitudeTestsPanel";
 import DsaAssignmentsPanel from "@/components/DsaAssignmentsPanel";
+import ClassMaterialsPanel from "@/components/ClassMaterialsPanel";
 import type { ClassAnalyticsSummary, StudentAnalyticsRow } from "@/types";
 
 interface ClassRow {
@@ -147,6 +148,8 @@ export default function TeacherDashboardPage() {
           )}
         </div>
       )}
+
+      {authorization && <ClassMaterialsPanel classId={selectedClass} />}
 
       {loadingAnalytics && <p className="text-sm text-fg-muted">Loading analytics…</p>}
 

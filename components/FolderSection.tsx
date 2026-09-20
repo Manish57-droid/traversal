@@ -10,6 +10,7 @@ import { ChevronDown, Folder, FolderOpen } from "lucide-react";
 export default function FolderSection({
   label,
   count,
+  unit = "question",
   defaultOpen = false,
   variant = "default",
   depth = 0,
@@ -18,6 +19,10 @@ export default function FolderSection({
 }: {
   label: string;
   count: number;
+  /** Singular noun for the count badge, e.g. "document" — pluralized
+   * with a trailing "s". Defaults to "question" for the three question
+   * banks this was originally built for. */
+  unit?: string;
   defaultOpen?: boolean;
   /** "uncategorized" gets warn-colored styling so it reads as a place
    * that needs attention, not just another folder. */
@@ -51,7 +56,7 @@ export default function FolderSection({
             {label}
           </span>
           <span className="text-xs text-fg-subtle">
-            {count} question{count === 1 ? "" : "s"}
+            {count} {unit}{count === 1 ? "" : "s"}
           </span>
           <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-fg-muted transition-transform ${open ? "rotate-180" : ""}`} />
         </button>

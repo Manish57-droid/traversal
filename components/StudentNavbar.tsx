@@ -12,15 +12,22 @@ const NAV_LINKS = [
   { href: "/student/dashboard", label: "Dashboard" },
   { href: "/student/dsa", label: "DSA" },
   { href: "/student/aptitude", label: "Aptitude" },
-  { href: "/student/interview-prep", label: "Interview Prep" },
   { href: "/student/proctored-tests", label: "Proctored Tests" },
   { href: "/student/classes", label: "My Classes" },
-  { href: "/topics", label: "Topics" },
+  // DSA Topics (/topics) and Interview Prep live under this hub now
+  // (see app/student/study-material/page.tsx) but keep their own
+  // routes — /topics is also linked from other, non-student navbars —
+  // so this stays highlighted while browsing either.
+  { href: "/student/study-material", label: "Study Material", activePrefixes: ["/topics", "/student/interview-prep"] },
 ];
 
 export default function StudentNavbar({ user }: { user: { full_name: string | null; email: string; role: UserRole } }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  function isActive(link: (typeof NAV_LINKS)[number]) {
+    return pathname.startsWith(link.href) || (link.activePrefixes ?? []).some((p) => pathname.startsWith(p));
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b border-line/70 bg-bg/80 backdrop-blur">
@@ -35,7 +42,7 @@ export default function StudentNavbar({ user }: { user: { full_name: string | nu
               key={link.href}
               href={link.href}
               className={`transition-colors hover:text-fg ${
-                pathname.startsWith(link.href) ? "text-fg" : "text-fg-muted"
+                isActive(link) ? "text-fg" : "text-fg-muted"
               }`}
             >
               {link.label}
@@ -70,7 +77,7 @@ export default function StudentNavbar({ user }: { user: { full_name: string | nu
                 href={link.href}
                 onClick={() => setMenuOpen(false)}
                 className={`py-1 transition-colors hover:text-fg ${
-                  pathname.startsWith(link.href) ? "text-fg" : "text-fg-muted"
+                  isActive(link) ? "text-fg" : "text-fg-muted"
                 }`}
               >
                 {link.label}
