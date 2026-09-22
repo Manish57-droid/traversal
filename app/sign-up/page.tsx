@@ -75,7 +75,9 @@ export default function SignUpPage() {
         <div>
           <p className="font-display text-xl text-fg">Create your account</p>
           <p className="mt-1 text-sm text-fg-muted">
-            An admin approves new accounts before you can sign in.
+            {requestedRole === "teacher"
+              ? "An admin approves teacher accounts before you can sign in."
+              : "Students can sign in right away — no approval needed."}
           </p>
         </div>
 
