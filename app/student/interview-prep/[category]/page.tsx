@@ -160,7 +160,7 @@ export default function InterviewPrepCategoryPage() {
 
       {!loading && questions.length === 0 && (
         <p className="card p-6 text-center text-sm text-fg-muted">
-          No questions in this category yet — check back once your teacher adds some.
+          No topics in this category yet — check back once your teacher adds some.
         </p>
       )}
 
@@ -173,14 +173,14 @@ export default function InterviewPrepCategoryPage() {
             className="btn-secondary w-full justify-center gap-2 text-sm lg:hidden"
           >
             <List className="h-4 w-4" />
-            Jump to question
+            Jump to topic
           </button>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
             <aside className="hidden lg:block">
               <div className="card sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto p-3">
                 <p className="mb-2 px-3 text-xs uppercase tracking-wide text-fg-subtle">
-                  {questions.length} question{questions.length === 1 ? "" : "s"}
+                  {questions.length} topic{questions.length === 1 ? "" : "s"}
                 </p>
                 <QuestionNav questions={questions} activeId={activeId} onJump={jumpTo} />
               </div>
@@ -207,7 +207,7 @@ export default function InterviewPrepCategoryPage() {
           <div className="absolute inset-0 bg-bg/60 backdrop-blur-sm" />
           <div className="relative flex h-full w-72 flex-col border-l border-line bg-bg p-4" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm font-medium text-fg">Jump to question</p>
+              <p className="text-sm font-medium text-fg">Jump to topic</p>
               <button
                 type="button"
                 aria-label="Close"

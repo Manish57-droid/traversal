@@ -3,6 +3,12 @@ import { getCurrentAppUser, requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import type { InterviewQuestion } from "@/types";
 
+const MIN_EXPLANATION_WORDS = 200;
+
+function countWords(text: string) {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
 // GET    /api/interview-prep/questions?categorySlug=cpp -> every question
 //         in that category, with the author's name resolved. Any
 //         signed-in role can read (students see the Q&A directly —
@@ -61,7 +67,14 @@ export async function POST(req: Request) {
 
   const { category_id, question, answer, difficulty } = await req.json();
   if (!category_id || !question?.trim() || !answer?.trim()) {
-    return NextResponse.json({ error: "category_id, question, and answer are required." }, { status: 400 });
+    return NextResponse.json({ error: "category_id, topic, and explanation are required." }, { status: 400 });
+  }
+  const wordCount = countWords(answer);
+  if (wordCount < MIN_EXPLANATION_WORDS) {
+    return NextResponse.json(
+      { error: `The explanation needs at least ${MIN_EXPLANATION_WORDS} words (currently ${wordCount}).` },
+      { status: 400 }
+    );
   }
 
   const supabase = supabaseAdmin();
@@ -99,6 +112,15 @@ export async function PATCH(req: Request) {
 
   const { id, category_id, question, answer, difficulty } = await req.json();
   if (!id) return NextResponse.json({ error: "id is required." }, { status: 400 });
+  if (answer?.trim()) {
+    const wordCount = countWords(answer);
+    if (wordCount < MIN_EXPLANATION_WORDS) {
+      return NextResponse.json(
+        { error: `The explanation needs at least ${MIN_EXPLANATION_WORDS} words (currently ${wordCount}).` },
+        { status: 400 }
+      );
+    }
+  }
 
   const supabase = supabaseAdmin();
   const { data, error } = await supabase

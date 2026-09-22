@@ -60,6 +60,11 @@ export default function TeacherInterviewPrepPage() {
     [categories, selectedCategory]
   );
 
+  const answerWordCount = useMemo(
+    () => questionForm.answer.trim().split(/\s+/).filter(Boolean).length,
+    [questionForm.answer]
+  );
+
   function cancelCategoryEdit() {
     setEditingCategoryId(null);
     setCategoryForm(EMPTY_CATEGORY_FORM);
@@ -157,7 +162,7 @@ export default function TeacherInterviewPrepPage() {
       <div>
         <h1 className="font-display text-2xl text-fg sm:text-3xl">Interview preparation</h1>
         <p className="mt-1 text-sm text-fg-muted">
-          Manage categories and author question/answer pairs for students to study.
+          Manage categories and author important topics with in-depth explanations (200+ words each) for students to study.
         </p>
       </div>
 
@@ -255,7 +260,7 @@ export default function TeacherInterviewPrepPage() {
                     </button>
                   </div>
                 </div>
-                <p className="mt-1 text-xs text-fg-subtle">{c.question_count} question{c.question_count === 1 ? "" : "s"}</p>
+                <p className="mt-1 text-xs text-fg-subtle">{c.question_count} topic{c.question_count === 1 ? "" : "s"}</p>
               </div>
             );
           })}
@@ -265,34 +270,39 @@ export default function TeacherInterviewPrepPage() {
       {/* ---------- Questions ---------- */}
       <section className="space-y-4 border-t border-line/70 pt-8">
         <h2 className="text-sm font-medium text-fg">
-          Questions {selectedCategoryName && <span className="text-fg-muted">— {selectedCategoryName}</span>}
+          Topics {selectedCategoryName && <span className="text-fg-muted">— {selectedCategoryName}</span>}
         </h2>
 
-        {!selectedCategory && <p className="text-sm text-fg-subtle">Pick a category above to manage its questions.</p>}
+        {!selectedCategory && <p className="text-sm text-fg-subtle">Pick a category above to manage its topics.</p>}
 
         {selectedCategory && (
           <>
             <form onSubmit={handleQuestionSubmit} className="card space-y-3 p-4">
               {editingQuestionId && (
                 <div className="flex items-center justify-between rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-xs text-warn">
-                  Editing a question
+                  Editing a topic
                   <button type="button" onClick={cancelQuestionEdit} className="underline">Cancel</button>
                 </div>
               )}
               <div>
-                <label className="mb-1 block text-xs text-fg-muted">Question</label>
+                <label className="mb-1 block text-xs text-fg-muted">Topic</label>
                 <textarea
                   className="input min-h-[60px]"
-                  placeholder="What is the difference between a pointer and a reference?"
+                  placeholder="Encapsulation"
                   value={questionForm.question}
                   onChange={(e) => setQuestionForm((f) => ({ ...f, question: e.target.value }))}
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-fg-muted">Answer</label>
+                <div className="mb-1 flex items-baseline justify-between">
+                  <label className="block text-xs text-fg-muted">Explanation</label>
+                  <span className={`text-xs ${answerWordCount > 0 && answerWordCount < 200 ? "text-warn" : "text-fg-subtle"}`}>
+                    {answerWordCount} word{answerWordCount === 1 ? "" : "s"}{answerWordCount < 200 ? " (aim for 200+)" : ""}
+                  </span>
+                </div>
                 <textarea
-                  className="input min-h-[100px] font-mono text-xs"
-                  placeholder="A reference must be initialized and can't be null or reassigned..."
+                  className="input min-h-[180px] text-sm"
+                  placeholder="Write a thorough, exam-ready explanation of this topic — at least 200 words covering what it is, why it matters, and a concrete example..."
                   value={questionForm.answer}
                   onChange={(e) => setQuestionForm((f) => ({ ...f, answer: e.target.value }))}
                 />
@@ -311,14 +321,14 @@ export default function TeacherInterviewPrepPage() {
                 </select>
               </div>
               <button className="btn-primary" disabled={savingQuestion}>
-                {savingQuestion ? "Saving..." : editingQuestionId ? "Save changes" : "Add question"}
+                {savingQuestion ? "Saving..." : editingQuestionId ? "Save changes" : "Add topic"}
               </button>
               {questionError && <p className="text-sm text-red-400">{questionError}</p>}
             </form>
 
             {loadingQuestions && <p className="text-sm text-fg-muted">Loading…</p>}
             {!loadingQuestions && questions.length === 0 && (
-              <p className="card p-6 text-center text-sm text-fg-muted">No questions yet — add one above.</p>
+              <p className="card p-6 text-center text-sm text-fg-muted">No topics yet — add one above.</p>
             )}
 
             <div className="space-y-3">

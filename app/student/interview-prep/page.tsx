@@ -21,7 +21,7 @@ export default function StudentInterviewPrepPage() {
       <div>
         <h1 className="font-display text-2xl text-fg sm:text-3xl">Interview preparation</h1>
         <p className="mt-1 text-sm text-fg-muted">
-          Common interview questions and answers, organized by language and topic.
+          Important topics to know for interviews, each with an in-depth explanation — organized by subject.
         </p>
       </div>
 
@@ -48,7 +48,7 @@ export default function StudentInterviewPrepPage() {
               <p className="mt-4 font-display text-lg text-fg">{c.name}</p>
               {c.description && <p className="mt-1 text-sm text-fg-muted">{c.description}</p>}
               <p className="mt-3 text-xs text-fg-subtle">
-                {c.question_count} question{c.question_count === 1 ? "" : "s"}
+                {c.question_count} topic{c.question_count === 1 ? "" : "s"}
               </p>
             </Link>
           );
