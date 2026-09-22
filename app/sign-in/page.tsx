@@ -1,13 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser-client";
 import PasswordInput from "@/components/PasswordInput";
 
 export default function SignInPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignInForm />
+    </Suspense>
+  );
+}
+
+function SignInForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const accountDeleted = searchParams.get("accountDeleted") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +47,13 @@ export default function SignInPage() {
       <Link href="/" className="text-sm text-fg-muted hover:text-fg">
         ← Back to home
       </Link>
+
+      {accountDeleted && (
+        <p className="w-full max-w-sm rounded-lg border border-success/40 bg-success/10 px-4 py-2 text-center text-xs text-success">
+          Your account has been permanently deleted.
+        </p>
+      )}
+
       <form onSubmit={handleSubmit} className="card w-full max-w-sm space-y-4 p-6">
         <p className="font-display text-xl text-fg">Sign in</p>
 

@@ -6,6 +6,12 @@ import type { AppUser, UserRole, UserStatus } from "@/types";
 
 const ROLES: UserRole[] = ["student", "teacher", "admin"];
 
+// Kept in sync with app/api/admin/users/route.ts, which is what
+// actually enforces this — the disabled dropdown here is just so the
+// UI doesn't invite an admin to try (and get a rejected request) in
+// the first place.
+const PROTECTED_ADMIN_EMAIL = "manishkushwaha572000@gmail.com";
+
 const STATUS_STYLE: Record<UserStatus, string> = {
   pending: "border-warn/40 text-warn",
   approved: "border-success/40 text-success",
@@ -463,14 +469,17 @@ export default function AdminUsersPage() {
               {filtered.map((u) => {
                 const isSelf = u.id === currentUserId;
                 const isLastAdmin = u.role === "admin" && adminCount <= 1;
+                const isProtectedAdmin = u.email.toLowerCase() === PROTECTED_ADMIN_EMAIL;
                 return (
                   <tr key={u.id} className="border-b border-line/40 last:border-0">
                     <td className="px-4 py-3 text-fg">{u.full_name || "—"}</td>
                     <td className="px-4 py-3 text-fg-muted">{u.email}</td>
                     <td className="px-4 py-3">
                       <select
-                        className="input w-auto py-1.5"
+                        className="input w-auto py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
                         value={u.role}
+                        disabled={isProtectedAdmin}
+                        title={isProtectedAdmin ? "This account's role is protected and can't be changed." : undefined}
                         onChange={(e) => patchUser(u.id, { role: e.target.value as UserRole })}
                       >
                         {ROLES.map((r) => (

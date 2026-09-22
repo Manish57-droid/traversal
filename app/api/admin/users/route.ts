@@ -71,6 +71,14 @@ export async function POST(req: Request) {
 const VALID_ROLES: UserRole[] = ["student", "teacher", "admin"];
 const VALID_STATUSES: UserStatus[] = ["pending", "approved", "rejected"];
 
+// The platform's one permanent admin — every other admin (including
+// ones this account itself promotes) can be freely changed to any
+// role by this account, but this account's own role can never be
+// changed away from "admin" by anyone, itself included. Checked by
+// email rather than id so it still holds even if the row were ever
+// recreated (e.g. deleted and re-signed-up) with a new id.
+const PROTECTED_ADMIN_EMAIL = "manishkushwaha572000@gmail.com";
+
 export async function PATCH(req: Request) {
   const admin = await requireRole(["admin"]).catch(() => null);
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -101,8 +109,12 @@ export async function PATCH(req: Request) {
   // there.
   let previousRole: UserRole | null = null;
   if (role) {
-    const { data: existing } = await supabase.from("users").select("role").eq("id", id).maybeSingle();
+    const { data: existing } = await supabase.from("users").select("role, email").eq("id", id).maybeSingle();
     previousRole = existing?.role ?? null;
+
+    if (existing?.email?.toLowerCase() === PROTECTED_ADMIN_EMAIL && role !== "admin") {
+      return NextResponse.json({ error: "This account's role is protected and can't be changed." }, { status: 400 });
+    }
   }
 
   const { data, error } = await supabase
