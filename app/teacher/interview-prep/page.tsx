@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { InterviewCategoryWithCount, InterviewQuestion } from "@/types";
 import { INTERVIEW_ICON_NAMES, getInterviewIcon } from "@/lib/interviewIcons";
+import AnswerContent from "@/components/interview-prep/AnswerContent";
 
 const EMPTY_CATEGORY_FORM = { name: "", slug: "", description: "", icon: INTERVIEW_ICON_NAMES[0], display_order: 0 };
 const EMPTY_QUESTION_FORM = { category_id: "", question: "", answer: "", difficulty: "unknown" };
@@ -27,6 +28,7 @@ export default function TeacherInterviewPrepPage() {
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [questionError, setQuestionError] = useState<string | null>(null);
   const [savingQuestion, setSavingQuestion] = useState(false);
+  const [answerTab, setAnswerTab] = useState<"write" | "preview">("write");
 
   async function loadCategories() {
     setLoadingCategories(true);
@@ -113,6 +115,7 @@ export default function TeacherInterviewPrepPage() {
     setEditingQuestionId(null);
     setQuestionForm({ ...EMPTY_QUESTION_FORM, category_id: selectedCategory });
     setQuestionError(null);
+    setAnswerTab("write");
   }
 
   async function handleQuestionSubmit(e: React.FormEvent) {
@@ -163,6 +166,7 @@ export default function TeacherInterviewPrepPage() {
         <h1 className="font-display text-2xl text-fg sm:text-3xl">Interview preparation</h1>
         <p className="mt-1 text-sm text-fg-muted">
           Manage categories and author important topics with in-depth explanations (200+ words each) for students to study.
+          Explanations support Markdown formatting and diagrams (fenced <code className="rounded bg-surface-2 px-1 py-0.5 text-xs">```mermaid</code> code blocks).
         </p>
       </div>
 
@@ -296,16 +300,44 @@ export default function TeacherInterviewPrepPage() {
               <div>
                 <div className="mb-1 flex items-baseline justify-between">
                   <label className="block text-xs text-fg-muted">Explanation</label>
-                  <span className={`text-xs ${answerWordCount > 0 && answerWordCount < 200 ? "text-warn" : "text-fg-subtle"}`}>
-                    {answerWordCount} word{answerWordCount === 1 ? "" : "s"}{answerWordCount < 200 ? " (aim for 200+)" : ""}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-xs ${answerWordCount > 0 && answerWordCount < 200 ? "text-warn" : "text-fg-subtle"}`}>
+                      {answerWordCount} word{answerWordCount === 1 ? "" : "s"}{answerWordCount < 200 ? " (aim for 200+)" : ""}
+                    </span>
+                    <div className="flex rounded-lg border border-line/70 p-0.5 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setAnswerTab("write")}
+                        className={`rounded-md px-2 py-1 ${answerTab === "write" ? "bg-surface-2 text-fg" : "text-fg-muted"}`}
+                      >
+                        Write
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAnswerTab("preview")}
+                        className={`rounded-md px-2 py-1 ${answerTab === "preview" ? "bg-surface-2 text-fg" : "text-fg-muted"}`}
+                      >
+                        Preview
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <textarea
-                  className="input min-h-[180px] text-sm"
-                  placeholder="Write a thorough, exam-ready explanation of this topic — at least 200 words covering what it is, why it matters, and a concrete example..."
-                  value={questionForm.answer}
-                  onChange={(e) => setQuestionForm((f) => ({ ...f, answer: e.target.value }))}
-                />
+                {answerTab === "write" ? (
+                  <textarea
+                    className="input min-h-[180px] text-sm"
+                    placeholder={"Write a thorough, exam-ready explanation — at least 200 words covering what it is, why it matters, and a concrete example.\n\nSupports Markdown (**bold**, lists, tables) and diagrams via a fenced ```mermaid code block."}
+                    value={questionForm.answer}
+                    onChange={(e) => setQuestionForm((f) => ({ ...f, answer: e.target.value }))}
+                  />
+                ) : (
+                  <div className="min-h-[180px] rounded-lg border border-line/70 bg-surface/40 p-4">
+                    {questionForm.answer.trim() ? (
+                      <AnswerContent content={questionForm.answer} />
+                    ) : (
+                      <p className="text-sm text-fg-subtle">Nothing to preview yet — write something first.</p>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="max-w-[200px]">
                 <label className="mb-1 block text-xs text-fg-muted">Difficulty</label>

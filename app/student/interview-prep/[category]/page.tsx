@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { ChevronDown, List, X } from "lucide-react";
 import type { InterviewCategoryWithCount, InterviewQuestion } from "@/types";
 import { getInterviewIcon } from "@/lib/interviewIcons";
+import AnswerContent from "@/components/interview-prep/AnswerContent";
 
 function QuestionAccordionItem({
   q,
@@ -31,7 +32,7 @@ function QuestionAccordionItem({
       </button>
       {isOpen && (
         <div className="border-t border-line/70 px-4 py-4">
-          <p className="whitespace-pre-wrap text-sm text-fg-muted">{q.answer}</p>
+          <AnswerContent content={q.answer} />
           <div className="mt-3 flex items-center gap-2 text-xs text-fg-subtle">
             {q.difficulty !== "unknown" && <span className="capitalize">{q.difficulty}</span>}
             {q.created_by_name && <span>· Added by {q.created_by_name}</span>}
