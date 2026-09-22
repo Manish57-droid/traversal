@@ -4,7 +4,15 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { remainingSeconds, finalizeAttempt } from "@/lib/proctoredScoring";
 import type { ProctoredViolationType } from "@/types";
 
-const VALID_TYPES: ProctoredViolationType[] = ["tab_switch", "fullscreen_exit", "copy_attempt", "camera_off"];
+const VALID_TYPES: ProctoredViolationType[] = [
+  "tab_switch",
+  "fullscreen_exit",
+  "copy_attempt",
+  "camera_off",
+  "phone_detected",
+  "multiple_people",
+  "talking_detected",
+];
 
 // POST /api/proctored-tests/[id]/attempts/[attemptId]/violations { violation_type }
 // Logs one violation row and increments violation_count server-side

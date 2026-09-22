@@ -21,6 +21,9 @@ const VIOLATION_LABEL: Record<string, string> = {
   fullscreen_exit: "Fullscreen exit",
   copy_attempt: "Copy attempt",
   camera_off: "Camera off",
+  phone_detected: "Phone visible",
+  multiple_people: "Multiple people",
+  talking_detected: "Talking detected",
 };
 
 function TestDetail({ testId }: { testId: string }) {

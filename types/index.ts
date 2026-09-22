@@ -230,7 +230,14 @@ export interface AptitudeAttemptRollup {
 
 export type ProctoredAttemptStatus = "in_progress" | "submitted" | "auto_submitted_violation" | "expired";
 
-export type ProctoredViolationType = "tab_switch" | "fullscreen_exit" | "copy_attempt" | "camera_off";
+export type ProctoredViolationType =
+  | "tab_switch"
+  | "fullscreen_exit"
+  | "copy_attempt"
+  | "camera_off"
+  | "phone_detected"
+  | "multiple_people"
+  | "talking_detected";
 
 export type ProctoredTimerMode = "combined" | "per_section";
 

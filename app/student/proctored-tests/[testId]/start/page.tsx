@@ -156,7 +156,13 @@ export default function ProctoredTestStartPage() {
             After <strong className="text-fg">{test.max_violations_before_autosubmit}</strong> violations, the test
             auto-submits immediately with whatever you've answered so far.
           </li>
-          {test.require_camera && <li>Your camera must stay on and visible for the whole test.</li>}
+          {test.require_camera && (
+            <li>
+              Your camera must stay on and visible for the whole test. It also checks for a phone in view, a second
+              person/face, and sustained talking — each is logged as a violation; turning your head away just shows a
+              reminder to face the screen.
+            </li>
+          )}
           {test.require_mic && <li>Your microphone must stay on for the whole test.</li>}
           <li className="text-fg-subtle">
             This only detects activity inside this browser tab — it cannot see other applications, other monitors, or

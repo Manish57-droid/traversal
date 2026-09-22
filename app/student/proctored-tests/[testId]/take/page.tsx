@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Lock } from "lucide-react";
 import SectionQuestionPalette from "@/components/proctored-take/SectionQuestionPalette";
 import BasicCalculator from "@/components/proctored-take/BasicCalculator";
+import { useCameraProctoring } from "@/components/proctored-take/useCameraProctoring";
 import { remainingSeconds as computeRemaining } from "@/lib/testTiming";
 import type {
   ProctoredAttemptQuestion,
@@ -41,6 +42,7 @@ export default function ProctoredTestTakePage() {
   const params = useParams<{ testId: string }>();
   const router = useRouter();
   const contentRef = useRef<HTMLDivElement>(null);
+  const cameraVideoRef = useRef<HTMLVideoElement>(null);
 
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -458,7 +460,11 @@ export default function ProctoredTestTakePage() {
     };
   }, [logViolation, questions.length]);
 
-  // Camera-off detection (only when this test requires a camera).
+  // Camera-off detection (only when this test requires a camera). Also
+  // attaches the video track to a hidden <video> element so the
+  // camera-vision proctoring hook below has frames to analyze — this
+  // stream was previously grabbed only to watch for it stopping/muting,
+  // never actually read.
   useEffect(() => {
     if (!test?.require_camera && !test?.require_mic) return;
     let stream: MediaStream | null = null;
@@ -475,6 +481,10 @@ export default function ProctoredTestTakePage() {
           track.addEventListener("ended", () => logViolation("camera_off"));
           track.addEventListener("mute", () => logViolation("camera_off"));
         });
+        if (cameraVideoRef.current && test?.require_camera) {
+          cameraVideoRef.current.srcObject = s;
+          cameraVideoRef.current.play().catch(() => {});
+        }
       })
       .catch(() => logViolation("camera_off"));
     return () => {
@@ -482,6 +492,18 @@ export default function ProctoredTestTakePage() {
       stream?.getTracks().forEach((t) => t.stop());
     };
   }, [test?.require_camera, test?.require_mic, logViolation]);
+
+  // Camera-vision checks (phone visible, a second face, sustained
+  // mouth movement read as talking, head turned away) — see
+  // components/proctored-take/useCameraProctoring.ts for the
+  // heuristics and their honestly-disclosed limits. Only three of the
+  // four count as violations; looking away is a toast nudge only.
+  useCameraProctoring(cameraVideoRef, !!test?.require_camera, {
+    onPhoneDetected: () => logViolation("phone_detected"),
+    onMultiplePeople: () => logViolation("multiple_people"),
+    onTalkingDetected: () => logViolation("talking_detected"),
+    onLookingAway: () => showToast("Please face the screen and keep your head steady."),
+  });
 
   async function persistAnswer(questionId: string, selectedOption: number | null, markedForReview?: boolean) {
     if (!attemptIdRef.current) return;
@@ -601,6 +623,21 @@ export default function ProctoredTestTakePage() {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-bg">
+      {/* Off-screen, never rendered visibly — exists purely so
+          useCameraProctoring has frames to read from. Muted/playsInline
+          so autoplay isn't blocked; positioned off-canvas rather than
+          display:none since some browsers pause frame delivery on
+          undisplayed video elements. */}
+      {test.require_camera && (
+        <video
+          ref={cameraVideoRef}
+          muted
+          playsInline
+          aria-hidden
+          className="pointer-events-none absolute -left-[9999px] -top-[9999px] h-px w-px opacity-0"
+        />
+      )}
+
       <div className="flex items-center justify-between border-b border-line/70 bg-surface/80 px-4 py-3 backdrop-blur sm:px-6">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-fg">{studentName}</p>
