@@ -26,6 +26,12 @@ export interface AppUser {
    * or a reset) and the user hasn't replaced it yet — middleware
    * redirects to /change-password until they do. */
   force_password_change: boolean;
+  /** True once the student has dismissed/clicked the one-time
+   * "check out Interview Prep" welcome tip — see
+   * components/WelcomeInterviewPrepTip.tsx. Existing accounts were
+   * backfilled to true (already seen) when this column was added;
+   * only new signups start false. */
+  interview_prep_tip_seen: boolean;
 }
 
 export interface Question {
