@@ -85,13 +85,24 @@ export async function middleware(req: NextRequest) {
   );
   const { data: profile } = await admin
     .from("users")
-    .select("role, status")
+    .select("role, status, force_password_change")
     .eq("id", user.id)
     .single();
 
   if (!profile || profile.status !== "approved") {
     if (pathname === "/pending-approval") return buildResponse();
     return NextResponse.redirect(new URL("/pending-approval", req.url));
+  }
+
+  // An admin-set password (new account or a reset — see
+  // app/api/admin/users/route.ts and .../[id]/reset-password) must be
+  // replaced before anything else is reachable.
+  if (pathname === "/change-password") {
+    if (!profile.force_password_change) return NextResponse.redirect(new URL("/dashboard", req.url));
+    return buildResponse();
+  }
+  if (profile.force_password_change) {
+    return NextResponse.redirect(new URL("/change-password", req.url));
   }
 
   if (pathname.startsWith("/admin") && profile.role !== "admin") {

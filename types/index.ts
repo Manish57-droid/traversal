@@ -22,6 +22,10 @@ export interface AppUser {
   role: UserRole;
   status: UserStatus;
   created_at: string;
+  /** True when the current password was set by an admin (new account
+   * or a reset) and the user hasn't replaced it yet — middleware
+   * redirects to /change-password until they do. */
+  force_password_change: boolean;
 }
 
 export interface Question {

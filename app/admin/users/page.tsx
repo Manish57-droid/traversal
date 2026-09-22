@@ -12,6 +12,15 @@ const STATUS_STYLE: Record<UserStatus, string> = {
   rejected: "border-red-500/40 text-red-400",
 };
 
+// Convenience prefill only — the admin can edit it before submitting.
+// Meets lib/passwordStrength.ts's rule (8+ chars, at least one digit).
+function generateTempPassword() {
+  const words = ["Copper", "Circuit", "Vertex", "Sprint", "Pixel", "Nimbus", "Cobalt", "Delta"];
+  const word = words[Math.floor(Math.random() * words.length)];
+  const digits = Math.floor(1000 + Math.random() * 9000);
+  return `${word}${digits}!`;
+}
+
 interface BlastRadius {
   user: { id: string; full_name: string | null; email: string; role: UserRole };
   classes_owned_count: number;
@@ -132,12 +141,216 @@ function DeleteUserDialog({
   );
 }
 
+// Shared "here are the credentials, copy them now" confirmation —
+// shown once after create/reset since the password is never
+// retrievable again afterward (Supabase Auth only ever stores its hash).
+function CredentialsConfirmation({
+  email,
+  password,
+  onDone,
+}: {
+  email: string;
+  password: string;
+  onDone: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-fg">
+        Share these with the user — they'll be asked to set their own password the first time they sign in.
+      </p>
+      <div className="space-y-2 rounded-lg border border-line/70 bg-surface-2 p-3 font-mono text-sm">
+        <p className="text-fg-muted">
+          Email <span className="text-fg">{email}</span>
+        </p>
+        <p className="text-fg-muted">
+          Password <span className="text-fg">{password}</span>
+        </p>
+      </div>
+      <div className="flex justify-end">
+        <button onClick={onDone} className="btn-primary py-1.5 text-xs">
+          Done
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AddUserDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState(generateTempPassword());
+  const [role, setRole] = useState<UserRole>("student");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [created, setCreated] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full_name: fullName, email, password, role }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setCreated(true);
+      onCreated();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-4 backdrop-blur">
+      <div className="card w-full max-w-md space-y-4 p-6">
+        <div>
+          <p className="font-display text-lg text-fg">Add a user</p>
+          <p className="mt-1 text-xs text-fg-subtle">Creates the login directly — approved immediately, no sign-up needed.</p>
+        </div>
+
+        {created ? (
+          <CredentialsConfirmation email={email} password={password} onDone={onClose} />
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs text-fg-muted">Full name</label>
+              <input required className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} autoFocus />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-fg-muted">Email</label>
+              <input required type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-fg-muted">Temporary password</label>
+              <div className="flex items-center gap-2">
+                <input required className="input font-mono" value={password} onChange={(e) => setPassword(e.target.value)} />
+                <button
+                  type="button"
+                  onClick={() => setPassword(generateTempPassword())}
+                  className="btn-secondary shrink-0 py-2.5 text-xs"
+                >
+                  Generate
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-fg-muted">Role</label>
+              <select className="input" value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
+                {ROLES.map((r) => (
+                  <option key={r} value={r} className="capitalize">{r}</option>
+                ))}
+              </select>
+            </div>
+
+            {error && <p className="text-sm text-red-400">{error}</p>}
+
+            <div className="flex justify-end gap-3 pt-1">
+              <button type="button" onClick={onClose} className="btn-secondary py-1.5 text-xs">
+                Cancel
+              </button>
+              <button type="submit" disabled={submitting} className="btn-primary py-1.5 text-xs">
+                {submitting ? "Creating..." : "Create user"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ResetPasswordDialog({
+  user,
+  onClose,
+}: {
+  user: { id: string; email: string; full_name: string | null };
+  onClose: () => void;
+}) {
+  const [password, setPassword] = useState(generateTempPassword());
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setDone(true);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-4 backdrop-blur">
+      <div className="card w-full max-w-md space-y-4 p-6">
+        <div>
+          <p className="font-display text-lg text-fg">Reset password</p>
+          <p className="mt-1 text-xs text-fg-subtle">
+            For <span className="text-fg">{user.full_name || user.email}</span>
+          </p>
+        </div>
+
+        {done ? (
+          <CredentialsConfirmation email={user.email} password={password} onDone={onClose} />
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs text-fg-muted">New temporary password</label>
+              <div className="flex items-center gap-2">
+                <input required autoFocus className="input font-mono" value={password} onChange={(e) => setPassword(e.target.value)} />
+                <button
+                  type="button"
+                  onClick={() => setPassword(generateTempPassword())}
+                  className="btn-secondary shrink-0 py-2.5 text-xs"
+                >
+                  Generate
+                </button>
+              </div>
+            </div>
+
+            {error && <p className="text-sm text-red-400">{error}</p>}
+
+            <div className="flex justify-end gap-3 pt-1">
+              <button type="button" onClick={onClose} className="btn-secondary py-1.5 text-xs">
+                Cancel
+              </button>
+              <button type="submit" disabled={submitting} className="btn-primary py-1.5 text-xs">
+                {submitting ? "Resetting..." : "Reset password"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | UserStatus>("all");
+  const [roleFilter, setRoleFilter] = useState<"all" | UserRole>("all");
+  const [search, setSearch] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [resetTarget, setResetTarget] = useState<AppUser | null>(null);
 
   async function load() {
     const res = await fetch("/api/admin/users");
@@ -167,34 +380,70 @@ export default function AdminUsersPage() {
     setDeleteTargetId(null);
   }
 
-  const filtered = users.filter((u) => filter === "all" || u.status === filter);
+  const normalizedSearch = search.trim().toLowerCase();
+  const filtered = users.filter((u) => {
+    if (filter !== "all" && u.status !== filter) return false;
+    if (roleFilter !== "all" && u.role !== roleFilter) return false;
+    if (normalizedSearch) {
+      const haystack = `${u.full_name ?? ""} ${u.email}`.toLowerCase();
+      if (!haystack.includes(normalizedSearch)) return false;
+    }
+    return true;
+  });
   const pendingCount = users.filter((u) => u.status === "pending").length;
   const adminCount = users.filter((u) => u.role === "admin").length;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl text-fg sm:text-3xl">Users</h1>
-        <p className="mt-1 text-sm text-fg-muted">
-          Approve new sign-ups and manage roles. {pendingCount > 0 && `${pendingCount} waiting on you.`}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl text-fg sm:text-3xl">Users</h1>
+          <p className="mt-1 text-sm text-fg-muted">
+            Approve new sign-ups and manage roles. {pendingCount > 0 && `${pendingCount} waiting on you.`}
+          </p>
+        </div>
+        <button onClick={() => setShowAddUser(true)} className="btn-primary shrink-0 py-2 text-xs">
+          + Add user
+        </button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {(["all", "pending", "approved", "rejected"] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`rounded-full border px-3 py-1.5 text-xs capitalize transition-colors ${
-              filter === f
-                ? "border-success/60 bg-success/10 text-success"
-                : "border-line/70 text-fg-muted hover:border-line"
-            }`}
-          >
-            {f}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          className="input w-auto min-w-[200px] flex-1 py-1.5 text-xs"
+          placeholder="Search by name or email…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select
+          className="input w-auto py-1.5 text-xs"
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value as "all" | UserRole)}
+        >
+          <option value="all">All roles</option>
+          {ROLES.map((r) => (
+            <option key={r} value={r} className="capitalize">{r}</option>
+          ))}
+        </select>
+        <div className="flex flex-wrap gap-2">
+          {(["all", "pending", "approved", "rejected"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`rounded-full border px-3 py-1.5 text-xs capitalize transition-colors ${
+                filter === f
+                  ? "border-success/60 bg-success/10 text-success"
+                  : "border-line/70 text-fg-muted hover:border-line"
+              }`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
       </div>
+
+      <p className="text-xs text-fg-subtle">
+        {filtered.length} of {users.length} user{users.length === 1 ? "" : "s"}
+      </p>
 
       {loading ? (
         <p className="text-sm text-fg-muted">Loading…</p>
@@ -253,6 +502,12 @@ export default function AdminUsersPage() {
                           </button>
                         )}
                         <button
+                          onClick={() => setResetTarget(u)}
+                          className="text-xs text-fg-muted hover:text-fg"
+                        >
+                          Reset password
+                        </button>
+                        <button
                           onClick={() => setDeleteTargetId(u.id)}
                           disabled={isSelf || isLastAdmin}
                           title={
@@ -288,6 +543,20 @@ export default function AdminUsersPage() {
           userId={deleteTargetId}
           onClose={() => setDeleteTargetId(null)}
           onDeleted={handleDeleted}
+        />
+      )}
+
+      {showAddUser && (
+        <AddUserDialog
+          onClose={() => setShowAddUser(false)}
+          onCreated={load}
+        />
+      )}
+
+      {resetTarget && (
+        <ResetPasswordDialog
+          user={resetTarget}
+          onClose={() => setResetTarget(null)}
         />
       )}
     </div>

@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { passwordStrengthError } from "@/lib/passwordStrength";
 import type { UserRole, UserStatus } from "@/types";
 
 // GET   /api/admin/users -> list every user (role + approval status)
+// POST  /api/admin/users { full_name, email, password, role } -> admin
+//        creates a login directly (any role, including admin) — no
+//        self-serve sign-up/approval flow. The account is approved
+//        immediately and flagged force_password_change so the admin-
+//        set password must be replaced on first sign-in (see
+//        middleware.ts and /change-password).
 // PATCH /api/admin/users { id, role?, status? } -> change a user's role
 //        and/or approve/reject their account. Admin only.
 export async function GET() {
@@ -18,6 +25,47 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ users: data });
+}
+
+const CREATABLE_ROLES: UserRole[] = ["student", "teacher", "admin"];
+
+export async function POST(req: Request) {
+  const admin = await requireRole(["admin"]).catch(() => null);
+  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const { full_name, email, password, role } = await req.json();
+  if (!full_name?.trim() || !email?.trim() || !password || !CREATABLE_ROLES.includes(role)) {
+    return NextResponse.json({ error: "full_name, email, password, and a valid role are required." }, { status: 400 });
+  }
+  const strengthError = passwordStrengthError(password);
+  if (strengthError) return NextResponse.json({ error: strengthError }, { status: 400 });
+
+  const supabase = supabaseAdmin();
+
+  // handle_new_user (the on_auth_user_created trigger) fires on this
+  // insert and creates the public.users row itself — it only ever
+  // assigns 'teacher' or 'student' from requested_role (never 'admin'
+  // from client-supplied metadata, by design, since that same trigger
+  // path is reachable from the public sign-up form). The explicit
+  // update right after is what actually applies the admin's chosen
+  // role — including 'admin' — plus approval and the forced-change flag.
+  const { data: created, error: createError } = await supabase.auth.admin.createUser({
+    email: email.trim(),
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: full_name.trim(), requested_role: role === "teacher" ? "teacher" : "student" },
+  });
+  if (createError) return NextResponse.json({ error: createError.message }, { status: 400 });
+
+  const { data: userRow, error: updateError } = await supabase
+    .from("users")
+    .update({ role, status: "approved", force_password_change: true })
+    .eq("id", created.user.id)
+    .select()
+    .single();
+  if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
+
+  return NextResponse.json({ user: userRow }, { status: 201 });
 }
 
 const VALID_ROLES: UserRole[] = ["student", "teacher", "admin"];
