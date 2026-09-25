@@ -92,7 +92,7 @@ export function useCameraProctoring(
 
     async function init() {
       try {
-        const fileset = await FilesetResolver.forVisionTasks("/mediapipe/wasm");
+        const fileset = await FilesetResolver.forVisionTasks(WASM_BASE_URL);
         const [fl, od] = await Promise.all([
           FaceLandmarker.createFromOptions(fileset, {
             baseOptions: { modelAssetPath: FACE_LANDMARKER_MODEL_URL, delegate: "GPU" },

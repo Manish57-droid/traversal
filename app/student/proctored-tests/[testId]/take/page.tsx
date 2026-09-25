@@ -635,19 +635,15 @@ export default function ProctoredTestTakePage() {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-bg">
-      {/* Off-screen, never rendered visibly — exists purely so
-          useCameraProctoring has frames to read from. Muted/playsInline
-          so autoplay isn't blocked; positioned off-canvas rather than
-          display:none since some browsers pause frame delivery on
-          undisplayed video elements. */}
+      {/* Visible in a corner so the student can see what the proctoring
+          check sees — muted/playsInline so autoplay isn't blocked. */}
       {test.require_camera && (
-        <video
-          ref={cameraVideoRef}
-          muted
-          playsInline
-          aria-hidden
-          className="pointer-events-none absolute -left-[9999px] -top-[9999px] h-px w-px opacity-0"
-        />
+        <div className="pointer-events-none fixed bottom-4 left-4 z-[60] overflow-hidden rounded-lg border border-line/70 bg-bg shadow-xl">
+          <video ref={cameraVideoRef} muted playsInline className="h-24 w-32 object-cover sm:h-28 sm:w-36" />
+          <span className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-black/50 px-1.5 py-0.5 text-[10px] text-white">
+            <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> Live
+          </span>
+        </div>
       )}
 
       <div className="flex items-center justify-between border-b border-line/70 bg-surface/80 px-4 py-3 backdrop-blur sm:px-6">

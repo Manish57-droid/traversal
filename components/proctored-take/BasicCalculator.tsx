@@ -80,7 +80,11 @@ export default function BasicCalculator() {
   }
 
   return (
-    <div className="card w-56 space-y-2 p-3">
+    // Fixed to a screen corner rather than inline — this used to sit
+    // directly in the question header's flex row and shove the whole
+    // card open when clicked; floating it keeps the question layout
+    // stable regardless of whether the calculator is open.
+    <div className="card fixed bottom-4 right-4 z-[60] w-56 space-y-2 p-3 shadow-xl">
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium text-fg">Calculator</p>
         <button type="button" onClick={() => setOpen(false)} aria-label="Close calculator" className="text-fg-muted hover:text-fg">
