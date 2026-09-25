@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, Download } from "lucide-react";
 import type { ProctoredSetWithCount, ProctoredSubjectWithCount } from "@/types";
+import SetQuestionsManager from "./SetQuestionsManager";
 
 const EMPTY_SUBJECT_FORM = { name: "" };
 const EMPTY_SET_FORM = { name: "" };
@@ -27,6 +28,7 @@ export default function SubjectSetManager({
   const [editingSetId, setEditingSetId] = useState<string | null>(null);
   const [setError, setSetError] = useState<string | null>(null);
   const [savingSet, setSavingSet] = useState(false);
+  const [managingSetId, setManagingSetId] = useState<string | null>(null);
 
   function cancelSubjectEdit() {
     setEditingSubjectId(null);
@@ -225,38 +227,56 @@ export default function SubjectSetManager({
                 <p className="rounded-lg border border-line/70 p-3 text-center text-xs text-fg-muted">No sets yet.</p>
               )}
               {sets.map((set) => (
-                <div key={set.id} className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-sm">
-                  <span className="text-fg">
-                    {set.name} <span className="text-xs text-fg-subtle">({set.question_count})</span>
-                  </span>
-                  <div className="flex items-center gap-3 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => downloadSet(set.id)}
-                      disabled={set.question_count === 0}
-                      className="flex items-center gap-1 text-fg-muted hover:text-fg disabled:opacity-40"
-                      title="Download this set's questions"
-                    >
-                      <Download className="h-3.5 w-3.5" /> Export
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingSetId(set.id);
-                        setSetForm({ name: set.name });
-                      }}
-                      className="text-fg-muted hover:text-fg"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSetDelete(set.id)}
-                      className="text-fg-subtle hover:text-red-400"
-                    >
-                      Delete
-                    </button>
+                <div key={set.id} className="rounded-lg bg-surface-2 px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-fg">
+                      {set.name} <span className="text-xs text-fg-subtle">({set.question_count})</span>
+                    </span>
+                    <div className="flex items-center gap-3 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setManagingSetId((cur) => (cur === set.id ? null : set.id))}
+                        className={managingSetId === set.id ? "text-accent" : "text-fg-muted hover:text-fg"}
+                      >
+                        {managingSetId === set.id ? "Close" : "Manage questions"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadSet(set.id)}
+                        disabled={set.question_count === 0}
+                        className="flex items-center gap-1 text-fg-muted hover:text-fg disabled:opacity-40"
+                        title="Download this set's questions"
+                      >
+                        <Download className="h-3.5 w-3.5" /> Export
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingSetId(set.id);
+                          setSetForm({ name: set.name });
+                        }}
+                        className="text-fg-muted hover:text-fg"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetDelete(set.id)}
+                        className="text-fg-subtle hover:text-red-400"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
+                  {managingSetId === set.id && (
+                    <div className="mt-2">
+                      <SetQuestionsManager
+                        setId={set.id}
+                        onClose={() => setManagingSetId(null)}
+                        onSaved={onReload}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
