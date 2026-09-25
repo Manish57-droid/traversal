@@ -20,7 +20,9 @@ interface MyAttempt {
   id: string;
   status: string;
   score: number | null;
+  max_score: number | null;
   total_questions: number | null;
+  grading_status: "not_required" | "pending" | "graded";
 }
 
 export default function ProctoredTestStartPage() {
@@ -118,10 +120,13 @@ export default function ProctoredTestStartPage() {
     return (
       <div className="card mx-auto max-w-lg space-y-2 p-6 text-center">
         <p className="font-medium text-fg">You've already completed this test.</p>
-        {myAttempt.score !== null && myAttempt.total_questions !== null && (
+        {myAttempt.score !== null && (myAttempt.max_score ?? myAttempt.total_questions) !== null && (
           <p className="text-2xl font-display text-fg">
-            {myAttempt.score}/{myAttempt.total_questions}
+            {myAttempt.score}/{myAttempt.max_score ?? myAttempt.total_questions}
           </p>
+        )}
+        {myAttempt.grading_status === "pending" && (
+          <p className="text-xs text-warn">Some theory answers are still awaiting your teacher's grading.</p>
         )}
       </div>
     );

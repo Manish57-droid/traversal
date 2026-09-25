@@ -64,9 +64,12 @@ export async function GET(req: Request) {
   sheet.columns = [
     { header: "Subject", key: "subject", width: 18 },
     { header: "Set", key: "set", width: 18 },
+    { header: "Type", key: "type", width: 10 },
     { header: "Prompt", key: "prompt", width: 50 },
     ...optionColumns,
     { header: "Correct option", key: "correct", width: 30 },
+    { header: "Max marks", key: "max_marks", width: 12 },
+    { header: "Min word count", key: "min_word_count", width: 14 },
     { header: "Explanation", key: "explanation", width: 40 },
     { header: "Difficulty", key: "difficulty", width: 12 },
   ];
@@ -77,8 +80,11 @@ export async function GET(req: Request) {
     const row: Record<string, unknown> = {
       subject: q.proctored_sets?.proctored_subjects?.name ?? "",
       set: q.proctored_sets?.name ?? "",
+      type: q.question_type ?? "mcq",
       prompt: q.prompt,
-      correct: options[q.correct_option] ?? "",
+      correct: q.correct_option !== null && q.correct_option !== undefined ? options[q.correct_option] ?? "" : "",
+      max_marks: q.max_marks ?? "",
+      min_word_count: q.min_word_count ?? "",
       explanation: q.explanation ?? "",
       difficulty: q.difficulty,
     };

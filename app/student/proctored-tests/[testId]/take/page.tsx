@@ -52,11 +52,14 @@ export default function ProctoredTestTakePage() {
   const [questions, setQuestions] = useState<ProctoredAttemptQuestion[]>([]);
   const [sections, setSections] = useState<ProctoredTestSection[]>([]);
   const [sectionAttempts, setSectionAttempts] = useState<ProctoredSectionAttempt[]>([]);
-  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [answers, setAnswers] = useState<Record<string, number | string>>({});
   const [questionStatus, setQuestionStatus] = useState<Record<string, ProctoredQuestionStatus>>({});
   const [currentSectionId, setCurrentSectionId] = useState<string | null>(null);
   const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
-  const [draftOption, setDraftOption] = useState<number | null>(null);
+  /** The selected MCQ option index, or the in-progress theory answer
+   * text — provisional until Save & Next / Mark for Review persists it,
+   * same NEET-style "not saved until you act" flow either way. */
+  const [draftAnswer, setDraftAnswer] = useState<number | string | null>(null);
   const [remaining, setRemaining] = useState(0);
   const [violationCount, setViolationCount] = useState(0);
   const [toast, setToast] = useState<{ text: string; key: number } | null>(null);
@@ -87,13 +90,14 @@ export default function ProctoredTestTakePage() {
   }, [toast]);
 
   const goToResult = useCallback(
-    (status: string, score: number | null, total: number | null) => {
+    (status: string, score: number | null, total: number | null, gradingStatus?: string) => {
       finishedRef.current = true;
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
       const q = new URLSearchParams({
         status,
         score: score === null ? "" : String(score),
         total: total === null ? "" : String(total),
+        ...(gradingStatus ? { grading: gradingStatus } : {}),
       });
       router.replace(`/student/proctored-tests/${params.testId}/result?${q.toString()}`);
     },
@@ -128,7 +132,7 @@ export default function ProctoredTestTakePage() {
   const applyLoadResponse = useCallback(
     (d: any) => {
       if (d.attempt.status !== "in_progress") {
-        goToResult(d.attempt.status, d.attempt.score, d.attempt.total_questions);
+        goToResult(d.attempt.status, d.attempt.score, d.attempt.max_score ?? d.attempt.total_questions, d.attempt.grading_status);
         return;
       }
       setAttemptId(d.attempt.id);
@@ -214,7 +218,7 @@ export default function ProctoredTestTakePage() {
   // (or Mark for Review & Next) is pressed.
   useEffect(() => {
     if (!currentQuestionId) return;
-    setDraftOption(answers[currentQuestionId] ?? null);
+    setDraftAnswer(answers[currentQuestionId] ?? null);
 
     if (!questionStatus[currentQuestionId]?.visited && attemptIdRef.current) {
       setQuestionStatus((prev) => ({ ...prev, [currentQuestionId]: { visited: true, marked_for_review: prev[currentQuestionId]?.marked_for_review ?? false } }));
@@ -236,7 +240,7 @@ export default function ProctoredTestTakePage() {
         method: "POST",
       });
       const data = await res.json();
-      goToResult(data.status, data.score, data.total_questions);
+      goToResult(data.status, data.score, data.max_score ?? data.total_questions, data.grading_status);
     } catch {
       finishedRef.current = false;
       setFinishing(false);
@@ -341,7 +345,7 @@ export default function ProctoredTestTakePage() {
         .then((d) => {
           if (finishedRef.current) return;
           if (d.attempt && d.attempt.status !== "in_progress") {
-            goToResult(d.attempt.status, d.attempt.score, d.attempt.total_questions);
+            goToResult(d.attempt.status, d.attempt.score, d.attempt.max_score ?? d.attempt.total_questions, d.attempt.grading_status);
             return;
           }
           setSectionAttempts(d.section_attempts ?? []);
@@ -382,7 +386,7 @@ export default function ProctoredTestTakePage() {
         if (data.autoSubmitted) {
           finishedRef.current = true;
           const result = data.result ?? { status: "auto_submitted_violation", score: null, total_questions: null };
-          goToResult(result.status, result.score, result.total_questions);
+          goToResult(result.status, result.score, result.max_score ?? result.total_questions, result.grading_status);
           return;
         }
         const max = testRef.current?.max_violations_before_autosubmit ?? 0;
@@ -505,7 +509,7 @@ export default function ProctoredTestTakePage() {
     onLookingAway: () => showToast("Please face the screen and keep your head steady."),
   });
 
-  async function persistAnswer(questionId: string, selectedOption: number | null, markedForReview?: boolean) {
+  async function persistAnswer(questionId: string, selectedOption: number | string | null, markedForReview?: boolean) {
     if (!attemptIdRef.current) return;
     try {
       const res = await fetch(`/api/proctored-tests/${params.testId}/attempts/${attemptIdRef.current}`, {
@@ -520,7 +524,7 @@ export default function ProctoredTestTakePage() {
       });
       if (res.status === 409) {
         const data = await res.json();
-        goToResult(data.status, data.score, data.total_questions);
+        goToResult(data.status, data.score, data.max_score ?? data.total_questions, data.grading_status);
       }
     } catch {
       // Best-effort — the next successful action (or the final submit)
@@ -535,18 +539,26 @@ export default function ProctoredTestTakePage() {
     if (idx >= 0 && idx < sectionQs.length - 1) setCurrentQuestionId(sectionQs[idx + 1].id);
   }
 
+  // A theory draft is a string — only worth saving once it has actual
+  // content; an MCQ draft is an option index, valid at 0. Blank/whitespace-
+  // only text is treated the same as "nothing selected".
+  function hasDraftContent(draft: number | string | null) {
+    if (draft === null) return false;
+    return typeof draft === "string" ? draft.trim().length > 0 : true;
+  }
+
   async function handleSaveAndNext() {
     if (!currentQuestionId) return;
-    if (draftOption !== null) {
-      setAnswers((prev) => ({ ...prev, [currentQuestionId]: draftOption }));
-      await persistAnswer(currentQuestionId, draftOption);
+    if (hasDraftContent(draftAnswer)) {
+      setAnswers((prev) => ({ ...prev, [currentQuestionId]: draftAnswer! }));
+      await persistAnswer(currentQuestionId, draftAnswer);
     }
     goToNextQuestionInSection();
   }
 
   async function handleClearResponse() {
     if (!currentQuestionId) return;
-    setDraftOption(null);
+    setDraftAnswer(null);
     setAnswers((prev) => {
       const next = { ...prev };
       delete next[currentQuestionId];
@@ -557,11 +569,11 @@ export default function ProctoredTestTakePage() {
 
   async function handleMarkForReviewAndNext() {
     if (!currentQuestionId) return;
-    if (draftOption !== null) {
-      setAnswers((prev) => ({ ...prev, [currentQuestionId]: draftOption }));
+    if (hasDraftContent(draftAnswer)) {
+      setAnswers((prev) => ({ ...prev, [currentQuestionId]: draftAnswer! }));
     }
     setQuestionStatus((prev) => ({ ...prev, [currentQuestionId]: { visited: true, marked_for_review: true } }));
-    await persistAnswer(currentQuestionId, draftOption, true);
+    await persistAnswer(currentQuestionId, hasDraftContent(draftAnswer) ? draftAnswer : null, true);
     goToNextQuestionInSection();
   }
 
@@ -709,30 +721,52 @@ export default function ProctoredTestTakePage() {
                 />
               )}
               <p className="text-lg font-medium text-fg">{current.prompt}</p>
-              <div className="space-y-2">
-                {current.options.map((opt, i) => {
-                  const selected = draftOption === i;
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setDraftOption(i)}
-                      className={`flex w-full items-center gap-3 rounded-lg border px-4 py-2.5 text-left text-sm transition-colors ${
-                        selected ? "border-success/60 bg-success/10 text-success" : "border-line/70 hover:border-line text-fg"
-                      }`}
-                    >
-                      <span
-                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                          selected ? "border-success bg-success" : "border-line"
+              {current.question_type === "theory" ? (
+                <div className="space-y-1.5">
+                  <textarea
+                    className="input min-h-[200px]"
+                    placeholder="Write your answer here…"
+                    value={typeof draftAnswer === "string" ? draftAnswer : ""}
+                    onChange={(e) => setDraftAnswer(e.target.value)}
+                  />
+                  {(() => {
+                    const wordCount = (typeof draftAnswer === "string" ? draftAnswer : "").trim().split(/\s+/).filter(Boolean).length;
+                    const min = current.min_word_count ?? 150;
+                    const met = wordCount >= min;
+                    return (
+                      <p className={`text-xs ${met ? "text-success" : "text-fg-subtle"}`}>
+                        {wordCount} word{wordCount === 1 ? "" : "s"} — aim for at least {min}
+                        {current.max_marks !== null && ` · worth ${current.max_marks} mark${current.max_marks === 1 ? "" : "s"}, graded manually`}
+                      </p>
+                    );
+                  })()}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {current.options.map((opt, i) => {
+                    const selected = draftAnswer === i;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setDraftAnswer(i)}
+                        className={`flex w-full items-center gap-3 rounded-lg border px-4 py-2.5 text-left text-sm transition-colors ${
+                          selected ? "border-success/60 bg-success/10 text-success" : "border-line/70 hover:border-line text-fg"
                         }`}
                       >
-                        {selected && <span className="h-1.5 w-1.5 rounded-full bg-ink-fixed" />}
-                      </span>
-                      {opt}
-                    </button>
-                  );
-                })}
-              </div>
+                        <span
+                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                            selected ? "border-success bg-success" : "border-line"
+                          }`}
+                        >
+                          {selected && <span className="h-1.5 w-1.5 rounded-full bg-ink-fixed" />}
+                        </span>
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
               <div className="flex flex-wrap items-center gap-2 pt-2">
                 <button type="button" onClick={handleSaveAndNext} className="btn-primary py-1.5 text-xs">

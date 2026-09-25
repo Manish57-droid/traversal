@@ -7,12 +7,21 @@
 export interface ReviewQuestion {
   id: string;
   prompt: string;
+  /** MCQ only — empty for a theory question. */
   options: string[];
-  correct_option: number;
+  /** MCQ only — null for a theory question. */
+  correct_option: number | null;
   explanation: string | null;
-  selected_option: number | null;
+  /** The selected option's index for an MCQ, the written text for a
+   * theory question, or null if unanswered. */
+  selected_option: number | string | null;
   /** Proctored-only — Aptitude questions never have one. */
   image_url?: string | null;
+  /** Proctored-only — Aptitude has no theory questions. */
+  question_type?: "mcq" | "theory";
+  min_word_count?: number | null;
+  max_marks?: number | null;
+  marks_awarded?: number | null;
 }
 
 export default function TestReviewView({
@@ -39,6 +48,34 @@ export default function TestReviewView({
 
       <div className="space-y-3">
         {questions.map((q, i) => {
+          if (q.question_type === "theory") {
+            const answerText = typeof q.selected_option === "string" ? q.selected_option : "";
+            const wordCount = answerText.trim().split(/\s+/).filter(Boolean).length;
+            const graded = q.marks_awarded !== null && q.marks_awarded !== undefined;
+            return (
+              <div key={q.id} className="card space-y-3 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-medium text-fg">
+                    <span className="mr-2 text-fg-subtle">{i + 1}.</span>
+                    {q.prompt}
+                  </p>
+                  <span className="shrink-0 text-xs font-medium text-fg">
+                    {graded ? `${q.marks_awarded}/${q.max_marks} marks` : "Pending grading"}
+                  </span>
+                </div>
+                {answerText ? (
+                  <div className="space-y-1 rounded-lg border border-line/70 px-3 py-2 text-sm text-fg">
+                    <p className="whitespace-pre-wrap">{answerText}</p>
+                    <p className="text-xs text-fg-subtle">{wordCount} word{wordCount === 1 ? "" : "s"}</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-fg-subtle">You didn't answer this question.</p>
+                )}
+                {q.explanation && <p className="text-xs text-fg-muted">{q.explanation}</p>}
+              </div>
+            );
+          }
+
           const answered = q.selected_option !== null;
           const wasCorrect = answered && q.selected_option === q.correct_option;
           return (

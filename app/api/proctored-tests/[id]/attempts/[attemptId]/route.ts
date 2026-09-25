@@ -4,15 +4,18 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { remainingSeconds, finalizeAttempt } from "@/lib/proctoredScoring";
 
 // PATCH /api/proctored-tests/[id]/attempts/[attemptId]
-//   { question_id, selected_option?: number | null, visited?: boolean, marked_for_review?: boolean }
+//   { question_id, selected_option?: number | string | null, visited?: boolean, marked_for_review?: boolean }
 // Autosaves immediately on every Save & Next / Clear Response / Mark
 // for Review / plain navigation — so a violation-triggered auto-submit
 // (or a crashed tab) always reflects real saved state, never
-// client-only state. `selected_option: number` sets the answer;
-// `selected_option: null` clears it (Clear Response — answered becomes
-// false); omitting it leaves the existing answer untouched (e.g. a
-// pure "mark for review" or "visited" ping). `visited`/`marked_for_review`
-// merge into `question_status`, independent of the answer.
+// client-only state. `selected_option: number` sets an MCQ answer (the
+// selected option's index); `selected_option: string` sets a theory
+// answer (the student's written text — length-capped well past any
+// reasonable ~150-word answer, just as a sanity bound); `selected_option:
+// null` clears it (Clear Response — answered becomes false); omitting
+// it leaves the existing answer untouched (e.g. a pure "mark for
+// review" or "visited" ping). `visited`/`marked_for_review` merge into
+// `question_status`, independent of the answer.
 export async function PATCH(req: Request, { params }: { params: { id: string; attemptId: string } }) {
   const user = await getCurrentAppUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -21,8 +24,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string; at
   if (!question_id) {
     return NextResponse.json({ error: "question_id is required." }, { status: 400 });
   }
-  if (selected_option !== undefined && selected_option !== null && !Number.isInteger(selected_option)) {
-    return NextResponse.json({ error: "selected_option must be an integer or null." }, { status: 400 });
+  if (selected_option !== undefined && selected_option !== null) {
+    const isValidMcqAnswer = Number.isInteger(selected_option);
+    const isValidTheoryAnswer = typeof selected_option === "string" && selected_option.length <= 20000;
+    if (!isValidMcqAnswer && !isValidTheoryAnswer) {
+      return NextResponse.json({ error: "selected_option must be an integer, a string, or null." }, { status: 400 });
+    }
   }
 
   const supabase = supabaseAdmin();

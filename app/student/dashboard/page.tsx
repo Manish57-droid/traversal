@@ -135,7 +135,9 @@ export default function StudentDashboardPage() {
                     <td className="py-2 pr-3 text-fg-muted">{ATTEMPT_STATUS_LABEL[t.attempt_status] ?? t.attempt_status}</td>
                     <td className="py-2 pr-3">
                       {t.results_released ? (
-                        t.score !== null && t.total_questions !== null ? `${t.score}/${t.total_questions}` : "—"
+                        t.score !== null && (t.max_score ?? t.total_questions) !== null
+                          ? `${t.score}/${t.max_score ?? t.total_questions}`
+                          : "—"
                       ) : (
                         <span className="text-fg-subtle">Not released</span>
                       )}

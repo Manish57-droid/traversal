@@ -249,11 +249,23 @@ export type ProctoredTimerMode = "combined" | "per_section";
 
 export type ProctoredSectionAttemptStatus = "not_started" | "in_progress" | "completed";
 
+export type ProctoredQuestionType = "mcq" | "theory";
+
+export type ProctoredGradingStatus = "not_required" | "pending" | "graded";
+
 export interface ProctoredQuestion {
   id: string;
+  question_type: ProctoredQuestionType;
   prompt: string;
-  options: string[];
-  correct_option: number;
+  /** MCQ only — null for a theory question. */
+  options: string[] | null;
+  /** MCQ only — null for a theory question. */
+  correct_option: number | null;
+  /** Theory only — a guideline shown to the student, not enforced. */
+  min_word_count: number | null;
+  /** Theory only — the marks a teacher can award for this answer;
+   * an MCQ is always worth a fixed 1 point, so this stays null. */
+  max_marks: number | null;
   explanation: string | null;
   difficulty: QuestionDifficulty;
   created_by: string | null;
@@ -374,10 +386,19 @@ export interface ProctoredTestAttempt {
   test_id: string;
   student_id: string;
   status: ProctoredAttemptStatus;
-  answers: Record<string, number>;
+  /** An MCQ answer is the selected option's index; a theory answer is
+   * the student's written text. */
+  answers: Record<string, number | string>;
   question_status: Record<string, ProctoredQuestionStatus>;
   score: number | null;
+  /** Total possible marks (mcq count + sum of theory max_marks) — the
+   * denominator for `score`, distinct from `total_questions` once a
+   * theory question is worth more than 1 point. */
+  max_score: number | null;
   total_questions: number | null;
+  /** Marks a teacher has awarded per theory question so far. */
+  theory_grades: Record<string, number>;
+  grading_status: ProctoredGradingStatus;
   violation_count: number;
   time_taken_seconds: number | null;
   started_at: string;
@@ -405,8 +426,12 @@ export interface ProctoredTestSectionSummary {
  * group them without another round trip. */
 export interface ProctoredAttemptQuestion {
   id: string;
+  question_type: ProctoredQuestionType;
   prompt: string;
+  /** MCQ only — empty for a theory question. */
   options: string[];
+  min_word_count: number | null;
+  max_marks: number | null;
   difficulty: QuestionDifficulty;
   image_url: string | null;
   section_id: string;
@@ -420,7 +445,9 @@ export interface ProctoredViolationBreakdown {
   student_email: string;
   status: ProctoredAttemptStatus;
   score: number | null;
+  max_score: number | null;
   total_questions: number | null;
+  grading_status: ProctoredGradingStatus;
   violation_count: number;
   started_at: string;
   submitted_at: string | null;
@@ -439,6 +466,7 @@ export interface ProctoredLeaderboardRow {
   student_name: string;
   student_email: string;
   score: number;
+  max_score: number | null;
   total_questions: number | null;
   time_taken_seconds: number | null;
   submitted_at: string;
@@ -456,7 +484,9 @@ export interface StudentProctoredTestRow {
   results_released: boolean;
   attempt_status: ProctoredAttemptStatus | "not_started";
   score: number | null;
+  max_score: number | null;
   total_questions: number | null;
+  grading_status: ProctoredGradingStatus;
   submitted_at: string | null;
   rank: number | null;
 }

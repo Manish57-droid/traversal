@@ -3,6 +3,8 @@ import { getCurrentAppUser, requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import type { ProctoredQuestion } from "@/types";
 
+const DEFAULT_MIN_WORD_COUNT = 150;
+
 // GET    /api/proctored-questions?setId=...&subjectId=...&needsCategorization=true
 //         -> list every question in the bank, with the author's name
 //         and its set/subject resolved. Any signed-in role can read
@@ -19,9 +21,12 @@ import type { ProctoredQuestion } from "@/types";
 function mapQuestion(q: any): ProctoredQuestion {
   return {
     id: q.id,
+    question_type: q.question_type ?? "mcq",
     prompt: q.prompt,
     options: q.options,
     correct_option: q.correct_option,
+    min_word_count: q.min_word_count,
+    max_marks: q.max_marks,
     explanation: q.explanation,
     difficulty: q.difficulty,
     created_by: q.created_by,
@@ -43,6 +48,14 @@ function validateOptions(options: unknown, correct_option: unknown) {
   const idx = Number(correct_option);
   if (!Number.isInteger(idx) || idx < 0 || idx >= options.length) {
     return "correct_option must be a valid index into options.";
+  }
+  return null;
+}
+
+function validateMaxMarks(max_marks: unknown) {
+  const marks = Number(max_marks);
+  if (!Number.isFinite(marks) || marks <= 0) {
+    return "max_marks must be a positive number for a theory question.";
   }
   return null;
 }
@@ -84,13 +97,20 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { prompt, options, correct_option, explanation, difficulty, image_url, set_id } = body ?? {};
+  const { question_type, prompt, options, correct_option, min_word_count, max_marks, explanation, difficulty, image_url, set_id } =
+    body ?? {};
+  const type = question_type === "theory" ? "theory" : "mcq";
 
   if (!prompt?.trim()) {
     return NextResponse.json({ error: "Prompt is required." }, { status: 400 });
   }
-  const optionsError = validateOptions(options, correct_option);
-  if (optionsError) return NextResponse.json({ error: optionsError }, { status: 400 });
+  if (type === "mcq") {
+    const optionsError = validateOptions(options, correct_option);
+    if (optionsError) return NextResponse.json({ error: optionsError }, { status: 400 });
+  } else {
+    const marksError = validateMaxMarks(max_marks);
+    if (marksError) return NextResponse.json({ error: marksError }, { status: 400 });
+  }
   if (!set_id) {
     return NextResponse.json({ error: "A Subject/Set is required." }, { status: 400 });
   }
@@ -99,9 +119,12 @@ export async function POST(req: Request) {
   const { data, error } = await supabase
     .from("proctored_questions")
     .insert({
+      question_type: type,
       prompt: prompt.trim(),
-      options: (options as string[]).map((o) => o.trim()),
-      correct_option: Number(correct_option),
+      options: type === "mcq" ? (options as string[]).map((o) => o.trim()) : null,
+      correct_option: type === "mcq" ? Number(correct_option) : null,
+      min_word_count: type === "theory" ? Number(min_word_count) || DEFAULT_MIN_WORD_COUNT : null,
+      max_marks: type === "theory" ? Number(max_marks) : null,
       explanation: explanation?.trim() || null,
       difficulty: difficulty || "unknown",
       image_url: image_url || null,
@@ -121,10 +144,27 @@ export async function PATCH(req: Request) {
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { id, prompt, options, correct_option, explanation, difficulty, image_url, set_id } = body ?? {};
+  const { id, question_type, prompt, options, correct_option, min_word_count, max_marks, explanation, difficulty, image_url, set_id } =
+    body ?? {};
 
   if (!id) return NextResponse.json({ error: "id is required." }, { status: 400 });
-  if (options !== undefined || correct_option !== undefined) {
+
+  // A question's type is always resent by the editing UI (it always
+  // loads the full question, including its type, before saving) — so
+  // when it's present, this always rewrites BOTH type-specific field
+  // groups together (the other type's fields going to null), which is
+  // the only way to keep proctored_questions_type_shape satisfied if a
+  // question's type is ever changed mid-edit.
+  const type = question_type === "theory" ? "theory" : question_type === "mcq" ? "mcq" : undefined;
+  if (type === "mcq") {
+    const optionsError = validateOptions(options, correct_option);
+    if (optionsError) return NextResponse.json({ error: optionsError }, { status: 400 });
+  } else if (type === "theory") {
+    const marksError = validateMaxMarks(max_marks);
+    if (marksError) return NextResponse.json({ error: marksError }, { status: 400 });
+  } else if (options !== undefined || correct_option !== undefined) {
+    // No type given (an older client) but MCQ fields were — keep the
+    // pre-theory validation behavior for that case.
     const optionsError = validateOptions(options, correct_option);
     if (optionsError) return NextResponse.json({ error: optionsError }, { status: 400 });
   }
@@ -133,9 +173,16 @@ export async function PATCH(req: Request) {
   const { data, error } = await supabase
     .from("proctored_questions")
     .update({
+      ...(type ? { question_type: type } : {}),
       ...(prompt?.trim() ? { prompt: prompt.trim() } : {}),
-      ...(options ? { options: (options as string[]).map((o) => o.trim()) } : {}),
-      ...(correct_option !== undefined ? { correct_option: Number(correct_option) } : {}),
+      ...(type === "mcq"
+        ? { options: (options as string[]).map((o) => o.trim()), correct_option: Number(correct_option), min_word_count: null, max_marks: null }
+        : type === "theory"
+          ? { options: null, correct_option: null, min_word_count: Number(min_word_count) || DEFAULT_MIN_WORD_COUNT, max_marks: Number(max_marks) }
+          : {
+              ...(options ? { options: (options as string[]).map((o) => o.trim()) } : {}),
+              ...(correct_option !== undefined ? { correct_option: Number(correct_option) } : {}),
+            }),
       ...(explanation !== undefined ? { explanation: explanation?.trim() || null } : {}),
       ...(difficulty ? { difficulty } : {}),
       ...(image_url !== undefined ? { image_url: image_url || null } : {}),

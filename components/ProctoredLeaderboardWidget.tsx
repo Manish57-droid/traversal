@@ -36,7 +36,9 @@ function LeaderboardRow({ row, highlight }: { row: ProctoredLeaderboardRow; high
         </div>
         <span className={`shrink-0 font-display text-lg font-bold ${medal.text}`}>
           {row.score}
-          {row.total_questions !== null && <span className="text-sm font-normal">/{row.total_questions}</span>}
+          {(row.max_score ?? row.total_questions) !== null && (
+            <span className="text-sm font-normal">/{row.max_score ?? row.total_questions}</span>
+          )}
         </span>
       </div>
     );
@@ -59,7 +61,7 @@ function LeaderboardRow({ row, highlight }: { row: ProctoredLeaderboardRow; high
       </div>
       <span className="shrink-0 font-medium text-fg">
         {row.score}
-        {row.total_questions !== null && `/${row.total_questions}`}
+        {(row.max_score ?? row.total_questions) !== null && `/${row.max_score ?? row.total_questions}`}
       </span>
     </div>
   );

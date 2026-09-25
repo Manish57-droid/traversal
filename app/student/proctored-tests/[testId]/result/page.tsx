@@ -11,6 +11,7 @@ export default function ProctoredTestResultPage() {
   const totalParam = searchParams.get("total");
   const score = scoreParam ? Number(scoreParam) : null;
   const total = totalParam ? Number(totalParam) : null;
+  const gradingStatus = searchParams.get("grading");
 
   return (
     <TestResultBanner
@@ -19,6 +20,7 @@ export default function ProctoredTestResultPage() {
       total={total}
       backHref="/student/proctored-tests"
       backLabel="Back to Proctored Tests"
+      pendingGrading={gradingStatus === "pending"}
     />
   );
 }

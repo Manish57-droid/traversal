@@ -44,7 +44,7 @@ const LEGEND: { state: PaletteState; label: string }[] = [
 
 export function questionPaletteState(
   questionId: string,
-  answers: Record<string, number>,
+  answers: Record<string, number | string>,
   questionStatus: Record<string, ProctoredQuestionStatus>,
   isCurrent: boolean
 ): PaletteState {
@@ -68,7 +68,7 @@ export default function SectionQuestionPalette({
 }: {
   sections: SectionInfo[];
   questions: ProctoredAttemptQuestion[];
-  answers: Record<string, number>;
+  answers: Record<string, number | string>;
   questionStatus: Record<string, ProctoredQuestionStatus>;
   currentQuestionId: string | undefined;
   onJump: (questionId: string) => void;

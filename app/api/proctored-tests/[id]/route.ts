@@ -63,7 +63,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
     const { data: attempt } = await supabase
       .from("proctored_test_attempts")
-      .select("id, status, score, total_questions, violation_count")
+      .select("id, status, score, max_score, total_questions, grading_status, violation_count")
       .eq("test_id", test.id)
       .eq("student_id", user.id)
       .maybeSingle();

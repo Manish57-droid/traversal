@@ -13,7 +13,9 @@ interface StudentProctoredTest {
   results_released: boolean;
   attempt_status: "not_started" | "in_progress" | "submitted" | "expired" | "auto_submitted_violation";
   score: number | null;
+  max_score: number | null;
   total_questions: number | null;
+  grading_status: "not_required" | "pending" | "graded";
 }
 
 const STATUS_LABEL: Record<StudentProctoredTest["attempt_status"], string> = {
@@ -98,7 +100,10 @@ export default function StudentProctoredTestsPage() {
               </div>
               <p className="mt-1 text-xs text-fg-muted">
                 {t.class_name} · {t.time_limit_minutes} min
-                {t.score !== null && t.total_questions !== null && ` · Scored ${t.score}/${t.total_questions}`}
+                {t.score !== null &&
+                  (t.max_score ?? t.total_questions) !== null &&
+                  ` · Scored ${t.score}/${t.max_score ?? t.total_questions}`}
+                {t.grading_status === "pending" && " · theory pending grading"}
               </p>
             </div>
             <div className="shrink-0">{actionFor(t)}</div>

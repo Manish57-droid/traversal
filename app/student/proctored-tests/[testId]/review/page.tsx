@@ -22,7 +22,7 @@ export default function ProctoredTestReviewPage() {
         }
         setQuestions(data.questions);
         setScore(data.score);
-        setTotal(data.total_questions);
+        setTotal(data.max_score ?? data.total_questions);
       })
       .finally(() => setLoading(false));
   }, [params.testId]);

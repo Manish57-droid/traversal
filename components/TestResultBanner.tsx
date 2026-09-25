@@ -36,12 +36,16 @@ export default function TestResultBanner({
   total,
   backHref,
   backLabel,
+  pendingGrading,
 }: {
   status: string;
   score: number | null;
   total: number | null;
   backHref: string;
   backLabel: string;
+  /** Proctored-only — true when the test has theory questions a
+   * teacher hasn't finished grading yet, so `score` is partial. */
+  pendingGrading?: boolean;
 }) {
   const banner = BANNERS[status] ?? BANNERS.submitted;
   const Icon = banner.icon;
@@ -55,6 +59,12 @@ export default function TestResultBanner({
       {score !== null && total !== null && (
         <p className="font-display text-4xl text-fg">
           You scored {score}/{total}
+        </p>
+      )}
+
+      {pendingGrading && (
+        <p className="text-sm text-warn">
+          This includes theory questions your teacher hasn't graded yet — your score will update once they're graded.
         </p>
       )}
 

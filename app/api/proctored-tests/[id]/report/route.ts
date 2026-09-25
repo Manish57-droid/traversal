@@ -61,8 +61,12 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   const workbook = newReportWorkbook();
 
   // ---------- Sheet 1: Summary ----------
-  const finished = attemptRows.filter((a) => a.score !== null && a.total_questions);
-  const passCount = finished.filter((a) => a.score! >= a.total_questions! * PASS_THRESHOLD_FRACTION).length;
+  // `max_score` (total possible marks) is the real denominator once a
+  // theory question can be worth more than 1 point — it falls back to
+  // total_questions for pre-theory attempts, where they were always
+  // equal (every question was worth exactly 1).
+  const finished = attemptRows.filter((a) => a.score !== null && (a.max_score ?? a.total_questions));
+  const passCount = finished.filter((a) => a.score! >= (a.max_score ?? a.total_questions!) * PASS_THRESHOLD_FRACTION).length;
   const failCount = finished.length - passCount;
 
   const chartPng = await renderPieChartPng({
@@ -74,19 +78,21 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
   summarySheet.getCell(`A${tableStartRow - 1}`).value = `Pass threshold: score >= ${Math.round(
     PASS_THRESHOLD_FRACTION * 100
-  )}% of total questions (hardcoded).`;
+  )}% of max score (hardcoded).`;
   summarySheet.getCell(`A${tableStartRow - 1}`).font = { italic: true, size: 10, color: { argb: "FF666666" } };
 
   // Width-only column config — no `header`/`key` here, since assigning
   // `.columns` with a `header` auto-writes row 1, which would collide
   // with the chart image anchored there. The header row is written
   // manually below, at `tableStartRow`, instead.
-  summarySheet.columns = [{ width: 24 }, { width: 10 }, { width: 14 }, { width: 14 }, { width: 22 }, { width: 12 }];
+  summarySheet.columns = [{ width: 24 }, { width: 10 }, { width: 12 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 22 }, { width: 12 }];
 
   summarySheet.getRow(tableStartRow).values = [
     "Student name",
     "Score",
+    "Max score",
     "Total questions",
+    "Grading",
     "Violation count",
     "Status",
     "Time taken",
@@ -97,7 +103,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     summarySheet.getRow(tableStartRow + 1 + i).values = [
       a.users?.full_name || a.users?.email || "Unknown",
       a.score,
+      a.max_score ?? a.total_questions,
       a.total_questions,
+      a.grading_status ?? "not_required",
       a.violation_count,
       a.status,
       formatTime(a.time_taken_seconds),
@@ -118,7 +126,22 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
   for (const a of attemptRows) {
     const studentName = a.users?.full_name || a.users?.email || "Unknown";
+    const theoryGrades = (a.theory_grades ?? {}) as Record<string, number>;
     for (const q of questions) {
+      if (q.question_type === "theory") {
+        const answerText = (a.answers?.[q.id] as string | undefined) ?? "";
+        const answered = answerText.trim().length > 0;
+        const graded = Object.prototype.hasOwnProperty.call(theoryGrades, q.id);
+        detailSheet.addRow([
+          studentName,
+          q.prompt,
+          answered ? answerText : "(not answered)",
+          `Theory — up to ${q.max_marks} marks`,
+          answered ? (graded ? "Graded" : "Pending grading") : "Unanswered",
+          graded ? theoryGrades[q.id] : "Pending",
+        ]);
+        continue;
+      }
       const selectedIdx = a.answers?.[q.id];
       const answered = selectedIdx !== undefined && selectedIdx !== null;
       const isCorrect = answered && selectedIdx === q.correct_option;
@@ -126,8 +149,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
       detailSheet.addRow([
         studentName,
         q.prompt,
-        answered ? q.options[selectedIdx] ?? `(option ${selectedIdx})` : "(not answered)",
-        q.options[q.correct_option],
+        answered ? q.options?.[selectedIdx as number] ?? `(option ${selectedIdx})` : "(not answered)",
+        q.correct_option !== null ? q.options?.[q.correct_option] : "",
         answered ? (isCorrect ? "Correct" : "Incorrect") : "Unanswered",
         points,
       ]);

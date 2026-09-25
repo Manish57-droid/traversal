@@ -1,13 +1,125 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Camera, ChevronDown, ChevronUp, Download, Mic, ShieldAlert, Trash2, Trophy } from "lucide-react";
+import { Camera, ChevronDown, ChevronUp, Download, Mic, PenLine, ShieldAlert, Trash2, Trophy } from "lucide-react";
 import type {
   ProctoredLeaderboardRow,
   ProctoredSubjectWithSets,
   ProctoredTestWithQuestions,
   ProctoredViolationBreakdown,
 } from "@/types";
+
+interface TheoryQuestionToGrade {
+  id: string;
+  prompt: string;
+  max_marks: number | null;
+  min_word_count: number | null;
+  answer: string;
+  marks_awarded: number | null;
+}
+
+// Inline grading form for one attempt's theory answers — mirrors this
+// panel's existing "expand a row to see more" pattern (TestDetail)
+// rather than a separate page, since no other proctored-test detail
+// lives outside this client component.
+function TheoryGradingPanel({ testId, attemptId, onGraded }: { testId: string; attemptId: string; onGraded: () => void }) {
+  const [studentName, setStudentName] = useState("");
+  const [questions, setQuestions] = useState<TheoryQuestionToGrade[] | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/proctored-tests/${testId}/attempts/${attemptId}/grade`)
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error);
+        setStudentName(data.student_name);
+        setQuestions(data.questions);
+        setDrafts(
+          Object.fromEntries((data.questions as TheoryQuestionToGrade[]).map((q) => [q.id, q.marks_awarded === null ? "" : String(q.marks_awarded)]))
+        );
+      })
+      .catch((err) => setError(err.message));
+  }, [testId, attemptId]);
+
+  async function saveMarks(questionId: string) {
+    setSavingId(questionId);
+    setError(null);
+    try {
+      const raw = drafts[questionId];
+      const marks_awarded = raw.trim() === "" ? null : Number(raw);
+      const res = await fetch(`/api/proctored-tests/${testId}/attempts/${attemptId}/grade`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question_id: questionId, marks_awarded }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setQuestions((prev) => prev?.map((q) => (q.id === questionId ? { ...q, marks_awarded: data.marks_awarded } : q)) ?? null);
+      onGraded();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  if (error && !questions) return <p className="text-xs text-red-400">{error}</p>;
+  if (!questions) return <p className="text-xs text-fg-subtle">Loading answers…</p>;
+  if (questions.length === 0) return <p className="text-xs text-fg-subtle">No theory questions on this test.</p>;
+
+  return (
+    <div className="space-y-3 rounded-lg border border-line/70 bg-surface-2/40 p-3">
+      <p className="text-xs font-medium text-fg">Grading {studentName}'s theory answers</p>
+      {questions.map((q, i) => {
+        const wordCount = q.answer.trim().split(/\s+/).filter(Boolean).length;
+        return (
+          <div key={q.id} className="space-y-1.5 rounded-lg border border-line/70 bg-bg p-3">
+            <p className="text-sm text-fg">
+              <span className="mr-1 text-fg-subtle">{i + 1}.</span>
+              {q.prompt}
+            </p>
+            {q.answer ? (
+              <div className="rounded-lg border border-line/50 bg-surface-2/60 px-3 py-2 text-sm text-fg">
+                <p className="whitespace-pre-wrap">{q.answer}</p>
+                <p className="mt-1 text-xs text-fg-subtle">
+                  {wordCount} word{wordCount === 1 ? "" : "s"}
+                  {q.min_word_count && wordCount < q.min_word_count && ` — under the ${q.min_word_count}-word guideline`}
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-fg-subtle">Not answered.</p>
+            )}
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                max={q.max_marks ?? undefined}
+                step="0.5"
+                className="input w-24 py-1.5 text-xs"
+                placeholder="0"
+                value={drafts[q.id] ?? ""}
+                onChange={(e) => setDrafts((prev) => ({ ...prev, [q.id]: e.target.value }))}
+              />
+              <span className="text-xs text-fg-muted">/ {q.max_marks} marks</span>
+              <button
+                type="button"
+                onClick={() => saveMarks(q.id)}
+                disabled={savingId === q.id}
+                className="btn-secondary py-1 text-xs"
+              >
+                {savingId === q.id ? "Saving..." : q.marks_awarded !== null ? "Update" : "Save"}
+              </button>
+              {q.marks_awarded !== null && <span className="text-xs text-success">Graded: {q.marks_awarded}</span>}
+            </div>
+          </div>
+        );
+      })}
+      {error && <p className="text-xs text-red-400">{error}</p>}
+    </div>
+  );
+}
 
 function formatDuration(seconds: number | null) {
   if (seconds === null) return "—";
@@ -32,8 +144,9 @@ function TestDetail({ testId }: { testId: string }) {
   const [released, setReleased] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [gradingAttemptId, setGradingAttemptId] = useState<string | null>(null);
 
-  useEffect(() => {
+  function load() {
     Promise.all([
       fetch(`/api/proctored-tests/${testId}/attempts`).then((r) => r.json()),
       fetch(`/api/proctored-tests/${testId}`).then((r) => r.json()),
@@ -42,6 +155,11 @@ function TestDetail({ testId }: { testId: string }) {
       setLeaderboard(attemptsData.leaderboard ?? []);
       setReleased(testData.test?.results_released ?? false);
     });
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [testId]);
 
   async function toggleRelease() {
@@ -118,7 +236,7 @@ function TestDetail({ testId }: { testId: string }) {
                       <td className="py-2 pr-3">{row.student_name}</td>
                       <td className="py-2 pr-3">
                         {row.score}
-                        {row.total_questions !== null && `/${row.total_questions}`}
+                        {(row.max_score ?? row.total_questions) !== null && `/${row.max_score ?? row.total_questions}`}
                       </td>
                       <td className="py-2 pr-3 text-fg-muted">{formatDuration(row.time_taken_seconds)}</td>
                       <td className="py-2 text-fg-muted">{new Date(row.submitted_at).toLocaleString()}</td>
@@ -142,13 +260,32 @@ function TestDetail({ testId }: { testId: string }) {
                   <p className="truncate text-sm text-fg">{a.student_name}</p>
                   <p className="text-xs text-fg-muted">
                     {a.status}
-                    {a.score !== null && a.total_questions !== null && ` · ${a.score}/${a.total_questions}`}
+                    {a.score !== null &&
+                      (a.max_score ?? a.total_questions) !== null &&
+                      ` · ${a.score}/${a.max_score ?? a.total_questions}`}
+                    {a.grading_status === "pending" && <span className="text-warn"> · theory ungraded</span>}
                   </p>
                 </div>
-                <span className="flex shrink-0 items-center gap-1 text-xs text-fg-subtle">
-                  <ShieldAlert className="h-3.5 w-3.5" />
-                  {a.violation_count} violation{a.violation_count === 1 ? "" : "s"}
-                </span>
+                <div className="flex shrink-0 items-center gap-3">
+                  {a.grading_status !== "not_required" && a.status !== "in_progress" && (
+                    <button
+                      type="button"
+                      onClick={() => setGradingAttemptId((cur) => (cur === a.attempt_id ? null : a.attempt_id))}
+                      className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors ${
+                        a.grading_status === "pending"
+                          ? "border-warn/40 bg-warn/10 text-warn"
+                          : "border-success/40 bg-success/10 text-success"
+                      }`}
+                    >
+                      <PenLine className="h-3 w-3" />
+                      {a.grading_status === "pending" ? "Grade theory" : "Graded"}
+                    </button>
+                  )}
+                  <span className="flex items-center gap-1 text-xs text-fg-subtle">
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                    {a.violation_count} violation{a.violation_count === 1 ? "" : "s"}
+                  </span>
+                </div>
               </div>
               {Object.keys(a.violations_by_type).length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -157,6 +294,11 @@ function TestDetail({ testId }: { testId: string }) {
                       {VIOLATION_LABEL[type] ?? type}: {count}
                     </span>
                   ))}
+                </div>
+              )}
+              {gradingAttemptId === a.attempt_id && (
+                <div className="mt-2">
+                  <TheoryGradingPanel testId={testId} attemptId={a.attempt_id} onGraded={load} />
                 </div>
               )}
             </div>

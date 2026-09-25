@@ -35,7 +35,7 @@ export async function GET() {
   const { data: attempts } = testIds.length
     ? await supabase
         .from("proctored_test_attempts")
-        .select("test_id, status, score, total_questions, submitted_at")
+        .select("test_id, status, score, max_score, total_questions, grading_status, submitted_at")
         .eq("student_id", user.id)
         .in("test_id", testIds)
     : { data: [] };
@@ -69,7 +69,9 @@ export async function GET() {
       results_released: released,
       attempt_status: attempt?.status ?? "not_started",
       score: released ? attempt?.score ?? null : null,
+      max_score: released ? attempt?.max_score ?? null : null,
       total_questions: released ? attempt?.total_questions ?? null : null,
+      grading_status: attempt?.grading_status ?? "not_required",
       submitted_at: attempt?.submitted_at ?? null,
       rank: released ? rankByTest.get(t.id) ?? null : null,
     };

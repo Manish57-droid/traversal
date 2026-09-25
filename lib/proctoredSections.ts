@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase/server";
-import type { QuestionDifficulty } from "@/types";
+import type { QuestionDifficulty, ProctoredQuestionType } from "@/types";
 
 // The one place a test's sections and their questions get resolved —
 // shared by attempt-start, scoring (lib/proctoredScoring.ts), and the
@@ -23,9 +23,16 @@ export interface ResolvedSection {
 export interface ResolvedQuestion {
   id: string;
   section_id: string;
+  question_type: ProctoredQuestionType;
   prompt: string;
-  options: string[];
-  correct_option: number;
+  /** MCQ only. */
+  options: string[] | null;
+  /** MCQ only. */
+  correct_option: number | null;
+  /** Theory only. */
+  min_word_count: number | null;
+  /** Theory only. */
+  max_marks: number | null;
   explanation: string | null;
   difficulty: QuestionDifficulty;
   image_url: string | null;
@@ -45,7 +52,8 @@ export async function getSectionsForTest(testId: string): Promise<ResolvedSectio
   return (data ?? []) as ResolvedSection[];
 }
 
-const QUESTION_FIELDS = "id, prompt, options, correct_option, explanation, difficulty, image_url";
+const QUESTION_FIELDS =
+  "id, question_type, prompt, options, correct_option, min_word_count, max_marks, explanation, difficulty, image_url";
 
 /** Every section of a test, each carrying its fully-resolved (full,
  * not sanitized) question list in a stable order. Legacy sections
@@ -95,9 +103,12 @@ export async function getSectionsWithQuestions(testId: string): Promise<SectionW
       const list = questionsBySet.get(q.set_id) ?? [];
       list.push({
         id: q.id,
+        question_type: q.question_type,
         prompt: q.prompt,
         options: q.options,
         correct_option: q.correct_option,
+        min_word_count: q.min_word_count,
+        max_marks: q.max_marks,
         explanation: q.explanation,
         difficulty: q.difficulty,
         image_url: q.image_url,
@@ -145,8 +156,11 @@ export async function ensureSectionAttempts(attemptId: string, testId: string) {
 export function sanitizeQuestion(q: ResolvedQuestion & { section_name?: string }) {
   return {
     id: q.id,
+    question_type: q.question_type,
     prompt: q.prompt,
-    options: q.options,
+    options: q.options ?? [],
+    min_word_count: q.min_word_count,
+    max_marks: q.max_marks,
     difficulty: q.difficulty,
     image_url: q.image_url,
     section_id: q.section_id,

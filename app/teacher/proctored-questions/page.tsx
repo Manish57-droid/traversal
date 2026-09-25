@@ -7,10 +7,15 @@ import SubjectSetManager from "@/components/proctored-bank/SubjectSetManager";
 import BulkImportPanel from "@/components/proctored-bank/BulkImportPanel";
 import FolderSection from "@/components/FolderSection";
 
+const DEFAULT_MIN_WORD_COUNT = 150;
+
 const EMPTY_FORM = {
+  question_type: "mcq" as "mcq" | "theory",
   prompt: "",
   options: ["", "", "", ""],
   correct_option: 0,
+  min_word_count: DEFAULT_MIN_WORD_COUNT,
+  max_marks: 5,
   explanation: "",
   difficulty: "unknown",
   image_url: "" as string | null,
@@ -114,9 +119,12 @@ export default function ProctoredQuestionsPage() {
   function startEdit(q: ProctoredQuestion) {
     setEditingId(q.id);
     setForm({
+      question_type: q.question_type,
       prompt: q.prompt,
-      options: q.options,
-      correct_option: q.correct_option,
+      options: q.options && q.options.length ? q.options : ["", "", "", ""],
+      correct_option: q.correct_option ?? 0,
+      min_word_count: q.min_word_count ?? DEFAULT_MIN_WORD_COUNT,
+      max_marks: q.max_marks ?? 5,
       explanation: q.explanation ?? "",
       difficulty: q.difficulty,
       image_url: q.image_url,
@@ -184,9 +192,11 @@ export default function ProctoredQuestionsPage() {
     }
     setSubmitting(true);
     try {
-      const cleanOptions = form.options.map((o) => o.trim()).filter(Boolean);
       const { subject_id, ...rest } = form;
-      const payload = { ...rest, options: cleanOptions };
+      const payload =
+        form.question_type === "mcq"
+          ? { ...rest, options: form.options.map((o) => o.trim()).filter(Boolean) }
+          : { ...rest, options: undefined, correct_option: undefined };
       const res = await fetch("/api/proctored-questions", {
         method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -223,6 +233,11 @@ export default function ProctoredQuestionsPage() {
       <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
+            {q.question_type === "theory" && (
+              <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent">
+                Theory · {q.max_marks} mark{q.max_marks === 1 ? "" : "s"}
+              </span>
+            )}
             {q.needs_categorization && (
               <span className="flex items-center gap-1 rounded-full bg-warn/10 px-2 py-0.5 text-xs text-warn">
                 <AlertTriangle className="h-3 w-3" /> Needs categorization
@@ -237,14 +252,20 @@ export default function ProctoredQuestionsPage() {
             <img src={q.image_url} alt="" className="mt-1 max-h-40 rounded-lg border border-line/70 object-contain" />
           )}
           <p className="mt-1 font-medium text-fg">{q.prompt}</p>
-          <ul className="mt-2 space-y-0.5 text-xs text-fg-muted">
-            {q.options.map((opt, i) => (
-              <li key={i} className={i === q.correct_option ? "text-success" : ""}>
-                {i === q.correct_option ? "✓ " : "· "}
-                {opt}
-              </li>
-            ))}
-          </ul>
+          {q.question_type === "theory" ? (
+            <p className="mt-2 text-xs text-fg-subtle">
+              Expects a written answer of at least {q.min_word_count ?? 150} words — graded manually after submission.
+            </p>
+          ) : (
+            <ul className="mt-2 space-y-0.5 text-xs text-fg-muted">
+              {(q.options ?? []).map((opt, i) => (
+                <li key={i} className={i === q.correct_option ? "text-success" : ""}>
+                  {i === q.correct_option ? "✓ " : "· "}
+                  {opt}
+                </li>
+              ))}
+            </ul>
+          )}
           {q.created_by_name && (
             <p className="mt-2 text-xs text-fg-subtle">Added by {q.created_by_name}</p>
           )}
@@ -295,6 +316,30 @@ export default function ProctoredQuestionsPage() {
             </button>
           </div>
         )}
+
+        <div>
+          <label className="mb-1 block text-xs text-fg-muted">Question type</label>
+          <div className="flex gap-4 pt-1">
+            <label className="flex items-center gap-2 text-sm text-fg">
+              <input
+                type="radio"
+                name="question_type"
+                checked={form.question_type === "mcq"}
+                onChange={() => setForm((f) => ({ ...f, question_type: "mcq" }))}
+              />
+              Multiple choice
+            </label>
+            <label className="flex items-center gap-2 text-sm text-fg">
+              <input
+                type="radio"
+                name="question_type"
+                checked={form.question_type === "theory"}
+                onChange={() => setForm((f) => ({ ...f, question_type: "theory" }))}
+              />
+              Theory (long answer)
+            </label>
+          </div>
+        </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
@@ -432,42 +477,72 @@ export default function ProctoredQuestionsPage() {
           />
         </div>
 
-        <div>
-          <label className="mb-1 block text-xs text-fg-muted">
-            Options — pick the radio button next to the correct one
-          </label>
-          <div className="space-y-2">
-            {form.options.map((opt, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="correct_option"
-                  checked={form.correct_option === i}
-                  onChange={() => setForm((f) => ({ ...f, correct_option: i }))}
-                  className="shrink-0 accent-success"
-                />
-                <input
-                  className="input"
-                  placeholder={`Option ${i + 1}`}
-                  value={opt}
-                  onChange={(e) => updateOption(i, e.target.value)}
-                />
-                {form.options.length > 2 && (
-                  <button
-                    type="button"
-                    onClick={() => removeOption(i)}
-                    className="shrink-0 text-xs text-fg-subtle hover:text-red-400"
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-            ))}
+        {form.question_type === "mcq" ? (
+          <div>
+            <label className="mb-1 block text-xs text-fg-muted">
+              Options — pick the radio button next to the correct one
+            </label>
+            <div className="space-y-2">
+              {form.options.map((opt, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="correct_option"
+                    checked={form.correct_option === i}
+                    onChange={() => setForm((f) => ({ ...f, correct_option: i }))}
+                    className="shrink-0 accent-success"
+                  />
+                  <input
+                    className="input"
+                    placeholder={`Option ${i + 1}`}
+                    value={opt}
+                    onChange={(e) => updateOption(i, e.target.value)}
+                  />
+                  {form.options.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => removeOption(i)}
+                      className="shrink-0 text-xs text-fg-subtle hover:text-red-400"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button type="button" onClick={addOption} className="mt-2 text-xs text-success hover:underline">
+              + Add option
+            </button>
           </div>
-          <button type="button" onClick={addOption} className="mt-2 text-xs text-success hover:underline">
-            + Add option
-          </button>
-        </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs text-fg-muted">Minimum word count (guideline shown to the student)</label>
+              <input
+                type="number"
+                min={1}
+                className="input"
+                value={form.min_word_count}
+                onChange={(e) => setForm((f) => ({ ...f, min_word_count: Number(e.target.value) }))}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-fg-muted">Marks for a full-credit answer</label>
+              <input
+                type="number"
+                min={1}
+                step="0.5"
+                className="input"
+                value={form.max_marks}
+                onChange={(e) => setForm((f) => ({ ...f, max_marks: Number(e.target.value) }))}
+              />
+            </div>
+            <p className="text-xs text-fg-subtle sm:col-span-2">
+              Theory answers aren't auto-graded — you'll award marks (up to this max) per answer after the test is
+              submitted.
+            </p>
+          </div>
+        )}
 
         <div>
           <label className="mb-1 block text-xs text-fg-muted">Explanation (shown after answering)</label>

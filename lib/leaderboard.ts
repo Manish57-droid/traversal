@@ -30,7 +30,7 @@ export async function getTestLeaderboard(testId: string): Promise<ProctoredLeade
   const supabase = supabaseAdmin();
   const { data, error } = await supabase
     .from("proctored_test_attempts")
-    .select("id, student_id, score, total_questions, time_taken_seconds, submitted_at, users(full_name, email)")
+    .select("id, student_id, score, max_score, total_questions, time_taken_seconds, submitted_at, users(full_name, email)")
     .eq("test_id", testId)
     .in("status", ["submitted", "auto_submitted_violation", "expired"])
     .not("score", "is", null)
@@ -58,6 +58,7 @@ export async function getTestLeaderboard(testId: string): Promise<ProctoredLeade
       student_name: row.users?.full_name || row.users?.email || "Unknown",
       student_email: row.users?.email ?? "",
       score: row.score,
+      max_score: row.max_score,
       total_questions: row.total_questions,
       time_taken_seconds: row.time_taken_seconds,
       submitted_at: row.submitted_at,

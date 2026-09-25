@@ -34,14 +34,19 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   }
 
   const resolvedQuestions = await getFlatQuestionsForTest(params.id);
+  const theoryGrades = (attempt.theory_grades ?? {}) as Record<string, number>;
 
   const questions = resolvedQuestions.map((q) => ({
     id: q.id,
+    question_type: q.question_type,
     prompt: q.prompt,
-    options: q.options,
+    options: q.options ?? [],
     correct_option: q.correct_option,
+    min_word_count: q.min_word_count,
+    max_marks: q.max_marks,
     explanation: q.explanation,
     selected_option: attempt.answers?.[q.id] ?? null,
+    marks_awarded: Object.prototype.hasOwnProperty.call(theoryGrades, q.id) ? theoryGrades[q.id] : null,
     image_url: q.image_url ?? null,
     section_id: q.section_id,
     section_name: q.section_name,
@@ -50,7 +55,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   return NextResponse.json({
     questions,
     score: attempt.score,
+    max_score: attempt.max_score,
     total_questions: attempt.total_questions,
+    grading_status: attempt.grading_status,
     status: attempt.status,
   });
 }
