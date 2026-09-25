@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Download, ImagePlus, X } from "lucide-react";
-import type { ProctoredQuestion, ProctoredSubjectWithSets } from "@/types";
+import type { ProctoredQuestion, ProctoredSetWithCount, ProctoredSubjectWithCount } from "@/types";
 import SubjectSetManager from "@/components/proctored-bank/SubjectSetManager";
 import BulkImportPanel from "@/components/proctored-bank/BulkImportPanel";
 import FolderSection from "@/components/FolderSection";
@@ -20,11 +20,12 @@ const EMPTY_FORM = {
   difficulty: "unknown",
   image_url: "" as string | null,
   subject_id: "",
-  set_id: "",
+  set_ids: [] as string[],
 };
 
 export default function ProctoredQuestionsPage() {
-  const [subjects, setSubjects] = useState<ProctoredSubjectWithSets[]>([]);
+  const [subjects, setSubjects] = useState<ProctoredSubjectWithCount[]>([]);
+  const [sets, setSets] = useState<ProctoredSetWithCount[]>([]);
   const [questions, setQuestions] = useState<ProctoredQuestion[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -42,7 +43,8 @@ export default function ProctoredQuestionsPage() {
   const [savingNewSet, setSavingNewSet] = useState(false);
   const [newSetError, setNewSetError] = useState<string | null>(null);
 
-  // Filters for the list view.
+  // Filters for the list view — independent of each other now that a
+  // Set isn't scoped to a Subject.
   const [filterSubjectId, setFilterSubjectId] = useState("");
   const [filterSetId, setFilterSetId] = useState("");
   const [showUncategorizedOnly, setShowUncategorizedOnly] = useState(false);
@@ -53,14 +55,20 @@ export default function ProctoredQuestionsPage() {
     setSubjects(data.subjects ?? []);
   }
 
+  async function loadSets() {
+    const res = await fetch("/api/proctored-sets");
+    const data = await res.json();
+    setSets(data.sets ?? []);
+  }
+
   async function loadQuestions() {
     setLoading(true);
     const params = new URLSearchParams();
     if (showUncategorizedOnly) {
       params.set("needsCategorization", "true");
     } else {
+      if (filterSubjectId) params.set("subjectId", filterSubjectId);
       if (filterSetId) params.set("setId", filterSetId);
-      else if (filterSubjectId) params.set("subjectId", filterSubjectId);
     }
     const res = await fetch(`/api/proctored-questions?${params.toString()}`);
     const data = await res.json();
@@ -70,6 +78,7 @@ export default function ProctoredQuestionsPage() {
 
   useEffect(() => {
     loadSubjects();
+    loadSets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -78,24 +87,19 @@ export default function ProctoredQuestionsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterSubjectId, filterSetId, showUncategorizedOnly]);
 
-  const formSets = useMemo(() => subjects.find((s) => s.id === form.subject_id)?.sets ?? [], [subjects, form.subject_id]);
-  const filterSets = useMemo(() => subjects.find((s) => s.id === filterSubjectId)?.sets ?? [], [subjects, filterSubjectId]);
-
   const filtersActive = Boolean(filterSubjectId || filterSetId || showUncategorizedOnly);
 
   const questionGroups = useMemo(() => {
-    const bySubject = new Map<string, Map<string, ProctoredQuestion[]>>();
+    const bySubject = new Map<string, ProctoredQuestion[]>();
     const uncategorized: ProctoredQuestion[] = [];
     for (const q of questions) {
-      if (q.needs_categorization || !q.subject_id || !q.set_id) {
+      if (q.needs_categorization || !q.subject_id) {
         uncategorized.push(q);
         continue;
       }
-      const setsMap = bySubject.get(q.subject_id) ?? new Map<string, ProctoredQuestion[]>();
-      const list = setsMap.get(q.set_id) ?? [];
+      const list = bySubject.get(q.subject_id) ?? [];
       list.push(q);
-      setsMap.set(q.set_id, list);
-      bySubject.set(q.subject_id, setsMap);
+      bySubject.set(q.subject_id, list);
     }
     return { bySubject, uncategorized };
   }, [questions]);
@@ -116,6 +120,13 @@ export default function ProctoredQuestionsPage() {
     }));
   }
 
+  function toggleFormSet(setId: string) {
+    setForm((f) => ({
+      ...f,
+      set_ids: f.set_ids.includes(setId) ? f.set_ids.filter((id) => id !== setId) : [...f.set_ids, setId],
+    }));
+  }
+
   function startEdit(q: ProctoredQuestion) {
     setEditingId(q.id);
     setForm({
@@ -129,7 +140,7 @@ export default function ProctoredQuestionsPage() {
       difficulty: q.difficulty,
       image_url: q.image_url,
       subject_id: q.subject_id ?? "",
-      set_id: q.set_id ?? "",
+      set_ids: q.sets.map((s) => s.id),
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -161,19 +172,19 @@ export default function ProctoredQuestionsPage() {
   }
 
   async function handleCreateSet() {
-    if (!form.subject_id || !newSetName.trim()) return;
+    if (!newSetName.trim()) return;
     setNewSetError(null);
     setSavingNewSet(true);
     try {
       const res = await fetch("/api/proctored-sets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject_id: form.subject_id, name: newSetName.trim() }),
+        body: JSON.stringify({ name: newSetName.trim() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      await loadSubjects();
-      setForm((f) => ({ ...f, set_id: data.set.id }));
+      await loadSets();
+      setForm((f) => ({ ...f, set_ids: [...f.set_ids, data.set.id] }));
       setNewSetName("");
       setCreatingSet(false);
     } catch (err: any) {
@@ -186,17 +197,16 @@ export default function ProctoredQuestionsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!form.set_id) {
-      setError("Pick a Subject and Set for this question.");
+    if (!form.subject_id) {
+      setError("Pick a Subject for this question.");
       return;
     }
     setSubmitting(true);
     try {
-      const { subject_id, ...rest } = form;
       const payload =
         form.question_type === "mcq"
-          ? { ...rest, options: form.options.map((o) => o.trim()).filter(Boolean) }
-          : { ...rest, options: undefined, correct_option: undefined };
+          ? { ...form, options: form.options.map((o) => o.trim()).filter(Boolean) }
+          : { ...form, options: undefined, correct_option: undefined };
       const res = await fetch("/api/proctored-questions", {
         method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -205,7 +215,7 @@ export default function ProctoredQuestionsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       cancelEdit();
-      await Promise.all([loadQuestions(), loadSubjects()]);
+      await Promise.all([loadQuestions(), loadSubjects(), loadSets()]);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -221,11 +231,11 @@ export default function ProctoredQuestionsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     });
-    await loadSubjects();
+    await Promise.all([loadSubjects(), loadSets()]);
   }
 
   async function handleReload() {
-    await Promise.all([loadSubjects(), loadQuestions()]);
+    await Promise.all([loadSubjects(), loadSets(), loadQuestions()]);
   }
 
   function QuestionCard({ q }: { q: ProctoredQuestion }) {
@@ -246,6 +256,11 @@ export default function ProctoredQuestionsPage() {
             {q.difficulty !== "unknown" && (
               <span className="text-xs capitalize text-fg-muted">{q.difficulty}</span>
             )}
+            {q.sets.map((s) => (
+              <span key={s.id} className="rounded-full border border-line/70 px-2 py-0.5 text-xs text-fg-muted">
+                {s.name}
+              </span>
+            ))}
           </div>
           {q.image_url && (
             // eslint-disable-next-line @next/next/no-img-element
@@ -288,8 +303,9 @@ export default function ProctoredQuestionsPage() {
         <div>
           <h1 className="font-display text-2xl text-fg sm:text-3xl">Proctored test question bank</h1>
           <p className="mt-1 text-sm text-fg-muted">
-            MCQs organized by Subject and Set, kept separate from Aptitude and DSA — build a proctored test from this
-            bank on a class's page.
+            MCQs organized by Subject, kept separate from Aptitude and DSA. Sets are optional exam bundles — mix
+            questions from any Subjects into one, or keep it single-topic — build a proctored test from them on a
+            class's page.
           </p>
         </div>
         <button type="button" className="btn-secondary" onClick={() => setShowBulkImport((v) => !v)}>
@@ -297,11 +313,12 @@ export default function ProctoredQuestionsPage() {
         </button>
       </div>
 
-      <SubjectSetManager subjects={subjects} onReload={loadSubjects} />
+      <SubjectSetManager subjects={subjects} sets={sets} onReload={handleReload} />
 
       {showBulkImport && (
         <BulkImportPanel
           subjects={subjects}
+          sets={sets}
           onImported={handleReload}
           onClose={() => setShowBulkImport(false)}
         />
@@ -341,27 +358,55 @@ export default function ProctoredQuestionsPage() {
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs text-fg-muted">Subject</label>
             <select
               className="input"
               value={form.subject_id}
-              onChange={(e) => setForm((f) => ({ ...f, subject_id: e.target.value, set_id: "" }))}
+              onChange={(e) => setForm((f) => ({ ...f, subject_id: e.target.value }))}
             >
               <option value="">Select subject…</option>
               {subjects.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
+            {!subjects.length && <p className="mt-1 text-xs text-fg-subtle">Add a Subject below first.</p>}
           </div>
           <div>
-            <label className="mb-1 block text-xs text-fg-muted">Set</label>
+            <label className="mb-1 block text-xs text-fg-muted">Difficulty</label>
+            <select
+              className="input"
+              value={form.difficulty}
+              onChange={(e) => setForm((f) => ({ ...f, difficulty: e.target.value }))}
+            >
+              <option value="unknown">Unspecified</option>
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs text-fg-muted">Sets (optional — this question can be in several, or none)</label>
+          <div className="flex flex-wrap items-center gap-2">
+            {sets.map((s) => (
+              <label
+                key={s.id}
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors ${
+                  form.set_ids.includes(s.id) ? "border-accent/60 bg-accent/10 text-accent" : "border-line text-fg-muted"
+                }`}
+              >
+                <input type="checkbox" className="sr-only" checked={form.set_ids.includes(s.id)} onChange={() => toggleFormSet(s.id)} />
+                {s.name}
+              </label>
+            ))}
             {creatingSet ? (
               <div className="flex items-center gap-1.5">
                 <input
                   autoFocus
-                  className="input"
+                  className="input py-1.5 text-xs"
                   placeholder="New set name"
                   value={newSetName}
                   onChange={(e) => setNewSetName(e.target.value)}
@@ -376,7 +421,7 @@ export default function ProctoredQuestionsPage() {
                   type="button"
                   onClick={handleCreateSet}
                   disabled={savingNewSet || !newSetName.trim()}
-                  className="btn-secondary shrink-0 py-2.5 text-xs"
+                  className="btn-secondary shrink-0 py-1.5 text-xs"
                 >
                   {savingNewSet ? "Saving..." : "Create"}
                 </button>
@@ -393,41 +438,12 @@ export default function ProctoredQuestionsPage() {
                 </button>
               </div>
             ) : (
-              <select
-                className="input"
-                value={form.set_id}
-                onChange={(e) => {
-                  if (e.target.value === "__new__") {
-                    setCreatingSet(true);
-                    return;
-                  }
-                  setForm((f) => ({ ...f, set_id: e.target.value }));
-                }}
-                disabled={!form.subject_id}
-              >
-                <option value="">Select set…</option>
-                {formSets.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-                {form.subject_id && <option value="__new__">+ Create new set…</option>}
-              </select>
+              <button type="button" onClick={() => setCreatingSet(true)} className="text-xs text-success hover:underline">
+                + Create new set…
+              </button>
             )}
-            {newSetError && <p className="mt-1 text-xs text-red-400">{newSetError}</p>}
-            {!subjects.length && <p className="mt-1 text-xs text-fg-subtle">Add a Subject above first.</p>}
           </div>
-          <div>
-            <label className="mb-1 block text-xs text-fg-muted">Difficulty</label>
-            <select
-              className="input"
-              value={form.difficulty}
-              onChange={(e) => setForm((f) => ({ ...f, difficulty: e.target.value }))}
-            >
-              <option value="unknown">Unspecified</option>
-              <option value="easy">Easy</option>
-              <option value="medium">Medium</option>
-              <option value="hard">Hard</option>
-            </select>
-          </div>
+          {newSetError && <p className="mt-1 text-xs text-red-400">{newSetError}</p>}
         </div>
 
         <div>
@@ -568,7 +584,6 @@ export default function ProctoredQuestionsPage() {
             value={filterSubjectId}
             onChange={(e) => {
               setFilterSubjectId(e.target.value);
-              setFilterSetId("");
               setShowUncategorizedOnly(false);
             }}
           >
@@ -587,10 +602,9 @@ export default function ProctoredQuestionsPage() {
               setFilterSetId(e.target.value);
               setShowUncategorizedOnly(false);
             }}
-            disabled={!filterSubjectId}
           >
             <option value="">All sets</option>
-            {filterSets.map((s) => (
+            {sets.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
@@ -629,23 +643,14 @@ export default function ProctoredQuestionsPage() {
           </p>
         )}
         {!loading && subjects.map((subject) => {
-          const setsMap = questionGroups.bySubject.get(subject.id);
-          const subjectTotal = setsMap ? Array.from(setsMap.values()).reduce((s, l) => s + l.length, 0) : 0;
-          if (filtersActive && subjectTotal === 0) return null;
+          const list = questionGroups.bySubject.get(subject.id) ?? [];
+          if (filtersActive && list.length === 0) return null;
           return (
-            <FolderSection key={subject.id} label={subject.name} count={subjectTotal} defaultOpen>
-              {subject.sets.map((set) => {
-                const list = setsMap?.get(set.id) ?? [];
-                if (filtersActive && list.length === 0) return null;
-                return (
-                  <FolderSection key={set.id} label={set.name} count={list.length} depth={1}>
-                    {list.length === 0 && <p className="text-xs text-fg-subtle">No questions here yet.</p>}
-                    {list.map((q) => (
-                      <QuestionCard key={q.id} q={q} />
-                    ))}
-                  </FolderSection>
-                );
-              })}
+            <FolderSection key={subject.id} label={subject.name} count={list.length} defaultOpen>
+              {list.length === 0 && <p className="text-xs text-fg-subtle">No questions here yet.</p>}
+              {list.map((q) => (
+                <QuestionCard key={q.id} q={q} />
+              ))}
             </FolderSection>
           );
         })}

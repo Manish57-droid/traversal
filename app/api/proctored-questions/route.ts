@@ -7,16 +7,19 @@ const DEFAULT_MIN_WORD_COUNT = 150;
 
 // GET    /api/proctored-questions?setId=...&subjectId=...&needsCategorization=true
 //         -> list every question in the bank, with the author's name
-//         and its set/subject resolved. Any signed-in role can read
+//         and its subject/sets resolved. Any signed-in role can read
 //         (teachers/admins manage the bank directly; students never
 //         see this bank outside of an actual test attempt, which the
 //         follow-up test-taking task will scope separately). Filters
 //         are optional and combinable; needsCategorization=true finds
 //         legacy/unassigned questions regardless of subject/set filters.
-// POST   /api/proctored-questions { prompt, options, correct_option, set_id, explanation?, difficulty? }
-//         -> teacher/admin only. set_id is required for new questions.
+// POST   /api/proctored-questions { prompt, options, correct_option, subject_id, set_ids?, explanation?, difficulty? }
+//         -> teacher/admin only. subject_id is required for new questions;
+//         set_ids is optional — a question can belong to any number of
+//         Sets (or none), independent of its subject.
 // PATCH  /api/proctored-questions { id, ...fields } -> teacher/admin only.
-//         set_id: null explicitly un-assigns and flags needs_categorization.
+//         subject_id: null explicitly un-assigns and flags needs_categorization.
+//         set_ids, when present, REPLACES the question's full Set membership.
 // DELETE /api/proctored-questions { id } -> teacher/admin only.
 function mapQuestion(q: any): ProctoredQuestion {
   return {
@@ -33,10 +36,12 @@ function mapQuestion(q: any): ProctoredQuestion {
     created_by_name: q.users?.full_name || q.users?.email || null,
     created_at: q.created_at,
     image_url: q.image_url ?? null,
-    set_id: q.set_id ?? null,
-    set_name: q.proctored_sets?.name ?? null,
-    subject_id: q.proctored_sets?.subject_id ?? null,
-    subject_name: q.proctored_sets?.proctored_subjects?.name ?? null,
+    sets: (q.proctored_question_sets ?? [])
+      .map((row: any) => row.proctored_sets)
+      .filter(Boolean)
+      .map((s: any) => ({ id: s.id, name: s.name })),
+    subject_id: q.subject_id ?? null,
+    subject_name: q.proctored_subjects?.name ?? null,
     needs_categorization: q.needs_categorization,
   };
 }
@@ -60,7 +65,8 @@ function validateMaxMarks(max_marks: unknown) {
   return null;
 }
 
-const SELECT_WITH_JOINS = "*, users(full_name, email), proctored_sets(name, subject_id, proctored_subjects(name))";
+const SELECT_WITH_JOINS =
+  "*, users(full_name, email), proctored_subjects(name), proctored_question_sets(proctored_sets(id, name))";
 
 export async function GET(req: Request) {
   const user = await getCurrentAppUser();
@@ -76,20 +82,24 @@ export async function GET(req: Request) {
 
   if (needsCategorization === "true") {
     query = query.eq("needs_categorization", true);
-  } else if (setId) {
-    query = query.eq("set_id", setId);
+  } else if (subjectId) {
+    query = query.eq("subject_id", subjectId);
+  }
+
+  if (setId) {
+    const { data: memberRows, error: memberError } = await supabase
+      .from("proctored_question_sets")
+      .select("question_id")
+      .eq("set_id", setId);
+    if (memberError) return NextResponse.json({ error: memberError.message }, { status: 500 });
+    const questionIds = (memberRows ?? []).map((r) => r.question_id);
+    query = query.in("id", questionIds.length ? questionIds : ["00000000-0000-0000-0000-000000000000"]);
   }
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  let mapped = (data ?? []).map(mapQuestion);
-  // Filtered in JS rather than via a dotted PostgREST embed filter,
-  // which filters the embedded relation's shape, not which parent rows
-  // come back — not what we want for a subject-wide list.
-  if (subjectId && needsCategorization !== "true") mapped = mapped.filter((q) => q.subject_id === subjectId);
-
-  return NextResponse.json({ questions: mapped });
+  return NextResponse.json({ questions: (data ?? []).map(mapQuestion) });
 }
 
 export async function POST(req: Request) {
@@ -97,8 +107,19 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { question_type, prompt, options, correct_option, min_word_count, max_marks, explanation, difficulty, image_url, set_id } =
-    body ?? {};
+  const {
+    question_type,
+    prompt,
+    options,
+    correct_option,
+    min_word_count,
+    max_marks,
+    explanation,
+    difficulty,
+    image_url,
+    subject_id,
+    set_ids,
+  } = body ?? {};
   const type = question_type === "theory" ? "theory" : "mcq";
 
   if (!prompt?.trim()) {
@@ -111,8 +132,8 @@ export async function POST(req: Request) {
     const marksError = validateMaxMarks(max_marks);
     if (marksError) return NextResponse.json({ error: marksError }, { status: 400 });
   }
-  if (!set_id) {
-    return NextResponse.json({ error: "A Subject/Set is required." }, { status: 400 });
+  if (!subject_id) {
+    return NextResponse.json({ error: "A Subject is required." }, { status: 400 });
   }
 
   const supabase = supabaseAdmin();
@@ -128,15 +149,31 @@ export async function POST(req: Request) {
       explanation: explanation?.trim() || null,
       difficulty: difficulty || "unknown",
       image_url: image_url || null,
-      set_id,
+      subject_id,
       needs_categorization: false,
       created_by: user.id,
     })
-    .select(SELECT_WITH_JOINS)
+    .select()
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ question: mapQuestion(data) }, { status: 201 });
+
+  const setIds = Array.isArray(set_ids) ? (set_ids as string[]).filter(Boolean) : [];
+  if (setIds.length > 0) {
+    const { error: linkError } = await supabase
+      .from("proctored_question_sets")
+      .insert(setIds.map((set_id) => ({ question_id: data.id, set_id })));
+    if (linkError) return NextResponse.json({ error: linkError.message }, { status: 500 });
+  }
+
+  const { data: full, error: refetchError } = await supabase
+    .from("proctored_questions")
+    .select(SELECT_WITH_JOINS)
+    .eq("id", data.id)
+    .single();
+  if (refetchError) return NextResponse.json({ error: refetchError.message }, { status: 500 });
+
+  return NextResponse.json({ question: mapQuestion(full) }, { status: 201 });
 }
 
 export async function PATCH(req: Request) {
@@ -144,8 +181,20 @@ export async function PATCH(req: Request) {
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { id, question_type, prompt, options, correct_option, min_word_count, max_marks, explanation, difficulty, image_url, set_id } =
-    body ?? {};
+  const {
+    id,
+    question_type,
+    prompt,
+    options,
+    correct_option,
+    min_word_count,
+    max_marks,
+    explanation,
+    difficulty,
+    image_url,
+    subject_id,
+    set_ids,
+  } = body ?? {};
 
   if (!id) return NextResponse.json({ error: "id is required." }, { status: 400 });
 
@@ -186,14 +235,34 @@ export async function PATCH(req: Request) {
       ...(explanation !== undefined ? { explanation: explanation?.trim() || null } : {}),
       ...(difficulty ? { difficulty } : {}),
       ...(image_url !== undefined ? { image_url: image_url || null } : {}),
-      ...(set_id !== undefined ? { set_id: set_id || null, needs_categorization: !set_id } : {}),
+      ...(subject_id !== undefined ? { subject_id: subject_id || null, needs_categorization: !subject_id } : {}),
     })
     .eq("id", id)
-    .select(SELECT_WITH_JOINS)
+    .select()
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ question: mapQuestion(data) });
+
+  if (Array.isArray(set_ids)) {
+    const setIds = (set_ids as string[]).filter(Boolean);
+    const { error: clearError } = await supabase.from("proctored_question_sets").delete().eq("question_id", id);
+    if (clearError) return NextResponse.json({ error: clearError.message }, { status: 500 });
+    if (setIds.length > 0) {
+      const { error: linkError } = await supabase
+        .from("proctored_question_sets")
+        .insert(setIds.map((set_id) => ({ question_id: id, set_id })));
+      if (linkError) return NextResponse.json({ error: linkError.message }, { status: 500 });
+    }
+  }
+
+  const { data: full, error: refetchError } = await supabase
+    .from("proctored_questions")
+    .select(SELECT_WITH_JOINS)
+    .eq("id", data.id)
+    .single();
+  if (refetchError) return NextResponse.json({ error: refetchError.message }, { status: 500 });
+
+  return NextResponse.json({ question: mapQuestion(full) });
 }
 
 export async function DELETE(req: Request) {

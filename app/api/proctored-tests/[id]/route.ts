@@ -26,9 +26,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   const questionCount = sectionsWithQuestions.reduce((sum, s) => sum + s.questions.length, 0);
 
   // Resolved values (the actual number that applies, not "inherited")
-  // — what the rules screen and the take screen's section tabs need;
-  // shown to both students and teachers alike, unlike subject_id/set
-  // internals which stay teacher-only below.
+  // — what the rules screen and the take screen's section tabs need.
   const sectionSummaries = sectionsWithQuestions
     .sort((a, b) => a.position - b.position)
     .map((s) => ({
@@ -77,7 +75,6 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   const sections = sectionsWithQuestions.map((s) => ({
     id: s.id,
     name: s.name,
-    subject_id: s.subject_id,
     position: s.position,
     time_limit_minutes: s.time_limit_minutes,
     negative_marking_fraction: s.negative_marking_fraction,

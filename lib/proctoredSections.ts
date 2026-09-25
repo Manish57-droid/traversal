@@ -13,7 +13,6 @@ export interface ResolvedSection {
   id: string;
   test_id: string;
   name: string;
-  subject_id: string | null;
   position: number;
   time_limit_minutes: number | null;
   negative_marking_fraction: number | null;
@@ -92,15 +91,16 @@ export async function getSectionsWithQuestions(testId: string): Promise<SectionW
   }
 
   const allSetIds = Array.from(new Set(Array.from(setIdsBySection.values()).flat()));
-  const questionsBySet = new Map<string, ResolvedQuestion[]>();
+  const questionsBySet = new Map<string, (ResolvedQuestion & { created_at: string })[]>();
   if (allSetIds.length > 0) {
-    const { data: dynQuestions } = await supabase
-      .from("proctored_questions")
-      .select(`${QUESTION_FIELDS}, set_id`)
-      .in("set_id", allSetIds)
-      .order("created_at", { ascending: true });
-    for (const q of (dynQuestions ?? []) as any[]) {
-      const list = questionsBySet.get(q.set_id) ?? [];
+    const { data: dynRows } = await supabase
+      .from("proctored_question_sets")
+      .select(`set_id, proctored_questions(${QUESTION_FIELDS}, created_at)`)
+      .in("set_id", allSetIds);
+    for (const row of (dynRows ?? []) as any[]) {
+      const q = row.proctored_questions;
+      if (!q) continue;
+      const list = questionsBySet.get(row.set_id) ?? [];
       list.push({
         id: q.id,
         question_type: q.question_type,
@@ -112,19 +112,31 @@ export async function getSectionsWithQuestions(testId: string): Promise<SectionW
         explanation: q.explanation,
         difficulty: q.difficulty,
         image_url: q.image_url,
+        created_at: q.created_at,
         section_id: "", // filled in per-section below
       });
-      questionsBySet.set(q.set_id, list);
+      questionsBySet.set(row.set_id, list);
     }
   }
 
   return sections.map((section) => {
     const enabledSetIds = setIdsBySection.get(section.id) ?? [];
-    const questions =
-      enabledSetIds.length > 0
-        ? enabledSetIds.flatMap((setId) => (questionsBySet.get(setId) ?? []).map((q) => ({ ...q, section_id: section.id })))
-        : legacyBySection.get(section.id) ?? [];
-    return { ...section, questions };
+    if (enabledSetIds.length === 0) {
+      return { ...section, questions: legacyBySection.get(section.id) ?? [] };
+    }
+    // A question can belong to more than one enabled Set on the same
+    // section — dedupe so it only appears once.
+    const seen = new Set<string>();
+    const questions: (ResolvedQuestion & { created_at: string })[] = [];
+    for (const setId of enabledSetIds) {
+      for (const q of questionsBySet.get(setId) ?? []) {
+        if (seen.has(q.id)) continue;
+        seen.add(q.id);
+        questions.push({ ...q, section_id: section.id });
+      }
+    }
+    questions.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    return { ...section, questions: questions.map(({ created_at, ...q }) => q) };
   });
 }
 

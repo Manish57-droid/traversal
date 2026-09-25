@@ -1,43 +1,51 @@
 import { NextResponse } from "next/server";
 import { getCurrentAppUser, requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import type { ProctoredSet } from "@/types";
+import type { ProctoredSetWithCount } from "@/types";
 
-// GET    /api/proctored-sets?subjectId=... -> sets for one subject
-//         (all sets if subjectId is omitted). Any signed-in role can read.
-// POST   /api/proctored-sets { subject_id, name } -> teacher/admin only.
+// GET    /api/proctored-sets -> every Set (flat, subject-less — a Set
+//         is just a named, optional bundle of questions any teacher
+//         can freely mix subjects into), each with a live question
+//         count. Any signed-in role can read.
+// POST   /api/proctored-sets { name } -> teacher/admin only.
 // PATCH  /api/proctored-sets { id, name } -> teacher/admin only.
-// DELETE /api/proctored-sets { id } -> teacher/admin only. Its questions
-//         are flagged needs_categorization before set_id goes null (see
-//         migration 0012's trigger) rather than being lost.
-export async function GET(req: Request) {
+// DELETE /api/proctored-sets { id } -> teacher/admin only. Its
+//         questions simply lose that bundle membership — a question's
+//         categorization depends only on its Subject, never its Sets.
+export async function GET() {
   const user = await getCurrentAppUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { searchParams } = new URL(req.url);
-  const subjectId = searchParams.get("subjectId");
-
   const supabase = supabaseAdmin();
-  let query = supabase.from("proctored_sets").select("*").order("name", { ascending: true });
-  if (subjectId) query = query.eq("subject_id", subjectId);
+  const { data, error } = await supabase
+    .from("proctored_sets")
+    .select("*, proctored_question_sets(count)")
+    .order("name", { ascending: true });
 
-  const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ sets: (data ?? []) as ProctoredSet[] });
+
+  const sets: ProctoredSetWithCount[] = (data ?? []).map((s: any) => ({
+    id: s.id,
+    name: s.name,
+    created_by: s.created_by,
+    created_at: s.created_at,
+    question_count: s.proctored_question_sets?.[0]?.count ?? 0,
+  }));
+
+  return NextResponse.json({ sets });
 }
 
 export async function POST(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { subject_id, name } = await req.json();
-  if (!subject_id) return NextResponse.json({ error: "subject_id is required." }, { status: 400 });
+  const { name } = await req.json();
   if (!name?.trim()) return NextResponse.json({ error: "name is required." }, { status: 400 });
 
   const supabase = supabaseAdmin();
   const { data, error } = await supabase
     .from("proctored_sets")
-    .insert({ subject_id, name: name.trim(), created_by: user.id })
+    .insert({ name: name.trim(), created_by: user.id })
     .select()
     .single();
 

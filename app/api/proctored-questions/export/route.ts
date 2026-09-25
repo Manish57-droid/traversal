@@ -4,10 +4,10 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { newReportWorkbook, styleHeaderRow, safeFilenamePart, excelResponse } from "@/lib/reports";
 
 // GET /api/proctored-questions/export?setId=... or ?subjectId=...
-// -> downloads an .xlsx listing every question in the set (or every
-// set under the subject) for a teacher's own records/backup — not a
-// student-facing export, so correct answers and explanations are
-// included in full.
+// -> downloads an .xlsx listing every question in the Set (or every
+// question under the Subject) for a teacher's own records/backup —
+// not a student-facing export, so correct answers and explanations
+// are included in full.
 export async function GET(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -21,31 +21,29 @@ export async function GET(req: Request) {
 
   const supabase = supabaseAdmin();
 
-  let setIds: string[] = [];
+  let questionIds: string[] | null = null;
   let exportName = "Questions";
 
   if (setId) {
     const { data: set } = await supabase.from("proctored_sets").select("id, name").eq("id", setId).maybeSingle();
     if (!set) return NextResponse.json({ error: "Set not found." }, { status: 404 });
-    setIds = [set.id];
     exportName = set.name;
+    const { data: memberRows } = await supabase.from("proctored_question_sets").select("question_id").eq("set_id", setId);
+    questionIds = (memberRows ?? []).map((r) => r.question_id);
+    if (questionIds.length === 0) return NextResponse.json({ error: "This set has no questions to export." }, { status: 404 });
   } else if (subjectId) {
     const { data: subject } = await supabase.from("proctored_subjects").select("id, name").eq("id", subjectId).maybeSingle();
     if (!subject) return NextResponse.json({ error: "Subject not found." }, { status: 404 });
-    const { data: sets } = await supabase.from("proctored_sets").select("id").eq("subject_id", subjectId);
-    setIds = (sets ?? []).map((s) => s.id);
     exportName = subject.name;
   }
 
-  if (setIds.length === 0) {
-    return NextResponse.json({ error: "No sets found to export." }, { status: 404 });
-  }
-
-  const { data: questions, error } = await supabase
+  let query = supabase
     .from("proctored_questions")
-    .select("*, proctored_sets(name, proctored_subjects(name))")
-    .in("set_id", setIds)
+    .select("*, proctored_subjects(name), proctored_question_sets(proctored_sets(name))")
     .order("created_at", { ascending: true });
+  query = questionIds ? query.in("id", questionIds) : query.eq("subject_id", subjectId);
+
+  const { data: questions, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -78,8 +76,8 @@ export async function GET(req: Request) {
   for (const q of rows as any[]) {
     const options: string[] = q.options ?? [];
     const row: Record<string, unknown> = {
-      subject: q.proctored_sets?.proctored_subjects?.name ?? "",
-      set: q.proctored_sets?.name ?? "",
+      subject: q.proctored_subjects?.name ?? "",
+      set: (q.proctored_question_sets ?? []).map((r: any) => r.proctored_sets?.name).filter(Boolean).join(", "),
       type: q.question_type ?? "mcq",
       prompt: q.prompt,
       correct: q.correct_option !== null && q.correct_option !== undefined ? options[q.correct_option] ?? "" : "",

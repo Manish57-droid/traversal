@@ -1,16 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { AlertTriangle, Trash2, X } from "lucide-react";
-import type { ProctoredSubjectWithSets } from "@/types";
+import type { ProctoredSetWithCount, ProctoredSubjectWithCount } from "@/types";
 import { parseBulkQuestions, type ParsedQuestion } from "@/lib/proctoredBulkParse";
 
 interface ReviewRow extends ParsedQuestion {
-  /** Per-question Subject/Set override — off by default, so the bulk
+  /** Per-question Subject/Sets override — off by default, so the bulk
    * target picker above applies to every row until a teacher opts one out. */
   overrideTarget: boolean;
   rowSubjectId: string;
-  rowSetId: string;
+  rowSetIds: string[];
 }
 
 const SAMPLE_PLACEHOLDER = `Paste questions here, e.g.:
@@ -31,21 +31,25 @@ Ans: 3`;
 
 export default function BulkImportPanel({
   subjects,
+  sets,
   onImported,
   onClose,
 }: {
-  subjects: ProctoredSubjectWithSets[];
+  subjects: ProctoredSubjectWithCount[];
+  sets: ProctoredSetWithCount[];
   onImported: () => Promise<void>;
   onClose: () => void;
 }) {
   const [rawText, setRawText] = useState("");
   const [rows, setRows] = useState<ReviewRow[] | null>(null);
   const [bulkSubjectId, setBulkSubjectId] = useState("");
-  const [bulkSetId, setBulkSetId] = useState("");
+  const [bulkSetIds, setBulkSetIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const bulkSets = useMemo(() => subjects.find((s) => s.id === bulkSubjectId)?.sets ?? [], [subjects, bulkSubjectId]);
+  function toggleBulkSet(setId: string) {
+    setBulkSetIds((prev) => (prev.includes(setId) ? prev.filter((id) => id !== setId) : [...prev, setId]));
+  }
 
   function handleParse() {
     const parsed = parseBulkQuestions(rawText);
@@ -54,7 +58,7 @@ export default function BulkImportPanel({
         ...q,
         overrideTarget: false,
         rowSubjectId: "",
-        rowSetId: "",
+        rowSetIds: [],
       }))
     );
     setError(null);
@@ -97,12 +101,16 @@ export default function BulkImportPanel({
     );
   }
 
-  function resolvedSetId(row: ReviewRow): string {
-    return row.overrideTarget ? row.rowSetId : bulkSetId;
+  function resolvedSubjectId(row: ReviewRow): string {
+    return row.overrideTarget ? row.rowSubjectId : bulkSubjectId;
+  }
+
+  function resolvedSetIds(row: ReviewRow): string[] {
+    return row.overrideTarget ? row.rowSetIds : bulkSetIds;
   }
 
   const readyCount = rows?.filter(
-    (r) => r.prompt.trim() && r.options.filter((o) => o.trim()).length >= 2 && r.correctOption !== null && resolvedSetId(r)
+    (r) => r.prompt.trim() && r.options.filter((o) => o.trim()).length >= 2 && r.correctOption !== null && resolvedSubjectId(r)
   ).length ?? 0;
 
   async function handleConfirm() {
@@ -110,11 +118,11 @@ export default function BulkImportPanel({
     setError(null);
 
     const invalidIdx = rows.findIndex(
-      (r) => !r.prompt.trim() || r.options.filter((o) => o.trim()).length < 2 || r.correctOption === null || !resolvedSetId(r)
+      (r) => !r.prompt.trim() || r.options.filter((o) => o.trim()).length < 2 || r.correctOption === null || !resolvedSubjectId(r)
     );
     if (invalidIdx >= 0) {
       setError(
-        `Question ${invalidIdx + 1} isn't ready yet — every question needs a prompt, at least 2 options, a correct option selected, and a Subject/Set.`
+        `Question ${invalidIdx + 1} isn't ready yet — every question needs a prompt, at least 2 options, a correct option selected, and a Subject.`
       );
       return;
     }
@@ -125,7 +133,8 @@ export default function BulkImportPanel({
         prompt: r.prompt.trim(),
         options: r.options.map((o) => o.trim()).filter(Boolean),
         correct_option: r.correctOption,
-        set_id: resolvedSetId(r),
+        subject_id: resolvedSubjectId(r),
+        set_ids: resolvedSetIds(r),
       }));
       const res = await fetch("/api/proctored-questions/bulk-import", {
         method: "POST",
@@ -194,14 +203,7 @@ export default function BulkImportPanel({
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs text-fg-muted">Apply to all — Subject</label>
-              <select
-                className="input"
-                value={bulkSubjectId}
-                onChange={(e) => {
-                  setBulkSubjectId(e.target.value);
-                  setBulkSetId("");
-                }}
-              >
+              <select className="input" value={bulkSubjectId} onChange={(e) => setBulkSubjectId(e.target.value)}>
                 <option value="">Select subject…</option>
                 {subjects.map((s) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
@@ -209,13 +211,20 @@ export default function BulkImportPanel({
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs text-fg-muted">Apply to all — Set</label>
-              <select className="input" value={bulkSetId} onChange={(e) => setBulkSetId(e.target.value)} disabled={!bulkSubjectId}>
-                <option value="">Select set…</option>
-                {bulkSets.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
+              <label className="mb-1 block text-xs text-fg-muted">Apply to all — Sets (optional)</label>
+              <div className="flex flex-wrap gap-1.5">
+                {sets.map((s) => (
+                  <label
+                    key={s.id}
+                    className={`flex items-center gap-1 rounded-full border px-2 py-1 text-xs transition-colors ${
+                      bulkSetIds.includes(s.id) ? "border-accent/60 bg-accent/10 text-accent" : "border-line text-fg-muted"
+                    }`}
+                  >
+                    <input type="checkbox" className="sr-only" checked={bulkSetIds.includes(s.id)} onChange={() => toggleBulkSet(s.id)} />
+                    {s.name}
+                  </label>
                 ))}
-              </select>
+              </div>
             </div>
           </div>
 
@@ -226,6 +235,7 @@ export default function BulkImportPanel({
                 index={i}
                 row={row}
                 subjects={subjects}
+                sets={sets}
                 onChange={(patch) => updateRow(row.clientId, patch)}
                 onOptionChange={(idx, value) => updateOption(row.clientId, idx, value)}
                 onAddOption={() => addOption(row.clientId)}
@@ -254,6 +264,7 @@ function ReviewCard({
   index,
   row,
   subjects,
+  sets,
   onChange,
   onOptionChange,
   onAddOption,
@@ -262,14 +273,17 @@ function ReviewCard({
 }: {
   index: number;
   row: ReviewRow;
-  subjects: ProctoredSubjectWithSets[];
+  subjects: ProctoredSubjectWithCount[];
+  sets: ProctoredSetWithCount[];
   onChange: (patch: Partial<ReviewRow>) => void;
   onOptionChange: (index: number, value: string) => void;
   onAddOption: () => void;
   onRemoveOption: (index: number) => void;
   onRemove: () => void;
 }) {
-  const rowSets = subjects.find((s) => s.id === row.rowSubjectId)?.sets ?? [];
+  function toggleRowSet(setId: string) {
+    onChange({ rowSetIds: row.rowSetIds.includes(setId) ? row.rowSetIds.filter((id) => id !== setId) : [...row.rowSetIds, setId] });
+  }
 
   return (
     <div className={`rounded-lg border p-3 ${row.parseError ? "border-warn/50 bg-warn/5" : "border-line/70"}`}>
@@ -334,31 +348,33 @@ function ReviewCard({
             checked={row.overrideTarget}
             onChange={(e) => onChange({ overrideTarget: e.target.checked })}
           />
-          Use a different Subject/Set for this question
+          Use a different Subject/Sets for this question
         </label>
         {row.overrideTarget && (
-          <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+          <div className="mt-1.5 space-y-1.5">
             <select
               className="input"
               value={row.rowSubjectId}
-              onChange={(e) => onChange({ rowSubjectId: e.target.value, rowSetId: "" })}
+              onChange={(e) => onChange({ rowSubjectId: e.target.value })}
             >
               <option value="">Select subject…</option>
               {subjects.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
-            <select
-              className="input"
-              value={row.rowSetId}
-              onChange={(e) => onChange({ rowSetId: e.target.value })}
-              disabled={!row.rowSubjectId}
-            >
-              <option value="">Select set…</option>
-              {rowSets.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
+            <div className="flex flex-wrap gap-1.5">
+              {sets.map((s) => (
+                <label
+                  key={s.id}
+                  className={`flex items-center gap-1 rounded-full border px-2 py-1 text-xs transition-colors ${
+                    row.rowSetIds.includes(s.id) ? "border-accent/60 bg-accent/10 text-accent" : "border-line text-fg-muted"
+                  }`}
+                >
+                  <input type="checkbox" className="sr-only" checked={row.rowSetIds.includes(s.id)} onChange={() => toggleRowSet(s.id)} />
+                  {s.name}
+                </label>
               ))}
-            </select>
+            </div>
           </div>
         )}
       </div>

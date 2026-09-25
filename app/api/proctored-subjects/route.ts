@@ -1,51 +1,37 @@
 import { NextResponse } from "next/server";
 import { getCurrentAppUser, requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import type { ProctoredSetWithCount, ProctoredSubjectWithSets } from "@/types";
+import type { ProctoredSubjectWithCount } from "@/types";
 
-// GET    /api/proctored-subjects -> every subject with its sets, each
-//         set carrying a live question count. Any signed-in role can
-//         read; only teacher/admin can write. Shared bank, not
-//         class-scoped — same spirit as DSA/Aptitude.
+// GET    /api/proctored-subjects -> every subject with its own direct
+//         question count. Any signed-in role can read; only
+//         teacher/admin can write. Shared bank, not class-scoped —
+//         same spirit as DSA/Aptitude. Subjects no longer nest Sets —
+//         a Set is an independent, optional bundle (see
+//         /api/proctored-sets) that can freely mix subjects.
 // POST   /api/proctored-subjects { name } -> teacher/admin only.
 // PATCH  /api/proctored-subjects { id, name } -> teacher/admin only.
-// DELETE /api/proctored-subjects { id } -> teacher/admin only. Cascades
-//         to its sets, which flag their questions needs_categorization
-//         before set_id goes null (see migration 0012's trigger).
+// DELETE /api/proctored-subjects { id } -> teacher/admin only. Its
+//         questions are flagged needs_categorization before subject_id
+//         goes null (see migration 0025's trigger).
 export async function GET() {
   const user = await getCurrentAppUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const supabase = supabaseAdmin();
-  const [{ data: subjects, error: subjErr }, { data: sets, error: setErr }] = await Promise.all([
-    supabase.from("proctored_subjects").select("*").order("name", { ascending: true }),
-    supabase.from("proctored_sets").select("*, proctored_questions(count)").order("name", { ascending: true }),
-  ]);
+  const { data: subjects, error } = await supabase
+    .from("proctored_subjects")
+    .select("*, proctored_questions(count)")
+    .order("name", { ascending: true });
 
-  if (subjErr) return NextResponse.json({ error: subjErr.message }, { status: 500 });
-  if (setErr) return NextResponse.json({ error: setErr.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const setsBySubject = new Map<string, ProctoredSetWithCount[]>();
-  for (const s of (sets ?? []) as any[]) {
-    const withCount: ProctoredSetWithCount = {
-      id: s.id,
-      subject_id: s.subject_id,
-      name: s.name,
-      created_by: s.created_by,
-      created_at: s.created_at,
-      question_count: s.proctored_questions?.[0]?.count ?? 0,
-    };
-    const list = setsBySubject.get(s.subject_id) ?? [];
-    list.push(withCount);
-    setsBySubject.set(s.subject_id, list);
-  }
-
-  const result: ProctoredSubjectWithSets[] = (subjects ?? []).map((subj: any) => ({
+  const result: ProctoredSubjectWithCount[] = (subjects ?? []).map((subj: any) => ({
     id: subj.id,
     name: subj.name,
     created_by: subj.created_by,
     created_at: subj.created_at,
-    sets: setsBySubject.get(subj.id) ?? [],
+    question_count: subj.proctored_questions?.[0]?.count ?? 0,
   }));
 
   return NextResponse.json({ subjects: result });

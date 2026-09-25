@@ -273,20 +273,24 @@ export interface ProctoredQuestion {
   created_at: string;
   /** Optional — most questions won't have one. */
   image_url: string | null;
-  /** Null only for legacy questions predating the Subject -> Set
-   * structure, or a set that was later deleted — see needs_categorization. */
-  set_id: string | null;
-  set_name: string | null;
+  /** A question's optional, many-to-many exam-bundle memberships — a
+   * question can be in several Sets, or none, independent of its
+   * Subject. */
+  sets: { id: string; name: string }[];
   subject_id: string | null;
   subject_name: string | null;
-  /** True when set_id is null and this question is awaiting a teacher
-   * to assign it a set — same pattern as DSA's needs_link_curation. */
+  /** True when subject_id is null and this question is awaiting a
+   * teacher to assign it a subject — same pattern as DSA's
+   * needs_link_curation. */
   needs_categorization: boolean;
 }
 
 // ---------- Proctored question bank: Subjects & Sets ----------
 // Shared bank, not class-scoped — any teacher/admin can create and
-// manage these, same spirit as the DSA/Aptitude banks.
+// manage these, same spirit as the DSA/Aptitude banks. Subject is a
+// required content-category tag on each Question; a Set is an
+// independent, optional, many-to-many exam-bundle a teacher curates —
+// it can mix questions from any Subjects or stick to one, freely.
 
 export interface ProctoredSubject {
   id: string;
@@ -295,9 +299,12 @@ export interface ProctoredSubject {
   created_at: string;
 }
 
+export interface ProctoredSubjectWithCount extends ProctoredSubject {
+  question_count: number;
+}
+
 export interface ProctoredSet {
   id: string;
-  subject_id: string;
   name: string;
   created_by: string | null;
   created_at: string;
@@ -305,10 +312,6 @@ export interface ProctoredSet {
 
 export interface ProctoredSetWithCount extends ProctoredSet {
   question_count: number;
-}
-
-export interface ProctoredSubjectWithSets extends ProctoredSubject {
-  sets: ProctoredSetWithCount[];
 }
 
 export interface ProctoredTest {
@@ -345,9 +348,6 @@ export interface ProctoredTestSection {
   id: string;
   test_id: string;
   name: string;
-  /** Null for a legacy default section (predates Subject/Set); a
-   * section created through the section-aware flow always sets this. */
-  subject_id: string | null;
   position: number;
   /** Null = uses the test's combined timer, not its own. */
   time_limit_minutes: number | null;
@@ -357,7 +357,6 @@ export interface ProctoredTestSection {
 }
 
 export interface ProctoredTestSectionWithMeta extends ProctoredTestSection {
-  subject_name: string | null;
   set_ids: string[];
   question_count: number;
 }

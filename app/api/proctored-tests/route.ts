@@ -12,13 +12,15 @@ import { notifyClassMembers } from "@/lib/notifications";
 // POST /api/proctored-tests { class_id, name, description?, time_limit_minutes,
 //       negative_marking_fraction?, max_violations_before_autosubmit?,
 //       require_camera?, require_mic?, timer_mode?, allow_free_section_navigation?,
-//       sections: [{ name, subject_id, set_ids, time_limit_minutes?, negative_marking_fraction?, calculator_enabled? }] }
+//       sections: [{ name, set_ids, time_limit_minutes?, negative_marking_fraction?, calculator_enabled? }] }
 //       -> creates the test plus its sections and each section's
 //       enabled-Set rows. At least one section, each with at least one
 //       enabled Set, is required — a test with zero sections/questions
 //       can't be created (same spirit as the old "at least one
-//       question" requirement, just moved up a level). Same
-//       class-scoped authorization check as POST /api/assign.
+//       question" requirement, just moved up a level). A Set's
+//       questions can span any Subjects — Sections no longer gate on
+//       Subject at all. Same class-scoped authorization check as
+//       POST /api/assign.
 export async function GET(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -69,7 +71,6 @@ export async function GET(req: Request) {
 
 interface SectionInput {
   name?: string;
-  subject_id?: string;
   set_ids?: string[];
   time_limit_minutes?: number | null;
   negative_marking_fraction?: number | null;
@@ -112,7 +113,6 @@ export async function POST(req: Request) {
   for (let i = 0; i < sectionInputs.length; i++) {
     const s = sectionInputs[i];
     if (!s.name?.trim()) return NextResponse.json({ error: `Section ${i + 1}: name is required.` }, { status: 400 });
-    if (!s.subject_id) return NextResponse.json({ error: `Section ${i + 1}: a Subject is required.` }, { status: 400 });
     if (!Array.isArray(s.set_ids) || s.set_ids.length === 0) {
       return NextResponse.json({ error: `Section ${i + 1}: at least one Set is required.` }, { status: 400 });
     }
@@ -131,7 +131,7 @@ export async function POST(req: Request) {
   // re-verified server-side rather than trusted from the client.
   const allSetIds = Array.from(new Set(sectionInputs.flatMap((s) => s.set_ids as string[])));
   const { data: setCounts, error: setCountError } = await supabase
-    .from("proctored_questions")
+    .from("proctored_question_sets")
     .select("set_id")
     .in("set_id", allSetIds);
   if (setCountError) return NextResponse.json({ error: setCountError.message }, { status: 500 });
@@ -167,7 +167,6 @@ export async function POST(req: Request) {
   const sectionRows = sectionInputs.map((s, i) => ({
     test_id: test.id,
     name: s.name!.trim(),
-    subject_id: s.subject_id,
     position: i,
     time_limit_minutes: s.time_limit_minutes ?? null,
     negative_marking_fraction: s.negative_marking_fraction ?? null,

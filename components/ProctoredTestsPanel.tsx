@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Camera, ChevronDown, ChevronUp, Download, Mic, PenLine, ShieldAlert, Trash2, Trophy } from "lucide-react";
 import type {
   ProctoredLeaderboardRow,
-  ProctoredSubjectWithSets,
+  ProctoredSetWithCount,
   ProctoredTestWithQuestions,
   ProctoredViolationBreakdown,
 } from "@/types";
@@ -312,7 +312,6 @@ function TestDetail({ testId }: { testId: string }) {
 interface SectionForm {
   clientId: string;
   name: string;
-  subject_id: string;
   set_ids: string[];
   time_limit_minutes: string;
   negative_marking_fraction: string;
@@ -325,7 +324,6 @@ function newSection(): SectionForm {
   return {
     clientId: `section-${sectionIdCounter}`,
     name: "",
-    subject_id: "",
     set_ids: [],
     time_limit_minutes: "",
     negative_marking_fraction: "",
@@ -349,7 +347,7 @@ function SectionEditor({
   section,
   index,
   total,
-  subjects,
+  sets,
   timerMode,
   onChange,
   onRemove,
@@ -358,14 +356,13 @@ function SectionEditor({
   section: SectionForm;
   index: number;
   total: number;
-  subjects: ProctoredSubjectWithSets[];
+  sets: ProctoredSetWithCount[];
   timerMode: "combined" | "per_section";
   onChange: (patch: Partial<SectionForm>) => void;
   onRemove: () => void;
   onMove: (dir: -1 | 1) => void;
 }) {
-  const subject = subjects.find((s) => s.id === section.subject_id);
-  const questionCount = (subject?.sets ?? [])
+  const questionCount = sets
     .filter((s) => section.set_ids.includes(s.id))
     .reduce((sum, s) => sum + s.question_count, 0);
 
@@ -390,50 +387,33 @@ function SectionEditor({
         </div>
       </div>
 
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">
-        <div>
-          <label className="mb-1 block text-xs text-fg-muted">Section name</label>
-          <input
-            className="input"
-            placeholder="e.g. Quantitative"
-            value={section.name}
-            onChange={(e) => onChange({ name: e.target.value })}
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs text-fg-muted">Subject</label>
-          <select
-            className="input"
-            value={section.subject_id}
-            onChange={(e) => onChange({ subject_id: e.target.value, set_ids: [] })}
-          >
-            <option value="">Select subject…</option>
-            {subjects.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-        </div>
+      <div>
+        <label className="mb-1 block text-xs text-fg-muted">Section name</label>
+        <input
+          className="input"
+          placeholder="e.g. Quantitative"
+          value={section.name}
+          onChange={(e) => onChange({ name: e.target.value })}
+        />
       </div>
 
-      {section.subject_id && (
-        <div className="mt-2">
-          <label className="mb-1 block text-xs text-fg-muted">Sets to include</label>
-          {(subject?.sets ?? []).length === 0 && <p className="text-xs text-fg-subtle">This subject has no Sets yet.</p>}
-          <div className="flex flex-wrap gap-2">
-            {(subject?.sets ?? []).map((s) => (
-              <label
-                key={s.id}
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors ${
-                  section.set_ids.includes(s.id) ? "border-accent/60 bg-accent/10 text-accent" : "border-line text-fg-muted"
-                }`}
-              >
-                <input type="checkbox" className="sr-only" checked={section.set_ids.includes(s.id)} onChange={() => toggleSet(s.id)} />
-                {s.name} ({s.question_count})
-              </label>
-            ))}
-          </div>
+      <div className="mt-2">
+        <label className="mb-1 block text-xs text-fg-muted">Sets to include</label>
+        {sets.length === 0 && <p className="text-xs text-fg-subtle">No Sets in the proctored bank yet.</p>}
+        <div className="flex flex-wrap gap-2">
+          {sets.map((s) => (
+            <label
+              key={s.id}
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors ${
+                section.set_ids.includes(s.id) ? "border-accent/60 bg-accent/10 text-accent" : "border-line text-fg-muted"
+              }`}
+            >
+              <input type="checkbox" className="sr-only" checked={section.set_ids.includes(s.id)} onChange={() => toggleSet(s.id)} />
+              {s.name} ({s.question_count})
+            </label>
+          ))}
         </div>
-      )}
+      </div>
 
       <p className="mt-2 text-xs text-fg-subtle">
         {questionCount} question{questionCount === 1 ? "" : "s"} in this section
@@ -484,7 +464,7 @@ function SectionEditor({
 // authorization server-side, this just controls visibility.
 export default function ProctoredTestsPanel({ classId }: { classId: string }) {
   const [tests, setTests] = useState<ProctoredTestWithQuestions[]>([]);
-  const [subjects, setSubjects] = useState<ProctoredSubjectWithSets[]>([]);
+  const [sets, setSets] = useState<ProctoredSetWithCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -495,14 +475,14 @@ export default function ProctoredTestsPanel({ classId }: { classId: string }) {
 
   async function load() {
     setLoading(true);
-    const [testsRes, subjectsRes] = await Promise.all([
+    const [testsRes, setsRes] = await Promise.all([
       fetch(`/api/proctored-tests?classId=${classId}`),
-      fetch("/api/proctored-subjects"),
+      fetch("/api/proctored-sets"),
     ]);
     const testsData = await testsRes.json();
-    const subjectsData = await subjectsRes.json();
+    const setsData = await setsRes.json();
     setTests(testsData.tests ?? []);
-    setSubjects(subjectsData.subjects ?? []);
+    setSets(setsData.sets ?? []);
     setLoading(false);
   }
 
@@ -532,13 +512,10 @@ export default function ProctoredTestsPanel({ classId }: { classId: string }) {
 
   const totalQuestionCount = useMemo(() => {
     return sections.reduce((sum, section) => {
-      const subject = subjects.find((s) => s.id === section.subject_id);
-      const count = (subject?.sets ?? [])
-        .filter((s) => section.set_ids.includes(s.id))
-        .reduce((n, s) => n + s.question_count, 0);
+      const count = sets.filter((s) => section.set_ids.includes(s.id)).reduce((n, s) => n + s.question_count, 0);
       return sum + count;
     }, 0);
-  }, [sections, subjects]);
+  }, [sections, sets]);
 
   function resetForm() {
     setForm(EMPTY_FORM);
@@ -557,7 +534,6 @@ export default function ProctoredTestsPanel({ classId }: { classId: string }) {
         ...form,
         sections: sections.map((s) => ({
           name: s.name,
-          subject_id: s.subject_id,
           set_ids: s.set_ids,
           time_limit_minutes: s.time_limit_minutes === "" ? null : Number(s.time_limit_minutes),
           negative_marking_fraction: s.negative_marking_fraction === "" ? null : Number(s.negative_marking_fraction),
@@ -753,9 +729,9 @@ export default function ProctoredTestsPanel({ classId }: { classId: string }) {
                 + Add section
               </button>
             </div>
-            {subjects.length === 0 && (
+            {sets.length === 0 && (
               <p className="mb-2 text-xs text-fg-subtle">
-                No Subjects in the proctored bank yet — add some from the Proctored Questions page first.
+                No Sets in the proctored bank yet — add some from the Proctored Questions page first.
               </p>
             )}
             <div className="space-y-2">
@@ -765,7 +741,7 @@ export default function ProctoredTestsPanel({ classId }: { classId: string }) {
                   section={section}
                   index={i}
                   total={sections.length}
-                  subjects={subjects}
+                  sets={sets}
                   timerMode={form.timer_mode}
                   onChange={(patch) => updateSection(section.clientId, patch)}
                   onRemove={() => removeSection(section.clientId)}
