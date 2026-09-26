@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Camera, ChevronDown, ChevronUp, Download, Mic, PenLine, ShieldAlert, Trash2, Trophy } from "lucide-react";
+import { Camera, ChevronDown, ChevronUp, Download, Mic, PenLine, RotateCcw, ShieldAlert, Trash2, Trophy } from "lucide-react";
 import type {
   ProctoredLeaderboardRow,
   ProctoredSetWithCount,
@@ -145,6 +145,15 @@ function TestDetail({ testId }: { testId: string }) {
   const [busy, setBusy] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [gradingAttemptId, setGradingAttemptId] = useState<string | null>(null);
+  const [retakingAttemptId, setRetakingAttemptId] = useState<string | null>(null);
+
+  async function handleAllowRetake(attemptId: string, studentName: string) {
+    if (!confirm(`This permanently discards ${studentName}'s current result and lets them retake the test. Continue?`)) return;
+    setRetakingAttemptId(attemptId);
+    const res = await fetch(`/api/proctored-tests/${testId}/attempts/${attemptId}`, { method: "DELETE" });
+    if (res.ok) load();
+    setRetakingAttemptId(null);
+  }
 
   function load() {
     Promise.all([
@@ -285,6 +294,18 @@ function TestDetail({ testId }: { testId: string }) {
                     <ShieldAlert className="h-3.5 w-3.5" />
                     {a.violation_count} violation{a.violation_count === 1 ? "" : "s"}
                   </span>
+                  {a.status !== "in_progress" && (
+                    <button
+                      type="button"
+                      onClick={() => handleAllowRetake(a.attempt_id, a.student_name)}
+                      disabled={retakingAttemptId === a.attempt_id}
+                      className="flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-xs text-fg-muted hover:text-fg"
+                      title="Discard this result and let the student retake the test"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      {retakingAttemptId === a.attempt_id ? "Resetting..." : "Allow retake"}
+                    </button>
+                  )}
                 </div>
               </div>
               {Object.keys(a.violations_by_type).length > 0 && (

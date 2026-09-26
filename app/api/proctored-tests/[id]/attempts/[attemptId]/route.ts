@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getCurrentAppUser } from "@/lib/roles";
+import { getCurrentAppUser, requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { getClassAuthorization, isAuthorized } from "@/lib/classAccess";
 import { remainingSeconds, finalizeAttempt } from "@/lib/proctoredScoring";
 
 // PATCH /api/proctored-tests/[id]/attempts/[attemptId]
@@ -89,4 +90,39 @@ export async function PATCH(req: Request, { params }: { params: { id: string; at
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
+}
+
+// DELETE /api/proctored-tests/[id]/attempts/[attemptId] -> teacher/admin
+// only, class-authorized. "Allow retake": deletes a finished attempt
+// outright (proctored_violations and proctored_section_attempts cascade
+// with it) so the student's next visit to the start screen sees no
+// attempt at all and can begin completely fresh — a clean reset, not a
+// side-by-side attempt history. Refused for an attempt still
+// in_progress; the student needs to actually be done first.
+export async function DELETE(req: Request, { params }: { params: { id: string; attemptId: string } }) {
+  const user = await requireRole(["teacher", "admin"]).catch(() => null);
+  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const supabase = supabaseAdmin();
+  const { data: test } = await supabase.from("proctored_tests").select("class_id").eq("id", params.id).maybeSingle();
+  if (!test) return NextResponse.json({ error: "Test not found." }, { status: 404 });
+
+  const classAuth = await getClassAuthorization(test.class_id, user.id, user.role);
+  if (!isAuthorized(classAuth)) return NextResponse.json({ error: "Test not found." }, { status: 404 });
+
+  const { data: attempt } = await supabase
+    .from("proctored_test_attempts")
+    .select("id, status")
+    .eq("id", params.attemptId)
+    .eq("test_id", params.id)
+    .maybeSingle();
+  if (!attempt) return NextResponse.json({ error: "Attempt not found." }, { status: 404 });
+  if (attempt.status === "in_progress") {
+    return NextResponse.json({ error: "This student is still taking the test." }, { status: 409 });
+  }
+
+  const { error } = await supabase.from("proctored_test_attempts").delete().eq("id", attempt.id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ deleted: true });
 }

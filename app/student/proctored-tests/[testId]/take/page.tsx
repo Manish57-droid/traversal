@@ -370,31 +370,41 @@ export default function ProctoredTestTakePage() {
   }, [test, params.testId, goToResult, advanceToNextSection]);
 
   const logViolation = useCallback(
-    async (type: ProctoredViolationType) => {
+    (type: ProctoredViolationType) => {
       if (finishedRef.current || !attemptIdRef.current) return;
-      try {
-        const res = await fetch(
-          `/api/proctored-tests/${params.testId}/attempts/${attemptIdRef.current}/violations`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ violation_type: type }),
+      // Shown instantly, optimistically — waiting on the server round
+      // trip before the student sees anything made every violation
+      // (even an instant DOM event like a tab switch) feel delayed.
+      // Reconciled with the server's authoritative count below; only
+      // the auto-submit transition itself waits on the real response.
+      const max = testRef.current?.max_violations_before_autosubmit ?? 0;
+      setViolationCount((prev) => {
+        const next = prev + 1;
+        showToast(`Violation logged (${next}/${max}). Reaching the limit will auto-submit your test.`);
+        return next;
+      });
+      (async () => {
+        try {
+          const res = await fetch(
+            `/api/proctored-tests/${params.testId}/attempts/${attemptIdRef.current}/violations`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ violation_type: type }),
+            }
+          );
+          const data = await res.json();
+          setViolationCount(data.violation_count);
+          if (data.autoSubmitted) {
+            finishedRef.current = true;
+            const result = data.result ?? { status: "auto_submitted_violation", score: null, total_questions: null };
+            goToResult(result.status, result.score, result.max_score ?? result.total_questions, result.grading_status);
           }
-        );
-        const data = await res.json();
-        setViolationCount(data.violation_count);
-        if (data.autoSubmitted) {
-          finishedRef.current = true;
-          const result = data.result ?? { status: "auto_submitted_violation", score: null, total_questions: null };
-          goToResult(result.status, result.score, result.max_score ?? result.total_questions, result.grading_status);
-          return;
+        } catch {
+          // Best-effort — the optimistic count/toast already shown; the
+          // server still enforces everything on the next successful request.
         }
-        const max = testRef.current?.max_violations_before_autosubmit ?? 0;
-        showToast(`Violation logged (${data.violation_count}/${max}). Reaching the limit will auto-submit your test.`);
-      } catch {
-        // Best-effort — if the network call itself fails, the server
-        // still enforces everything on the next successful request.
-      }
+      })();
     },
     [params.testId, goToResult]
   );

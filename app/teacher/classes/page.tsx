@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabaseBrowser } from "@/lib/supabase/browser-client";
 import type { ClassBrowseRow } from "@/types";
 
 const RELATIONSHIP_LABEL: Record<string, string> = {
@@ -26,6 +27,14 @@ export default function BrowseClassesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requesting, setRequesting] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabaseBrowser()
+      .auth.getUser()
+      .then(({ data }) => setCurrentUserId(data.user?.id ?? null));
+  }, []);
 
   // Surfaces a failed response instead of silently falling back to an
   // empty list — a `?? []` fallback here previously hid a real 500
@@ -54,6 +63,15 @@ export default function BrowseClassesPage() {
     const res = await fetch(`/api/classes/${classId}/access-requests`, { method: "POST" });
     if (res.ok) await load();
     setRequesting(null);
+  }
+
+  async function handleLeave(classId: string) {
+    if (!currentUserId) return;
+    if (!confirm("Leave this class? You'll lose access until re-approved.")) return;
+    setLeaving(classId);
+    await fetch(`/api/classes/${classId}/collaborators/${currentUserId}`, { method: "DELETE" });
+    await load();
+    setLeaving(null);
   }
 
   const hasAccess = (rel: string) => rel === "owner" || rel === "collaborator" || rel === "admin";
@@ -113,6 +131,18 @@ export default function BrowseClassesPage() {
                         className="btn-secondary py-1.5 text-xs"
                       >
                         {requesting === c.id ? "Requesting..." : "Request access"}
+                      </button>
+                    )}
+                    {c.relationship === "collaborator" && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleLeave(c.id);
+                        }}
+                        disabled={leaving === c.id || !currentUserId}
+                        className="btn-secondary py-1.5 text-xs"
+                      >
+                        {leaving === c.id ? "Leaving..." : "Leave"}
                       </button>
                     )}
                   </td>
