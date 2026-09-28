@@ -2,17 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Circle, BookOpen } from "lucide-react";
+import { Flame, Target, Percent, Sparkles } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import StatTile from "@/components/StatTile";
-import ProgressBar from "@/components/ProgressBar";
+import { DIFFICULTY_LABELS, DIFFICULTY_BADGE_STYLE } from "@/lib/difficulty";
 import ProctoredLeaderboardWidget from "@/components/ProctoredLeaderboardWidget";
 import StudentNotifications from "@/components/StudentNotifications";
-import type { QuestionStatus, StudentProctoredTestRow } from "@/types";
+import type { Question, QuestionStatus, StudentProctoredTestRow } from "@/types";
 
 interface ProgressJoinRow {
+  question_id: string;
   status: QuestionStatus;
-  questions: { platform: string; topic: string | null };
+  questions: Question;
 }
 
 const ATTEMPT_STATUS_LABEL: Record<string, string> = {
@@ -33,8 +34,6 @@ const ATTEMPT_STATUS_STYLE: Record<string, string> = {
   auto_submitted_violation: "border-warn/40 bg-warn/10 text-warn",
   expired: "border-warn/40 bg-warn/10 text-warn",
 };
-
-const MAX_TOPICS_SHOWN = 6;
 
 function CompletionDonut({ completed, notCompleted, pct }: { completed: number; notCompleted: number; pct: number }) {
   const data = [
@@ -60,10 +59,23 @@ function CompletionDonut({ completed, notCompleted, pct }: { completed: number; 
   );
 }
 
+// A stable pick for the whole day (not re-randomized on every reload)
+// without needing any backend state — hash today's date into an index
+// over whichever easy questions are loaded. Changes once at midnight,
+// same for every visit that day.
+function pickQuestionOfTheDay(candidates: ProgressJoinRow[]): ProgressJoinRow | null {
+  if (candidates.length === 0) return null;
+  const todayKey = new Date().toISOString().slice(0, 10);
+  let hash = 0;
+  for (let i = 0; i < todayKey.length; i++) hash = (hash * 31 + todayKey.charCodeAt(i)) >>> 0;
+  return candidates[hash % candidates.length];
+}
+
 export default function StudentDashboardPage() {
   const [rows, setRows] = useState<ProgressJoinRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [proctoredTests, setProctoredTests] = useState<StudentProctoredTestRow[]>([]);
+  const [aptitude, setAptitude] = useState({ attempted: 0, total: 0 });
 
   useEffect(() => {
     fetch("/api/progress")
@@ -74,25 +86,34 @@ export default function StudentDashboardPage() {
     fetch("/api/student/proctored-tests")
       .then((r) => r.json())
       .then((d) => setProctoredTests(d.tests ?? []));
+
+    fetch("/api/student/aptitude-summary")
+      .then((r) => r.json())
+      .then((d) => setAptitude({ attempted: d.attempted ?? 0, total: d.total ?? 0 }))
+      .catch(() => {});
   }, []);
 
   const attemptedTests = proctoredTests.filter((t) => t.attempt_status !== "not_started");
 
-  const total = rows.length;
-  const completed = rows.filter((r) => r.status === "completed").length;
-  const notCompleted = total - completed;
-  const pct = total ? (completed / total) * 100 : 0;
+  const dsaTotal = rows.length;
+  const dsaCompleted = rows.filter((r) => r.status === "completed").length;
+  const dsaNotCompleted = dsaTotal - dsaCompleted;
+  const dsaPct = dsaTotal ? (dsaCompleted / dsaTotal) * 100 : 0;
+  const totalAttempted = dsaCompleted + aptitude.attempted;
 
-  const topicBreakdown = useMemo(() => {
-    const byTopic = rows.reduce<Record<string, { total: number; completed: number }>>((acc, r) => {
-      const key = r.questions.topic || "Uncategorized";
-      acc[key] ??= { total: 0, completed: 0 };
-      acc[key].total += 1;
-      if (r.status === "completed") acc[key].completed += 1;
-      return acc;
-    }, {});
-    return Object.entries(byTopic).sort((a, b) => b[1].total - a[1].total);
+  const questionOfTheDay = useMemo(() => {
+    const easyQuestions = rows.filter((r) => r.questions.difficulty === "easy");
+    return pickQuestionOfTheDay(easyQuestions.length > 0 ? easyQuestions : rows);
   }, [rows]);
+
+  async function handleStatusChange(questionId: string, status: QuestionStatus) {
+    setRows((prev) => prev.map((r) => (r.question_id === questionId ? { ...r, status } : r)));
+    await fetch("/api/progress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question_id: questionId, status }),
+    });
+  }
 
   return (
     <div className="space-y-8">
@@ -108,44 +129,59 @@ export default function StudentDashboardPage() {
 
       {!loading && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatTile icon={CheckCircle2} label="Completed" value={completed} tint="success" />
-          <StatTile icon={Circle} label="Not completed" value={notCompleted} tint="muted" />
-          <StatTile icon={BookOpen} label="Total on sheet" value={total} tint="accent" />
+          <StatTile icon={Flame} label="Questions attempted" value={totalAttempted} tint="warn" />
+          <StatTile icon={Target} label="DSA progress" value={`${dsaCompleted}/${dsaTotal}`} tint="success" />
+          <StatTile icon={Percent} label="Aptitude progress" value={`${aptitude.attempted}/${aptitude.total}`} tint="accent" />
         </div>
       )}
 
-      {!loading && total > 0 && (
+      {!loading && dsaTotal > 0 && (
         <div className="card flex flex-col items-center gap-2 p-5 sm:flex-row sm:items-center sm:justify-center sm:gap-8">
-          <CompletionDonut completed={completed} notCompleted={notCompleted} pct={pct} />
+          <CompletionDonut completed={dsaCompleted} notCompleted={dsaNotCompleted} pct={dsaPct} />
           <div className="text-center sm:text-left">
             <p className="text-sm font-medium text-fg">Overall completion</p>
             <p className="mt-1 text-xs text-fg-muted">
-              {completed} of {total} question{total === 1 ? "" : "s"} checked off.
+              {dsaCompleted} of {dsaTotal} question{dsaTotal === 1 ? "" : "s"} checked off.
             </p>
           </div>
         </div>
       )}
 
-      {topicBreakdown.length > 0 && (
+      {questionOfTheDay && (
         <div className="card p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-fg">By topic</h2>
-            {topicBreakdown.length > MAX_TOPICS_SHOWN && (
-              <Link href="/student/dsa" className="text-xs text-success hover:underline">
-                View full breakdown on the DSA sheet →
-              </Link>
-            )}
+          <div className="mb-3 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-warn" />
+            <h2 className="text-sm font-medium text-fg">Question of the Day</h2>
           </div>
-          <div className="space-y-4">
-            {topicBreakdown.slice(0, MAX_TOPICS_SHOWN).map(([topic, stats]) => (
-              <div key={topic}>
-                <div className="mb-1 flex items-center justify-between text-xs text-fg-muted">
-                  <span>{topic}</span>
-                  <span>{stats.completed}/{stats.total}</span>
-                </div>
-                <ProgressBar value={(stats.completed / stats.total) * 100} />
-              </div>
-            ))}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line/70 px-4 py-3">
+            <div className="min-w-0">
+              {questionOfTheDay.questions.url ? (
+                <a
+                  href={questionOfTheDay.questions.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-fg hover:text-success hover:underline"
+                >
+                  {questionOfTheDay.questions.title}
+                </a>
+              ) : (
+                <span className="font-medium text-fg-muted">{questionOfTheDay.questions.title}</span>
+              )}
+              {questionOfTheDay.questions.difficulty !== "unknown" && (
+                <span className={`ml-2 rounded-full border px-2 py-0.5 text-xs capitalize ${DIFFICULTY_BADGE_STYLE[questionOfTheDay.questions.difficulty]}`}>
+                  {DIFFICULTY_LABELS[questionOfTheDay.questions.difficulty]}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => handleStatusChange(questionOfTheDay.question_id, questionOfTheDay.status === "completed" ? "not_started" : "completed")}
+              className={`flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                questionOfTheDay.status === "completed" ? "border-success/40 bg-success/10 text-success" : "border-line/70 hover:border-line"
+              }`}
+            >
+              <span className={`h-3 w-3 rounded-full ${questionOfTheDay.status === "completed" ? "bg-success" : "border border-line"}`} />
+              {questionOfTheDay.status === "completed" ? "Completed" : "Not completed"}
+            </button>
           </div>
         </div>
       )}
