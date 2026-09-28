@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 const DEVELOPER_PORTFOLIO_URL = "https://manish-portfolio-smoky.vercel.app/";
@@ -31,7 +32,10 @@ export default function Footer() {
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="flex flex-col gap-10 sm:flex-row sm:justify-between">
           <div className="max-w-xs">
-            <span className="font-display text-lg tracking-tight text-fg">traversal</span>
+            <div className="flex items-center gap-2">
+              <Image src="/logo-mark.png" alt="" width={28} height={28} className="rounded-full" />
+              <span className="font-display text-lg tracking-tight text-fg">traversal</span>
+            </div>
             <p className="mt-2 text-sm text-fg-muted">
               Placement prep and simulated drives, built for students and the colleges training them.
             </p>

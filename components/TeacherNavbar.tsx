@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Binary, BookOpen, Calculator, ChevronDown, Compass, ListChecks, MessagesSquare, Menu, Send, ShieldCheck, Users, X } from "lucide-react";
+import BrandMark from "@/components/BrandMark";
 import ThemeToggle from "@/components/ThemeToggle";
 import UserMenu from "@/components/UserMenu";
 import type { UserRole } from "@/types";
@@ -109,9 +110,7 @@ export default function TeacherNavbar({ user }: { user: { full_name: string | nu
   return (
     <header className="sticky top-0 z-40 border-b border-line/70 bg-bg/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-        <Link href="/teacher/dashboard" className="font-display text-lg tracking-tight text-fg">
-          traversal
-        </Link>
+        <BrandMark href="/teacher/dashboard" />
 
         <nav className="hidden items-center gap-1 lg:flex">
           <NavPill {...CLASSES_LINK} active={pathname === CLASSES_LINK.href} />

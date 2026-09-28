@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentAppUser } from "@/lib/roles";
 import StudentNavbar from "@/components/StudentNavbar";
+import StudentFooter from "@/components/StudentFooter";
 import StudentGuide from "@/components/StudentGuide";
 import WelcomeInterviewPrepTip from "@/components/WelcomeInterviewPrepTip";
 
@@ -13,12 +14,15 @@ export default async function StudentLayout({ children }: { children: React.Reac
   if (user.role !== "student") redirect(`/${user.role}/dashboard`);
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="flex min-h-screen flex-col bg-bg">
       <StudentNavbar user={{ full_name: user.full_name, email: user.email, role: user.role }} />
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+      {/* flex-1 so the footer sits at the bottom of the viewport on a
+          short page instead of floating right under sparse content. */}
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
         <WelcomeInterviewPrepTip />
         {children}
       </main>
+      <StudentFooter />
       {/* Site-wide, not just the dashboard — "guide through the
           website" means every student page, not one of them. */}
       <StudentGuide />

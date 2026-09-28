@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
+import BrandMark from "@/components/BrandMark";
 import ThemeToggle from "@/components/ThemeToggle";
 import UserMenu from "@/components/UserMenu";
 import type { UserRole } from "@/types";
@@ -32,9 +33,7 @@ export default function StudentNavbar({ user }: { user: { full_name: string | nu
   return (
     <header className="sticky top-0 z-40 border-b border-line/70 bg-bg/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-        <Link href="/student/dashboard" className="font-display text-lg tracking-tight text-fg">
-          traversal
-        </Link>
+        <BrandMark href="/student/dashboard" />
 
         <nav className="hidden items-center gap-6 text-sm md:flex">
           {NAV_LINKS.map((link) => (

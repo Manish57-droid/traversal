@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import BrandMark from "@/components/BrandMark";
 import { supabaseBrowser } from "@/lib/supabase/browser-client";
 import type { UserRole } from "@/types";
 
@@ -25,9 +26,7 @@ export default function Navbar({ role, authed = true }: { role?: UserRole; authe
   return (
     <header className="sticky top-0 z-30 border-b border-line/70 bg-bg/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-        <Link href={homeHref} className="font-display text-lg tracking-tight text-fg">
-          traversal
-        </Link>
+        <BrandMark href={homeHref} />
 
         {role && (
           <nav className="hidden items-center gap-6 text-sm text-fg sm:flex">

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
+import BrandMark from "@/components/BrandMark";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const NAV_LINKS = [
@@ -17,9 +18,7 @@ export default function PublicNavbar({ userId }: { userId?: string }) {
   return (
     <header className="sticky top-0 z-40 border-b border-line/70 bg-bg/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-        <Link href="/" className="font-display text-lg tracking-tight text-fg">
-          traversal
-        </Link>
+        <BrandMark href="/" />
 
         <nav className="hidden items-center gap-8 text-sm text-fg-muted md:flex">
           {NAV_LINKS.map((link) => (

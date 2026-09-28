@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { GraduationCap, History, Inbox, LayoutDashboard, Menu, Users, X } from "lucide-react";
+import BrandMark from "@/components/BrandMark";
 import ThemeToggle from "@/components/ThemeToggle";
 import UserMenu from "@/components/UserMenu";
 import type { UserRole } from "@/types";
@@ -67,9 +69,9 @@ export default function AdminSidebar({ user }: { user: { full_name: string | nul
     <>
       {/* Desktop / tablet sidebar — icon rail on md, full width on lg+ */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-16 flex-col border-r border-line/70 bg-bg py-4 md:flex lg:w-60">
-        <Link href="/admin/dashboard" className="mb-4 flex items-center justify-center px-3 lg:justify-start">
+        <Link href="/admin/dashboard" className="mb-4 flex items-center justify-center gap-2 px-3 lg:justify-start">
+          <Image src="/logo-mark.png" alt="" width={28} height={28} className="rounded-full" priority />
           <span className="hidden font-display text-lg tracking-tight text-fg lg:inline">traversal</span>
-          <span className="font-display text-lg tracking-tight text-fg lg:hidden">t</span>
         </Link>
 
         {nav()}
@@ -86,9 +88,7 @@ export default function AdminSidebar({ user }: { user: { full_name: string | nul
 
       {/* Mobile top bar + slide-out drawer */}
       <header className="sticky top-0 z-40 flex items-center justify-between border-b border-line/70 bg-bg/80 px-4 py-3 backdrop-blur md:hidden">
-        <Link href="/admin/dashboard" className="font-display text-lg tracking-tight text-fg">
-          traversal
-        </Link>
+        <BrandMark href="/admin/dashboard" />
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <button
@@ -110,7 +110,7 @@ export default function AdminSidebar({ user }: { user: { full_name: string | nul
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between px-3">
-              <span className="font-display text-lg tracking-tight text-fg">traversal</span>
+              <BrandMark href="/admin/dashboard" />
               <button
                 type="button"
                 aria-label="Close menu"
