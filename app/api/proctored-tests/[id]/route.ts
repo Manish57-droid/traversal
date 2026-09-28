@@ -12,6 +12,12 @@ import { getSectionsWithQuestions } from "@/lib/proctoredSections";
 //     section list (subject/set-count/question-count per section).
 // PATCH /api/proctored-tests/[id] { results_released } -> teacher/admin
 //   only, same class-scoped authorization as creating a test.
+// DELETE /api/proctored-tests/[id] -> teacher/admin only, same
+//   class-scoped authorization. Refused while any attempt is still
+//   in_progress (don't yank a test out from under a student mid-exam);
+//   otherwise a plain cascade delete — every child table (sections,
+//   section_sets, test_questions, attempts, violations,
+//   section_attempts) already cascades off proctored_tests.id.
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const user = await getCurrentAppUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -110,4 +116,30 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ test: updated });
+}
+
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  const user = await requireRole(["teacher", "admin"]).catch(() => null);
+  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const supabase = supabaseAdmin();
+  const { data: test } = await supabase.from("proctored_tests").select("class_id").eq("id", params.id).maybeSingle();
+  if (!test) return NextResponse.json({ error: "Test not found." }, { status: 404 });
+
+  const classAuth = await getClassAuthorization(test.class_id, user.id, user.role);
+  if (!isAuthorized(classAuth)) return NextResponse.json({ error: "Test not found." }, { status: 404 });
+
+  const { count: inProgressCount } = await supabase
+    .from("proctored_test_attempts")
+    .select("id", { count: "exact", head: true })
+    .eq("test_id", params.id)
+    .eq("status", "in_progress");
+  if ((inProgressCount ?? 0) > 0) {
+    return NextResponse.json({ error: "A student is still taking this test — wait for them to finish first." }, { status: 409 });
+  }
+
+  const { error } = await supabase.from("proctored_tests").delete().eq("id", params.id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ deleted: true });
 }

@@ -15,11 +15,11 @@ export default function Platforms() {
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="max-w-2xl">
           <h2 className="font-display text-3xl text-fg sm:text-4xl">
-            Integrated with the platforms students already use
+            Works with the platforms you're already grinding on
           </h2>
           <p className="mt-4 text-base text-fg-muted">
-            Solve wherever the problem lives — Traversal detects the platform from the link and
-            tracks the checkbox, no separate editor to learn.
+            Drop in a link, we detect the platform and track it — no new editor to learn, no
+            extra tab to juggle.
           </p>
         </div>
 
@@ -36,8 +36,8 @@ export default function Platforms() {
         </div>
 
         <p className="mt-8 text-center text-sm text-fg-subtle">
-          Practice problems across LeetCode, CodeChef, Codeforces, GfG &amp; HackerRank — assigned
-          by your teacher or found on your own.
+          LeetCode, CodeChef, Codeforces, GfG, HackerRank — assigned by your teacher, or hunted
+          down on your own.
         </p>
       </div>
     </section>

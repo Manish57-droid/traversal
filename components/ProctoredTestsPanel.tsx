@@ -136,16 +136,37 @@ const VIOLATION_LABEL: Record<string, string> = {
   phone_detected: "Phone visible",
   multiple_people: "Multiple people",
   talking_detected: "Talking detected",
+  looking_away: "Looking away",
+  face_not_visible: "Face not visible",
 };
 
-function TestDetail({ testId }: { testId: string }) {
+function TestDetail({ testId, testName, onDeleted }: { testId: string; testName: string; onDeleted: () => void }) {
   const [attempts, setAttempts] = useState<ProctoredViolationBreakdown[] | null>(null);
   const [leaderboard, setLeaderboard] = useState<ProctoredLeaderboardRow[] | null>(null);
   const [released, setReleased] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [gradingAttemptId, setGradingAttemptId] = useState<string | null>(null);
   const [retakingAttemptId, setRetakingAttemptId] = useState<string | null>(null);
+
+  async function handleDeleteTest() {
+    const attemptCount = attempts?.length ?? 0;
+    const warning =
+      attemptCount > 0
+        ? `Delete "${testName}"? This permanently removes it and all ${attemptCount} student attempt${attemptCount === 1 ? "" : "s"}. This can't be undone.`
+        : `Delete "${testName}"? This can't be undone.`;
+    if (!confirm(warning)) return;
+    setDeleting(true);
+    const res = await fetch(`/api/proctored-tests/${testId}`, { method: "DELETE" });
+    if (res.ok) {
+      onDeleted();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "Couldn't delete this test.");
+      setDeleting(false);
+    }
+  }
 
   async function handleAllowRetake(attemptId: string, studentName: string) {
     if (!confirm(`This permanently discards ${studentName}'s current result and lets them retake the test. Continue?`)) return;
@@ -205,6 +226,14 @@ function TestDetail({ testId }: { testId: string }) {
           </a>
           <button onClick={toggleRelease} disabled={busy || released === null} className="btn-secondary py-1.5 text-xs">
             {busy ? "Saving..." : released ? "Unrelease results" : "Release results"}
+          </button>
+          <button
+            onClick={handleDeleteTest}
+            disabled={deleting}
+            className="flex items-center gap-1.5 rounded-lg border border-red-400/40 px-3 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-400/10"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            {deleting ? "Deleting..." : "Delete test"}
           </button>
         </div>
       </div>
@@ -507,6 +536,11 @@ export default function ProctoredTestsPanel({ classId }: { classId: string }) {
     setLoading(false);
   }
 
+  function handleTestDeleted() {
+    setExpandedTestId(null);
+    load();
+  }
+
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -621,7 +655,7 @@ export default function ProctoredTestsPanel({ classId }: { classId: string }) {
                 />
               </div>
             </button>
-            {expandedTestId === t.id && <TestDetail testId={t.id} />}
+            {expandedTestId === t.id && <TestDetail testId={t.id} testName={t.name} onDeleted={handleTestDeleted} />}
           </div>
         ))}
       </div>

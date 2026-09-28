@@ -164,21 +164,10 @@ export default function ProctoredTestStartPage() {
           {test.require_camera && (
             <li>
               Your camera must stay on and visible for the whole test. It also checks for a phone in view, a second
-              person/face, and sustained talking — each is logged as a violation; turning your head away just shows a
-              reminder to face the screen.
+              person/face, sustained talking, and looking away from the screen — each is logged as a violation.
             </li>
           )}
           {test.require_mic && <li>Your microphone must stay on for the whole test.</li>}
-          <li className="text-fg-subtle">
-            This only detects activity inside this browser tab — it cannot see other applications, other monitors, or
-            remote-desktop software, and nothing is a guarantee against every form of cheating.
-          </li>
-          {needsMedia && (
-            <li className="text-fg-subtle">
-              Your camera/mic feed is checked live in the browser only — it is never recorded, saved, or uploaded
-              anywhere.
-            </li>
-          )}
         </ul>
       </div>
 

@@ -23,17 +23,30 @@ import { FaceLandmarker, ObjectDetector, FilesetResolver } from "@mediapipe/task
 //  - "talking" is read from the jawOpen blendshape sustained across
 //    several samples — real speech, chewing, and a long yawn can all
 //    look similar to this signal; there's no audio involved at all.
-//  - head-pose-from-landmarks (looking away) is the least precise of
-//    the four, which is exactly why the task treats it as a toast
-//    warning, never a logged violation.
+//  - "looking away" and "face not visible" are both read from face-mesh
+//    presence/pose, each gated behind its own sustained streak (not a
+//    single frame) so a blink or a momentary glance doesn't fire it —
+//    still the least precise of the checks here, just no longer
+//    swallowed as a toast-only nicety.
 const DETECTION_INTERVAL_MS = 2500;
-const VIOLATION_COOLDOWN_MS = 15_000;
 const PHONE_SCORE_THRESHOLD = 0.5;
 const MULTI_FACE_STREAK_REQUIRED = 2; // consecutive ticks, ~5s, before it counts
-const YAW_RATIO_THRESHOLD = 0.28; // nose offset from eye-midpoint, as a fraction of eye distance
+const NO_FACE_STREAK_REQUIRED = 3; // ~7.5s with no face at all (covered lens, stepped away)
+const LOOKING_AWAY_STREAK_REQUIRED = 3; // ~7.5s of sustained turn, not a glance
+const YAW_RATIO_THRESHOLD = 0.2; // nose offset from eye-midpoint, as a fraction of eye distance
 const JAW_OPEN_THRESHOLD = 0.35;
 const TALK_WINDOW_SIZE = 4; // ~10s of samples
 const TALK_HITS_REQUIRED = 3; // mouth open in at least 3 of the last 4 samples
+
+// Per-type cooldown after a violation fires, before the same type can
+// fire again — phone gets a shorter one than the others since a phone
+// can be shown, put away, and shown again within seconds; the
+// streak-gated checks already take several seconds to re-arm on their
+// own, so they can afford the longer default.
+const DEFAULT_COOLDOWN_MS = 15_000;
+const COOLDOWN_MS: Partial<Record<keyof CameraProctoringCallbacks, number>> = {
+  onPhoneDetected: 8_000,
+};
 
 // jsDelivr, not self-hosted: the WASM runtime bundled with this
 // package is ~35MB across its SIMD/non-SIMD variants — too large to
@@ -52,6 +65,7 @@ interface CameraProctoringCallbacks {
   onMultiplePeople: () => void;
   onTalkingDetected: () => void;
   onLookingAway: () => void;
+  onFaceNotVisible: () => void;
 }
 
 /**
@@ -82,10 +96,13 @@ export function useCameraProctoring(
     const lastFiredAt: Partial<Record<keyof CameraProctoringCallbacks, number>> = {};
     const jawOpenHistory: boolean[] = [];
     let multiFaceStreak = 0;
+    let noFaceStreak = 0;
+    let lookingAwayStreak = 0;
 
     function maybeFire(type: keyof CameraProctoringCallbacks) {
       const now = Date.now();
-      if (now - (lastFiredAt[type] ?? 0) < VIOLATION_COOLDOWN_MS) return;
+      const cooldown = COOLDOWN_MS[type] ?? DEFAULT_COOLDOWN_MS;
+      if (now - (lastFiredAt[type] ?? 0) < cooldown) return;
       lastFiredAt[type] = now;
       callbacksRef.current[type]();
     }
@@ -139,9 +156,18 @@ export function useCameraProctoring(
 
             if (faces.length >= 2) {
               multiFaceStreak++;
+              noFaceStreak = 0;
               if (multiFaceStreak >= MULTI_FACE_STREAK_REQUIRED) maybeFire("onMultiplePeople");
+            } else if (faces.length === 0) {
+              multiFaceStreak = 0;
+              // Covered lens, stepped out of frame, or the room went
+              // dark enough that no face resolves at all — all of these
+              // mean "we can't verify who's there anymore."
+              noFaceStreak++;
+              if (noFaceStreak >= NO_FACE_STREAK_REQUIRED) maybeFire("onFaceNotVisible");
             } else {
               multiFaceStreak = 0;
+              noFaceStreak = 0;
             }
 
             // Pose/mouth checks only make sense with exactly one face —
@@ -158,7 +184,10 @@ export function useCameraProctoring(
                 const eyeDist = Math.abs(rightEye.x - leftEye.x) || 1;
                 const yawRatio = (nose.x - (leftEye.x + rightEye.x) / 2) / eyeDist;
                 if (Math.abs(yawRatio) > YAW_RATIO_THRESHOLD) {
-                  callbacksRef.current.onLookingAway();
+                  lookingAwayStreak++;
+                  if (lookingAwayStreak >= LOOKING_AWAY_STREAK_REQUIRED) maybeFire("onLookingAway");
+                } else {
+                  lookingAwayStreak = 0;
                 }
               }
 

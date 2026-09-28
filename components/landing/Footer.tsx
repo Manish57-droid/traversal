@@ -37,7 +37,7 @@ export default function Footer() {
               <span className="font-display text-lg tracking-tight text-fg">traversal</span>
             </div>
             <p className="mt-2 text-sm text-fg-muted">
-              Placement prep and simulated drives, built for students and the colleges training them.
+              Placement prep that actually feels real — built for students and the colleges training them.
             </p>
           </div>
 

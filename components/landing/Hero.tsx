@@ -57,13 +57,12 @@ export default function Hero({ userId }: { userId?: string }) {
       <div className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-2 lg:gap-8 lg:py-28">
         <div>
           <h1 className="font-display text-4xl leading-[1.1] text-fg sm:text-5xl lg:text-6xl">
-            Placement prep, practiced <span className="italic text-accent">like the real thing.</span>
+            Placement prep that <span className="italic text-accent">actually feels real.</span>
           </h1>
           <p className="mt-6 max-w-md text-base text-fg-muted sm:text-lg">
-            Aptitude, technical rounds, and DSA practice in one place — plus a live board of
-            off-campus opportunities and simulated company drives that run just like a real
-            recruitment process. For students prepping solo, and for colleges tracking a whole
-            batch.
+            Aptitude, technical rounds, and DSA practice, plus a live board of off-campus roles
+            and simulated drives that mirror the real hiring process, round for round. Built for
+            solo grinders — and for colleges tracking a whole batch.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
             {userId ? (

@@ -508,15 +508,17 @@ export default function ProctoredTestTakePage() {
   }, [test?.require_camera, test?.require_mic, logViolation]);
 
   // Camera-vision checks (phone visible, a second face, sustained
-  // mouth movement read as talking, head turned away) — see
+  // mouth movement read as talking, head turned away, camera
+  // covered/no face at all) — see
   // components/proctored-take/useCameraProctoring.ts for the
-  // heuristics and their honestly-disclosed limits. Only three of the
-  // four count as violations; looking away is a toast nudge only.
+  // heuristics and their honestly-disclosed limits. All five count as
+  // real, server-recorded violations.
   useCameraProctoring(cameraVideoRef, !!test?.require_camera, {
     onPhoneDetected: () => logViolation("phone_detected"),
     onMultiplePeople: () => logViolation("multiple_people"),
     onTalkingDetected: () => logViolation("talking_detected"),
-    onLookingAway: () => showToast("Please face the screen and keep your head steady."),
+    onLookingAway: () => logViolation("looking_away"),
+    onFaceNotVisible: () => logViolation("face_not_visible"),
   });
 
   async function persistAnswer(questionId: string, selectedOption: number | string | null, markedForReview?: boolean) {

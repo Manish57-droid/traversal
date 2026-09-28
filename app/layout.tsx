@@ -25,7 +25,7 @@ const spaceMono = Space_Mono({
 export const metadata: Metadata = {
   title: "Traversal — Placement Prep & Simulated Drives",
   description:
-    "Aptitude, technical, and DSA practice, off-campus opportunities, and simulated placement drives — one platform for students and the colleges training them.",
+    "Aptitude, technical, and DSA practice, off-campus opportunities, and simulated placement drives that mirror the real hiring process — one platform for students and the colleges training them.",
 };
 
 export default function RootLayout({

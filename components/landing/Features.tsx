@@ -5,37 +5,37 @@ const FEATURES: { icon: LucideIcon; title: string; description: string }[] = [
     icon: Binary,
     title: "DSA Practice & Tracking",
     description:
-      "Solve problems from LeetCode, CodeChef, Codeforces, GfG, and HackerRank. Teachers assign, students check off, progress builds up automatically.",
+      "LeetCode, CodeChef, Codeforces, GfG, HackerRank — assigned by your teacher, tracked automatically the moment you check it off.",
   },
   {
     icon: Calculator,
     title: "Aptitude Practice",
     description:
-      "Quant, logical, and verbal MCQs organized by topic, with instant feedback and explanations — plus timed, teacher-assigned tests.",
+      "Quant, logical, and verbal MCQs by topic, with instant feedback that actually explains itself — plus timed tests your teacher assigns.",
   },
   {
     icon: Cpu,
     title: "Technical Round Practice",
     description:
-      "CS fundamentals and technical MCQs to get interview-ready, alongside the DSA and aptitude tracks you're already building progress in.",
+      "CS fundamentals and technical MCQs that get you interview-ready, not just quiz-ready.",
   },
   {
     icon: Briefcase,
     title: "Off-Campus Opportunities",
     description:
-      "A curated board of internships and jobs beyond your campus drive, with filters and application tracking in one place.",
+      "Internships and jobs beyond your campus drive — filtered, tracked, and in one board instead of six browser tabs.",
   },
   {
     icon: Flag,
     title: "Simulated Placement Drives",
     description:
-      "Multi-round, timed drives that mirror a real recruitment process — aptitude, technical, coding, and results, with pass/fail gating between rounds.",
+      "Timed, multi-round drives that mirror the real thing — aptitude, technical, coding, results, pass/fail gating and all.",
   },
   {
     icon: LineChart,
     title: "Classroom & Progress Analytics",
     description:
-      "Teachers assign across every module and see per-student, per-class rollups — who's on track, and who needs a nudge.",
+      "One rollup per class, per student — who's crushing it, who needs a nudge, at a glance.",
   },
 ];
 
@@ -44,10 +44,10 @@ export default function Features() {
     <section id="features" className="scroll-mt-20 border-t border-line/70 py-20 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="max-w-2xl">
-          <h2 className="font-display text-3xl text-fg sm:text-4xl">Everything placement prep needs, in one place</h2>
+          <h2 className="font-display text-3xl text-fg sm:text-4xl">Everything placement season throws at you — in one place</h2>
           <p className="mt-4 text-base text-fg-muted">
-            Traversal isn't just a DSA sheet — it's practice, opportunities, and simulated drives,
-            built around how recruitment actually works.
+            Not just another DSA sheet. Practice, opportunities, and simulated drives — built
+            around how hiring actually works.
           </p>
         </div>
 

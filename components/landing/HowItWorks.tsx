@@ -5,30 +5,30 @@ import { useState } from "react";
 const TEACHER_STEPS = [
   {
     title: "Build your classroom",
-    description: "Create a class and share the join code — students enroll themselves, no roster upload needed.",
+    description: "Create a class, drop the join code — students enroll themselves. No roster spreadsheet required.",
   },
   {
     title: "Assign across every module",
-    description: "Send a DSA question set, an aptitude test, or a full simulated drive to the whole class at once.",
+    description: "Send a DSA set, an aptitude test, or a full simulated drive to the whole class — in one shot.",
   },
   {
     title: "Track performance",
-    description: "See a per-student, per-class rollup — who's completed what, who's stuck, who's ready for the next round.",
+    description: "One rollup, every student — who's on track, who's stuck, who's ready for the next round.",
   },
 ];
 
 const STUDENT_STEPS = [
   {
     title: "Join your class",
-    description: "Enter the code your teacher shares to get everything they assign you, automatically.",
+    description: "Drop in the code your teacher shares — everything they assign lands automatically.",
   },
   {
     title: "Practice at your own pace",
-    description: "Work through DSA, aptitude, and technical questions — checkmarks and correctness tracked as you go.",
+    description: "DSA, aptitude, technical — work through it your way, progress tracked as you go.",
   },
   {
     title: "Run the drive",
-    description: "Take a timed, multi-round simulated drive and see exactly where you'd stand in the real process.",
+    description: "Take the timed, multi-round drive and find out exactly where you'd stand for real.",
   },
 ];
 
@@ -40,8 +40,8 @@ export default function HowItWorks() {
     <section id="how-it-works" className="scroll-mt-20 border-t border-line/70 py-20 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="max-w-2xl">
-          <h2 className="font-display text-3xl text-fg sm:text-4xl">How it works</h2>
-          <p className="mt-4 text-base text-fg-muted">The same platform, two different workflows.</p>
+          <h2 className="font-display text-3xl text-fg sm:text-4xl">How you'd actually use it</h2>
+          <p className="mt-4 text-base text-fg-muted">Same platform, built for two very different jobs.</p>
         </div>
 
         <div className="mt-8 inline-flex rounded-full border border-line p-1">

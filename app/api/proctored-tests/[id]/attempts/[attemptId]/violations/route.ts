@@ -12,6 +12,8 @@ const VALID_TYPES: ProctoredViolationType[] = [
   "phone_detected",
   "multiple_people",
   "talking_detected",
+  "looking_away",
+  "face_not_visible",
 ];
 
 // POST /api/proctored-tests/[id]/attempts/[attemptId]/violations { violation_type }

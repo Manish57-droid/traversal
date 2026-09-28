@@ -243,7 +243,9 @@ export type ProctoredViolationType =
   | "camera_off"
   | "phone_detected"
   | "multiple_people"
-  | "talking_detected";
+  | "talking_detected"
+  | "looking_away"
+  | "face_not_visible";
 
 export type ProctoredTimerMode = "combined" | "per_section";
 
