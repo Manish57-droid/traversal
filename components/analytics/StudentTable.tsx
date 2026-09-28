@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import ProgressBar from "@/components/ProgressBar";
 import type { StudentAnalyticsRow } from "@/types";
 
 type SortKey = "name" | "dsa" | "aptitude" | "total";
@@ -67,8 +68,18 @@ export default function StudentTable({
               className="cursor-pointer border-b border-line/40 transition-colors last:border-0 hover:bg-surface-2"
             >
               <td className="px-4 py-3 text-fg">{s.full_name || s.email}</td>
-              <td className="px-4 py-3 text-fg-muted">{s.dsa_completion_pct}%</td>
-              <td className="px-4 py-3 text-fg-muted">{s.aptitude_accuracy_pct}%</td>
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-16 shrink-0"><ProgressBar value={s.dsa_completion_pct} /></span>
+                  <span className="text-fg-muted">{s.dsa_completion_pct}%</span>
+                </div>
+              </td>
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-16 shrink-0"><ProgressBar value={s.aptitude_accuracy_pct} /></span>
+                  <span className="text-fg-muted">{s.aptitude_accuracy_pct}%</span>
+                </div>
+              </td>
               <td className="px-4 py-3 text-fg-muted">{s.total_attempted}</td>
             </tr>
           ))}

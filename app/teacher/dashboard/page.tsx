@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Users, Target, Percent } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/browser-client";
+import StatTile from "@/components/StatTile";
 import ClassSummaryCharts from "@/components/analytics/ClassSummaryCharts";
 import StudentTable from "@/components/analytics/StudentTable";
 import StudentDrawer from "@/components/analytics/StudentDrawer";
@@ -111,22 +113,32 @@ export default function TeacherDashboardPage() {
 
   const activeClass = classes.find((c) => c.id === selectedClass);
 
+  const avgDsaCompletion = useMemo(
+    () => (students.length ? Math.round(students.reduce((sum, s) => sum + s.dsa_completion_pct, 0) / students.length) : 0),
+    [students]
+  );
+  const avgAptitudeAccuracy = useMemo(
+    () => (students.length ? Math.round(students.reduce((sum, s) => sum + s.aptitude_accuracy_pct, 0) / students.length) : 0),
+    [students]
+  );
+
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-display text-2xl text-fg sm:text-3xl">Class progress</h1>
-        <p className="mt-1 text-sm text-fg-muted">
-          Combined DSA and Aptitude performance for every student in a class.
-        </p>
-      </div>
-
-      <form onSubmit={handleCreateClass} className="card flex flex-wrap items-end gap-3 p-4">
-        <div className="min-w-[200px] flex-1">
-          <label className="mb-1 block text-xs text-fg-muted" htmlFor="className">New class name</label>
-          <input id="className" className="input" placeholder="e.g. CSE-3B" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} />
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl text-fg sm:text-3xl">Class progress</h1>
+          <p className="mt-1 text-sm text-fg-muted">
+            Combined DSA and Aptitude performance for every student in a class.
+          </p>
         </div>
-        <button type="submit" className="btn-secondary">Create class</button>
-      </form>
+        <form onSubmit={handleCreateClass} className="flex flex-wrap items-end gap-2">
+          <div className="min-w-[160px]">
+            <label className="mb-1 block text-xs text-fg-muted" htmlFor="className">New class name</label>
+            <input id="className" className="input py-2 text-sm" placeholder="e.g. CSE-3B" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} />
+          </div>
+          <button type="submit" className="btn-secondary py-2 text-sm">Create class</button>
+        </form>
+      </div>
 
       {!loadingClasses && classes.length === 0 && (
         <p className="card p-6 text-center text-sm text-fg-muted">
@@ -159,10 +171,22 @@ export default function TeacherDashboardPage() {
 
       {!loadingAnalytics && summary && (
         <>
-          <ClassSummaryCharts summary={summary} />
-          <StudentTable students={students} onSelect={setSelectedStudentId} />
+          <div>
+            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-fg-subtle">Overview</p>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <StatTile icon={Users} label="Students" value={students.length} tint="accent" />
+                <StatTile icon={Target} label="Avg. DSA completion" value={`${avgDsaCompletion}%`} tint="success" />
+                <StatTile icon={Percent} label="Avg. Aptitude accuracy" value={`${avgAptitudeAccuracy}%`} tint="warn" />
+              </div>
+              <ClassSummaryCharts summary={summary} />
+              <StudentTable students={students} onSelect={setSelectedStudentId} />
+            </div>
+          </div>
+
           {authorization && (
-            <>
+            <div className="space-y-4 border-t border-line/70 pt-6">
+              <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">Manage this class</p>
               <DsaAssignmentsPanel classId={selectedClass} />
               <AptitudeTestsPanel classId={selectedClass} />
               <ProctoredTestsPanel classId={selectedClass} />
@@ -174,7 +198,7 @@ export default function TeacherDashboardPage() {
                 onLeft={handleLeftClass}
                 onDeleted={handleLeftClass}
               />
-            </>
+            </div>
           )}
         </>
       )}

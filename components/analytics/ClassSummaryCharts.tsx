@@ -29,12 +29,14 @@ export default function ClassSummaryCharts({ summary }: { summary: ClassAnalytic
     { name: "Incorrect", value: summary.aptitude.incorrect, color: "rgb(var(--warn))" },
   ];
   const aptitudeTotal = summary.aptitude.correct + summary.aptitude.incorrect;
+  const dsaTotal = summary.dsa.completed + summary.dsa.attempted + summary.dsa.not_started;
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <div className="card p-5">
         <p className="text-sm font-medium text-fg">DSA completion</p>
-        <div className="mt-4 h-64">
+        <p className="mt-0.5 text-xs text-fg-muted">{summary.dsa.completed} of {dsaTotal} questions completed</p>
+        <div className="mt-4 h-72">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={dsaData} margin={{ left: -20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
@@ -53,7 +55,10 @@ export default function ClassSummaryCharts({ summary }: { summary: ClassAnalytic
 
       <div className="card p-5">
         <p className="text-sm font-medium text-fg">Aptitude accuracy</p>
-        <div className="mt-4 h-64">
+        {aptitudeTotal > 0 && (
+          <p className="mt-0.5 text-xs text-fg-muted">{summary.aptitude.correct} of {aptitudeTotal} answered correctly</p>
+        )}
+        <div className="mt-4 h-72">
           {aptitudeTotal === 0 ? (
             <div className="flex h-full items-center justify-center text-sm text-fg-muted">
               No aptitude attempts yet.

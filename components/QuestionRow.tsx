@@ -4,12 +4,6 @@ import { DIFFICULTY_LABELS, DIFFICULTY_BADGE_STYLE } from "@/lib/difficulty";
 import CompanyBadge from "@/components/CompanyBadge";
 import type { Question, QuestionStatus } from "@/types";
 
-const STATUS_LABEL: Record<QuestionStatus, string> = {
-  not_started: "Not started",
-  attempted: "Attempted",
-  completed: "Completed",
-};
-
 // Caps how many chips render inline before collapsing into "+N more"
 // — a question can carry ~5 companies and ~3 topics on average in the
 // imported dataset, too many to show in full inside a table cell.
@@ -40,11 +34,11 @@ export default function QuestionRow({
   companyFilter?: string;
   onStatusChange: (next: QuestionStatus) => void;
 }) {
-  const cycle: Record<QuestionStatus, QuestionStatus> = {
-    not_started: "attempted",
-    attempted: "completed",
-    completed: "not_started",
-  };
+  // Just two states now — "attempted" still exists as a DB value for
+  // any old row that predates this, but this toggle only ever reads
+  // "completed or not" and only ever writes those two, collapsing
+  // "attempted" into "not completed" everywhere it shows up.
+  const isCompleted = status === "completed";
 
   const shownCompanies = question.companies.slice(0, MAX_CHIPS);
   const extraCompanies = question.companies.length - shownCompanies.length;
@@ -107,16 +101,14 @@ export default function QuestionRow({
       </td>
       <td className="py-3">
         <button
-          onClick={() => onStatusChange(cycle[status])}
-          className="flex items-center gap-2 whitespace-nowrap rounded-lg border border-line/70 px-3 py-2 text-sm transition-colors hover:border-line"
-          aria-label={`Mark as ${cycle[status].replace("_", " ")}`}
+          onClick={() => onStatusChange(isCompleted ? "not_started" : "completed")}
+          className={`flex items-center gap-2 whitespace-nowrap rounded-lg border px-3 py-2 text-sm transition-colors ${
+            isCompleted ? "border-success/40 bg-success/10 text-success" : "border-line/70 hover:border-line"
+          }`}
+          aria-label={`Mark as ${isCompleted ? "not completed" : "completed"}`}
         >
-          <span
-            className={`h-3 w-3 rounded-full ${
-              status === "completed" ? "bg-success" : status === "attempted" ? "bg-warn" : "border border-line"
-            }`}
-          />
-          {STATUS_LABEL[status]}
+          <span className={`h-3 w-3 rounded-full ${isCompleted ? "bg-success" : "border border-line"}`} />
+          {isCompleted ? "Completed" : "Not completed"}
         </button>
       </td>
     </tr>
