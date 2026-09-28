@@ -4,18 +4,75 @@ import { useEffect, useMemo, useState } from "react";
 import { PLATFORM_COLORS, PLATFORM_LABELS } from "@/lib/platform";
 import { DIFFICULTY_LABELS, FILTERABLE_DIFFICULTIES } from "@/lib/difficulty";
 import FolderSection from "@/components/FolderSection";
-import type { DsaTopicWithCount, Question, QuestionDifficulty } from "@/types";
+import CompanyBadge from "@/components/CompanyBadge";
+import type { CompanyWithCount, DsaTopicWithCount, Question, QuestionDifficulty } from "@/types";
 
 type PlatformFilter = "" | "leetcode" | "hackerrank" | "codechef" | "others";
+
+/** company_id -> frequency input text (empty string = no frequency set
+ * yet). A company's mere presence as a key means it's selected. */
+type CompanyFreqMap = Record<string, string>;
+
+function companiesToPayload(map: CompanyFreqMap) {
+  return Object.entries(map).map(([company_id, freq]) => ({
+    company_id,
+    frequency: freq.trim() === "" ? null : Number(freq),
+  }));
+}
+
+function CompanyPicker({
+  companies,
+  selected,
+  onChange,
+}: {
+  companies: CompanyWithCount[];
+  selected: CompanyFreqMap;
+  onChange: (next: CompanyFreqMap) => void;
+}) {
+  function toggle(id: string) {
+    const next = { ...selected };
+    if (id in next) delete next[id];
+    else next[id] = "";
+    onChange(next);
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {companies.map((c) => (
+        <div
+          key={c.id}
+          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+            c.id in selected ? "border-accent/60 bg-accent/10 text-accent" : "border-line text-fg-muted"
+          }`}
+        >
+          <button type="button" onClick={() => toggle(c.id)}>{c.name}</button>
+          {c.id in selected && (
+            <input
+              type="number"
+              min={0}
+              placeholder="×"
+              className="w-10 border-l border-line/50 bg-transparent pl-1.5 text-center text-xs text-fg outline-none"
+              value={selected[c.id]}
+              onChange={(e) => onChange({ ...selected, [c.id]: e.target.value })}
+            />
+          )}
+        </div>
+      ))}
+      {companies.length === 0 && <p className="text-xs text-fg-subtle">No companies yet — add one below.</p>}
+    </div>
+  );
+}
 
 export default function TeacherQuestionsPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [topics, setTopics] = useState<DsaTopicWithCount[]>([]);
+  const [companies, setCompanies] = useState<CompanyWithCount[]>([]);
 
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
   const [topicId, setTopicId] = useState("");
   const [difficulty, setDifficulty] = useState("unknown");
+  const [companyFreqs, setCompanyFreqs] = useState<CompanyFreqMap>({});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -37,10 +94,28 @@ export default function TeacherQuestionsPage() {
   const [moving, setMoving] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
 
+  const [taggingId, setTaggingId] = useState<string | null>(null);
+  const [tagFreqs, setTagFreqs] = useState<CompanyFreqMap>({});
+  const [tagging, setTagging] = useState(false);
+  const [tagError, setTagError] = useState<string | null>(null);
+
+  const [showCompanyManager, setShowCompanyManager] = useState(false);
+  const [newCompanyName, setNewCompanyName] = useState("");
+  const [savingNewCompany, setSavingNewCompany] = useState(false);
+  const [companyManagerError, setCompanyManagerError] = useState<string | null>(null);
+  const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
+  const [editingCompanyName, setEditingCompanyName] = useState("");
+
   async function loadTopics() {
     const res = await fetch("/api/dsa-topics");
     const data = await res.json();
     setTopics(data.topics ?? []);
+  }
+
+  async function loadCompanies() {
+    const res = await fetch("/api/companies");
+    const data = await res.json();
+    setCompanies(data.companies ?? []);
   }
 
   // Both filters are sent as query params to the API — filtering
@@ -57,6 +132,7 @@ export default function TeacherQuestionsPage() {
 
   useEffect(() => {
     loadTopics();
+    loadCompanies();
   }, []);
 
   useEffect(() => {
@@ -91,7 +167,13 @@ export default function TeacherQuestionsPage() {
       const res = await fetch("/api/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, title, topic_id: topicId || null, difficulty }),
+        body: JSON.stringify({
+          url,
+          title,
+          topic_id: topicId || null,
+          difficulty,
+          companies: companiesToPayload(companyFreqs),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -99,11 +181,81 @@ export default function TeacherQuestionsPage() {
       setTitle("");
       setTopicId("");
       setDifficulty("unknown");
-      await Promise.all([load(), loadTopics()]);
+      setCompanyFreqs({});
+      await Promise.all([load(), loadTopics(), loadCompanies()]);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleCreateCompany() {
+    if (!newCompanyName.trim()) return;
+    setCompanyManagerError(null);
+    setSavingNewCompany(true);
+    try {
+      const res = await fetch("/api/companies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newCompanyName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      await loadCompanies();
+      setNewCompanyName("");
+    } catch (err: any) {
+      setCompanyManagerError(err.message);
+    } finally {
+      setSavingNewCompany(false);
+    }
+  }
+
+  async function handleRenameCompany(id: string) {
+    if (!editingCompanyName.trim()) return;
+    await fetch("/api/companies", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, name: editingCompanyName.trim() }),
+    });
+    setEditingCompanyId(null);
+    await Promise.all([loadCompanies(), load()]);
+  }
+
+  async function handleDeleteCompany(id: string, name: string) {
+    if (!confirm(`Delete company "${name}"? Questions tagged with it just lose that tag. This can't be undone.`)) return;
+    await fetch("/api/companies", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    await Promise.all([loadCompanies(), load()]);
+  }
+
+  function startTagging(q: Question) {
+    setTaggingId(q.id);
+    setTagFreqs(Object.fromEntries(q.companies.map((c) => [c.id, c.frequency === null ? "" : String(c.frequency)])));
+    setTagError(null);
+  }
+
+  async function handleTagSave() {
+    if (!taggingId) return;
+    setTagError(null);
+    setTagging(true);
+    try {
+      const res = await fetch("/api/questions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: taggingId, companies: companiesToPayload(tagFreqs) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setTaggingId(null);
+      await load();
+    } catch (err: any) {
+      setTagError(err.message);
+    } finally {
+      setTagging(false);
     }
   }
 
@@ -213,11 +365,23 @@ export default function TeacherQuestionsPage() {
             ) : (
               <span className="font-medium text-fg-muted">{q.title}</span>
             )}
+            {q.companies.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {q.companies.map((c) => (
+                  <CompanyBadge key={c.id} name={c.name} frequency={c.frequency} />
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex shrink-0 items-center gap-3 text-xs">
             {q.needs_link_curation && curatingId !== q.id && (
               <button onClick={() => startCuration(q)} className="text-warn hover:underline">
                 Add link
+              </button>
+            )}
+            {taggingId !== q.id && (
+              <button onClick={() => startTagging(q)} className="text-fg-muted hover:text-fg">
+                Tag companies
               </button>
             )}
             {movingId !== q.id && (
@@ -227,6 +391,21 @@ export default function TeacherQuestionsPage() {
             )}
           </div>
         </div>
+
+        {taggingId === q.id && (
+          <div className="space-y-2 border-t border-line/70 pt-3">
+            <CompanyPicker companies={companies} selected={tagFreqs} onChange={setTagFreqs} />
+            <div className="flex items-center gap-2">
+              <button onClick={handleTagSave} disabled={tagging} className="btn-secondary py-1.5 text-xs">
+                {tagging ? "Saving..." : "Save"}
+              </button>
+              <button type="button" onClick={() => setTaggingId(null)} className="text-xs text-fg-muted hover:text-fg">
+                Cancel
+              </button>
+            </div>
+            {tagError && <p className="text-xs text-red-400">{tagError}</p>}
+          </div>
+        )}
 
         {movingId === q.id && (
           <div className="flex flex-wrap items-center gap-2 border-t border-line/70 pt-3">
@@ -278,6 +457,96 @@ export default function TeacherQuestionsPage() {
           Add links here so they're ready to assign to a class from the Assign page.
         </p>
       </div>
+
+      <section className="card p-4">
+        <button
+          type="button"
+          onClick={() => setShowCompanyManager((v) => !v)}
+          className="flex w-full items-center justify-between text-left text-sm font-medium text-fg"
+        >
+          Manage companies ({companies.length})
+          <span className="text-xs text-fg-muted">{showCompanyManager ? "Hide" : "Show"}</span>
+        </button>
+        {showCompanyManager && (
+          <div className="mt-3 space-y-3">
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="min-w-[180px] flex-1">
+                <input
+                  className="input"
+                  placeholder="e.g. Adobe"
+                  value={newCompanyName}
+                  onChange={(e) => setNewCompanyName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleCreateCompany();
+                    }
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleCreateCompany}
+                disabled={savingNewCompany || !newCompanyName.trim()}
+                className="btn-secondary py-2.5 text-xs"
+              >
+                {savingNewCompany ? "Saving..." : "+ Add company"}
+              </button>
+            </div>
+            {companyManagerError && <p className="text-sm text-red-400">{companyManagerError}</p>}
+            <div className="space-y-1.5">
+              {companies.length === 0 && <p className="text-xs text-fg-subtle">No companies yet.</p>}
+              {companies.map((c) => (
+                <div key={c.id} className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-sm">
+                  {editingCompanyId === c.id ? (
+                    <div className="flex flex-1 items-center gap-2">
+                      <input
+                        autoFocus
+                        className="input py-1.5 text-xs"
+                        value={editingCompanyName}
+                        onChange={(e) => setEditingCompanyName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleRenameCompany(c.id);
+                          }
+                        }}
+                      />
+                      <button onClick={() => handleRenameCompany(c.id)} className="btn-secondary py-1 text-xs">Save</button>
+                      <button type="button" onClick={() => setEditingCompanyId(null)} className="text-xs text-fg-subtle hover:text-fg">Cancel</button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-fg">
+                        {c.name} <span className="text-xs text-fg-subtle">({c.question_count})</span>
+                      </span>
+                      <div className="flex items-center gap-3 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingCompanyId(c.id);
+                            setEditingCompanyName(c.name);
+                          }}
+                          className="text-fg-muted hover:text-fg"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCompany(c.id, c.name)}
+                          className="text-fg-subtle hover:text-red-400"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
 
       <form onSubmit={handleAdd} className="card grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5 lg:items-end">
         <div className="lg:col-span-2">
@@ -354,6 +623,10 @@ export default function TeacherQuestionsPage() {
             <option value="medium">Medium</option>
             <option value="hard">Hard</option>
           </select>
+        </div>
+        <div className="sm:col-span-2 lg:col-span-5">
+          <label className="mb-1 block text-xs text-fg-muted">Companies (optional — pick any that asked this)</label>
+          <CompanyPicker companies={companies} selected={companyFreqs} onChange={setCompanyFreqs} />
         </div>
         <button className="btn-primary lg:col-span-5" disabled={submitting}>
           {submitting ? "Adding..." : "Add to bank"}

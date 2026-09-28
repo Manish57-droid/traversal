@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentAppUser, requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { detectPlatform, guessTitleFromUrl, isValidUrl } from "@/lib/platform";
+import type { Question } from "@/types";
 
 // Platforms bucketed as: LeetCode / HackerRank / CodeChef individually
 // (the three most-assigned judges), everything else (Codeforces,
@@ -10,6 +11,30 @@ import { detectPlatform, guessTitleFromUrl, isValidUrl } from "@/lib/platform";
 // so a 4th filter bucket reads cleaner than 6 near-empty individual ones.
 const OTHERS_PLATFORMS = ["codeforces", "geeksforgeeks", "other"] as const;
 const NAMED_PLATFORMS = ["leetcode", "hackerrank", "codechef"] as const;
+
+const SELECT_WITH_COMPANIES = "*, question_companies(frequency, companies(id, name))";
+
+function mapQuestion(q: any): Question {
+  return {
+    ...q,
+    companies: (q.question_companies ?? [])
+      .filter((row: any) => row.companies)
+      .map((row: any) => ({ id: row.companies.id, name: row.companies.name, frequency: row.frequency })),
+  };
+}
+
+async function replaceCompanies(questionId: string, companies: { company_id: string; frequency: number | null }[]) {
+  const supabase = supabaseAdmin();
+  const { error: deleteError } = await supabase.from("question_companies").delete().eq("question_id", questionId);
+  if (deleteError) return deleteError.message;
+  if (companies.length > 0) {
+    const { error: insertError } = await supabase.from("question_companies").insert(
+      companies.map((c) => ({ question_id: questionId, company_id: c.company_id, frequency: c.frequency ?? null }))
+    );
+    if (insertError) return insertError.message;
+  }
+  return null;
+}
 
 // GET /api/questions?platform=&difficulty=  -> list questions in the
 //   bank, optionally filtered (both combine with AND). Any signed-in
@@ -30,7 +55,7 @@ export async function GET(req: Request) {
   const difficulty = searchParams.get("difficulty");
 
   const supabase = supabaseAdmin();
-  let query = supabase.from("questions").select("*").order("created_at", { ascending: false });
+  let query = supabase.from("questions").select(SELECT_WITH_COMPANIES).order("created_at", { ascending: false });
 
   if (platform === "others") {
     query = query.in("platform", [...OTHERS_PLATFORMS]);
@@ -45,7 +70,7 @@ export async function GET(req: Request) {
   const { data, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ questions: data });
+  return NextResponse.json({ questions: (data ?? []).map(mapQuestion) });
 }
 
 // Resolves a topic_id into its current name (or null for "leave
@@ -64,7 +89,7 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { url, title, topic_id, difficulty } = body ?? {};
+  const { url, title, topic_id, difficulty, companies } = body ?? {};
 
   if (!url || !isValidUrl(url)) {
     return NextResponse.json({ error: "A valid URL is required." }, { status: 400 });
@@ -88,21 +113,36 @@ export async function POST(req: Request) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ question }, { status: 201 });
+
+  if (Array.isArray(companies) && companies.length > 0) {
+    const companyError = await replaceCompanies(question.id, companies);
+    if (companyError) return NextResponse.json({ error: companyError }, { status: 500 });
+  }
+
+  const { data: full, error: refetchError } = await supabase
+    .from("questions")
+    .select(SELECT_WITH_COMPANIES)
+    .eq("id", question.id)
+    .single();
+  if (refetchError) return NextResponse.json({ error: refetchError.message }, { status: 500 });
+
+  return NextResponse.json({ question: mapQuestion(full) }, { status: 201 });
 }
 
-// PATCH /api/questions { id, url? , topic_id? } -> partial update.
-// `url` fills in the real link for a bulk-seeded question flagged
-// `needs_link_curation` (or fixes a wrong one on any question) and
-// clears that flag. `topic_id` (a topic's id, or null) moves the
+// PATCH /api/questions { id, url?, topic_id?, companies? } -> partial
+// update. `url` fills in the real link for a bulk-seeded question
+// flagged `needs_link_curation` (or fixes a wrong one on any question)
+// and clears that flag. `topic_id` (a topic's id, or null) moves the
 // question into a different folder — omit the key entirely to leave
-// it untouched; pass it explicitly as null to uncategorize.
+// it untouched; pass it explicitly as null to uncategorize. `companies`
+// (an array, possibly empty), when present, REPLACES the question's
+// full company/frequency tagging.
 export async function PATCH(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { id, url } = body ?? {};
+  const { id, url, companies } = body ?? {};
   if (!id) return NextResponse.json({ error: "id is required." }, { status: 400 });
 
   const update: Record<string, unknown> = {};
@@ -122,18 +162,30 @@ export async function PATCH(req: Request) {
     Object.assign(update, topicResult);
   }
 
-  if (Object.keys(update).length === 0) {
+  if (Object.keys(update).length === 0 && !Array.isArray(companies)) {
     return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
   }
 
   const supabase = supabaseAdmin();
+
+  if (Array.isArray(companies)) {
+    const companyError = await replaceCompanies(id, companies);
+    if (companyError) return NextResponse.json({ error: companyError }, { status: 500 });
+  }
+
+  if (Object.keys(update).length === 0) {
+    const { data: full, error: refetchError } = await supabase.from("questions").select(SELECT_WITH_COMPANIES).eq("id", id).single();
+    if (refetchError) return NextResponse.json({ error: refetchError.message }, { status: 500 });
+    return NextResponse.json({ question: mapQuestion(full) });
+  }
+
   const { data: question, error } = await supabase
     .from("questions")
     .update(update)
     .eq("id", id)
-    .select()
+    .select(SELECT_WITH_COMPANIES)
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ question });
+  return NextResponse.json({ question: mapQuestion(question) });
 }

@@ -54,6 +54,27 @@ export interface Question {
   created_by: string | null;
   created_at: string;
   needs_link_curation: boolean;
+  /** Companies this question has been asked by, each with its own
+   * asked-frequency (null if not set) — a question can have several. */
+  companies: { id: string; name: string; frequency: number | null }[];
+}
+
+/** A recruiter tag for DSA questions ("asked by Adobe, TCS..."). Shared/
+ * unscoped, same spirit as dsa_topics — any teacher/admin can create
+ * one, any signed-in role can read the list. */
+export interface Company {
+  id: string;
+  name: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+/** The shape the list endpoint actually returns — just enough for the
+ * picker/manager UI, not the full row (see Company for that). */
+export interface CompanyWithCount {
+  id: string;
+  name: string;
+  question_count: number;
 }
 
 /** A DSA question-bank "folder" (app/teacher/questions). Shared/
