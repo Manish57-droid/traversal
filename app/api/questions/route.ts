@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getCurrentAppUser, requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { detectPlatform, guessTitleFromUrl, isValidUrl } from "@/lib/platform";
-import type { Question } from "@/types";
+import { fetchAllRows } from "@/lib/supabase/fetchAll";
+import { QUESTION_SELECT, mapQuestion } from "@/lib/dsaQuestions";
 
 // Platforms bucketed as: LeetCode / HackerRank / CodeChef individually
 // (the three most-assigned judges), everything else (Codeforces,
@@ -11,17 +12,6 @@ import type { Question } from "@/types";
 // so a 4th filter bucket reads cleaner than 6 near-empty individual ones.
 const OTHERS_PLATFORMS = ["codeforces", "geeksforgeeks", "other"] as const;
 const NAMED_PLATFORMS = ["leetcode", "hackerrank", "codechef"] as const;
-
-const SELECT_WITH_COMPANIES = "*, question_companies(frequency, companies(id, name))";
-
-function mapQuestion(q: any): Question {
-  return {
-    ...q,
-    companies: (q.question_companies ?? [])
-      .filter((row: any) => row.companies)
-      .map((row: any) => ({ id: row.companies.id, name: row.companies.name, frequency: row.frequency })),
-  };
-}
 
 async function replaceCompanies(questionId: string, companies: { company_id: string; frequency: number | null }[]) {
   const supabase = supabaseAdmin();
@@ -55,22 +45,24 @@ export async function GET(req: Request) {
   const difficulty = searchParams.get("difficulty");
 
   const supabase = supabaseAdmin();
-  let query = supabase.from("questions").select(SELECT_WITH_COMPANIES).order("created_at", { ascending: false });
 
-  if (platform === "others") {
-    query = query.in("platform", [...OTHERS_PLATFORMS]);
-  } else if (platform && (NAMED_PLATFORMS as readonly string[]).includes(platform)) {
-    query = query.eq("platform", platform);
+  try {
+    const data = await fetchAllRows((from, to) => {
+      let query = supabase.from("questions").select(QUESTION_SELECT).order("created_at", { ascending: false }).range(from, to);
+      if (platform === "others") {
+        query = query.in("platform", [...OTHERS_PLATFORMS]);
+      } else if (platform && (NAMED_PLATFORMS as readonly string[]).includes(platform)) {
+        query = query.eq("platform", platform);
+      }
+      if (difficulty === "easy" || difficulty === "medium" || difficulty === "hard") {
+        query = query.eq("difficulty", difficulty);
+      }
+      return query;
+    });
+    return NextResponse.json({ questions: data.map(mapQuestion) });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
-
-  if (difficulty === "easy" || difficulty === "medium" || difficulty === "hard") {
-    query = query.eq("difficulty", difficulty);
-  }
-
-  const { data, error } = await query;
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ questions: (data ?? []).map(mapQuestion) });
 }
 
 // Resolves a topic_id into its current name (or null for "leave
@@ -121,7 +113,7 @@ export async function POST(req: Request) {
 
   const { data: full, error: refetchError } = await supabase
     .from("questions")
-    .select(SELECT_WITH_COMPANIES)
+    .select(QUESTION_SELECT)
     .eq("id", question.id)
     .single();
   if (refetchError) return NextResponse.json({ error: refetchError.message }, { status: 500 });
@@ -174,7 +166,7 @@ export async function PATCH(req: Request) {
   }
 
   if (Object.keys(update).length === 0) {
-    const { data: full, error: refetchError } = await supabase.from("questions").select(SELECT_WITH_COMPANIES).eq("id", id).single();
+    const { data: full, error: refetchError } = await supabase.from("questions").select(QUESTION_SELECT).eq("id", id).single();
     if (refetchError) return NextResponse.json({ error: refetchError.message }, { status: 500 });
     return NextResponse.json({ question: mapQuestion(full) });
   }
@@ -183,7 +175,7 @@ export async function PATCH(req: Request) {
     .from("questions")
     .update(update)
     .eq("id", id)
-    .select(SELECT_WITH_COMPANIES)
+    .select(QUESTION_SELECT)
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

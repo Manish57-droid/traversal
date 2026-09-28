@@ -1,6 +1,23 @@
 -- ============================================================
 -- Traversal DSA — Supabase schema (consolidated reference)
 --
+-- ⚠ DO NOT run this file against a project that has already been set
+-- up (i.e. this one, or any clone of it that already ran the
+-- migrations below). It replays the full migration history in order,
+-- including intermediate steps that read/write columns later
+-- migrations in this same file go on to drop — safe on a truly empty
+-- database, but guaranteed to fail with a "column does not exist"
+-- error partway through on a database that's already past that point
+-- (e.g. 0025's data-backfill step reads proctored_sets.subject_id, a
+-- column 0025 itself drops a few lines later — fine on first run,
+-- broken on a second run since that column is already gone for real).
+-- If it does fail partway through, nothing is corrupted — Supabase's
+-- SQL editor runs a pasted script as one transaction, so a failure
+-- anywhere rolls back everything; you're left exactly where you
+-- started. This file's only real use is bootstrapping a BRAND-NEW,
+-- empty Supabase project in one paste — an already-set-up project
+-- (like this one) needs nothing further from this file at all.
+--
 -- This file is a single-source-of-truth SNAPSHOT of the full schema as
 -- currently applied, kept for convenience (e.g. bootstrapping a fresh
 -- Supabase project in one paste). It is NOT where new schema changes
@@ -1668,3 +1685,218 @@ where question = 'Database Sharding' and category_id = (select id from interview
 
 alter table users add column if not exists interview_prep_tip_seen boolean not null default true;
 alter table users alter column interview_prep_tip_seen set default false;
+
+-- ============================================================
+-- 0024_proctored_theory_questions — 2026-09-25
+-- Adds long-answer "theory" questions to the proctored question bank
+-- alongside MCQs (same Subject/Set bank — a Set is just curated by a
+-- teacher to hold one kind or the other, so a section built from it
+-- naturally ends up type-pure without any DB-level enforcement).
+--
+-- A theory question can't be auto-graded like an MCQ, so it carries
+-- its own `max_marks` (set by the teacher at authoring time) instead
+-- of the fixed 1-point MCQ scoring, and its `min_word_count` is a
+-- guideline shown to the student (not DB-enforced — the take screen
+-- shows a live counter). Grading happens after submission: a teacher
+-- awards marks per theory answer (proctored_test_attempts.theory_grades),
+-- which lib/proctoredScoring.ts folds into the attempt's score once
+-- entered. `grading_status` tracks whether that's happened yet, so the
+-- teacher panel and student result screen can both show "pending
+-- grading" instead of a misleadingly final score.
+-- ============================================================
+
+do $$ begin
+  create type proctored_question_type as enum ('mcq', 'theory');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type proctored_grading_status as enum ('not_required', 'pending', 'graded');
+exception when duplicate_object then null; end $$;
+
+alter table proctored_questions add column if not exists question_type proctored_question_type not null default 'mcq';
+alter table proctored_questions add column if not exists min_word_count int;
+alter table proctored_questions add column if not exists max_marks numeric;
+
+alter table proctored_questions alter column options drop not null;
+alter table proctored_questions alter column correct_option drop not null;
+
+alter table proctored_questions drop constraint if exists proctored_questions_options_len;
+alter table proctored_questions drop constraint if exists proctored_questions_correct_option_range;
+
+-- One shape check covers both kinds: an MCQ must have its options/
+-- correct_option (and no marks override — always worth 1 point); a
+-- theory question must have max_marks and no options/correct_option.
+alter table proctored_questions drop constraint if exists proctored_questions_type_shape;
+alter table proctored_questions add constraint proctored_questions_type_shape check (
+  (
+    question_type = 'mcq'
+    and options is not null
+    and jsonb_array_length(options) >= 2
+    and correct_option is not null
+    and correct_option >= 0
+    and correct_option < jsonb_array_length(options)
+    and max_marks is null
+  )
+  or
+  (
+    question_type = 'theory'
+    and options is null
+    and correct_option is null
+    and max_marks is not null
+    and max_marks > 0
+  )
+);
+
+-- `answers` already stores per-question values as jsonb (option index
+-- for MCQ) — a theory answer is just a string in the same map, no
+-- column change needed there.
+--
+-- `theory_grades` is the analogous map for marks a teacher has awarded
+-- so far: { [question_id]: marks_awarded }. `max_score` is the total
+-- possible marks for the attempt (mcq count + sum of theory max_marks)
+-- — the denominator that belongs next to `score` once theory questions
+-- are in the mix, since `total_questions` is just a question count and
+-- no longer equals "max possible marks" when a theory question is
+-- worth more than 1.
+alter table proctored_test_attempts add column if not exists theory_grades jsonb not null default '{}';
+alter table proctored_test_attempts add column if not exists grading_status proctored_grading_status not null default 'not_required';
+alter table proctored_test_attempts add column if not exists max_score numeric;
+
+-- Backfill: every existing scored attempt predates theory questions,
+-- so its max possible marks was always exactly its question count.
+update proctored_test_attempts set max_score = total_questions where max_score is null and total_questions is not null;
+
+-- ============================================================
+-- 0025_decouple_sets_from_subjects — 2026-09-26
+-- Un-nests Sets from Subjects. Previously a Set belonged to exactly
+-- one Subject (proctored_sets.subject_id NOT NULL), and a Question's
+-- subject was only known indirectly through its Set — which forced
+-- every Set to be single-subject even when a teacher wanted to build
+-- a mixed-topic exam bundle. Subject is a content-category tag that
+-- now lives directly on the Question; a Set is just a named,
+-- optional, many-to-many bundle of questions, free to mix subjects
+-- or not, entirely at the teacher's discretion. A test Section drops
+-- the Subject concept entirely — it only ever picked Sets anyway.
+--
+-- needs_categorization changes meaning: it used to mean "has no Set";
+-- it now means "has no Subject" — Subject is the thing every question
+-- must have, Set membership is optional and flexible.
+-- ============================================================
+
+-- ---------- Question -> Subject (direct, required) ----------
+alter table proctored_questions add column if not exists subject_id uuid references proctored_subjects(id) on delete set null;
+
+update proctored_questions q
+set subject_id = ps.subject_id
+from proctored_sets ps
+where q.set_id = ps.id and q.subject_id is null;
+
+-- ---------- Question <-> Set (many-to-many) ----------
+create table if not exists proctored_question_sets (
+  question_id uuid not null references proctored_questions(id) on delete cascade,
+  set_id uuid not null references proctored_sets(id) on delete cascade,
+  primary key (question_id, set_id)
+);
+
+create index if not exists idx_proctored_question_sets_set on proctored_question_sets(set_id);
+create index if not exists idx_proctored_question_sets_question on proctored_question_sets(question_id);
+
+insert into proctored_question_sets (question_id, set_id)
+select id, set_id from proctored_questions where set_id is not null
+on conflict do nothing;
+
+-- ---------- Drop old set_id-keyed constraint/trigger ----------
+-- Categorization used to be judged by set_id; a Set's contents can no
+-- longer be checked with a single-column CHECK, and a question's
+-- categorization no longer depends on Set membership at all.
+alter table proctored_questions drop constraint if exists proctored_questions_set_required_unless_flagged;
+drop trigger if exists trg_proctored_sets_before_delete on proctored_sets;
+drop function if exists proctored_flag_uncategorized_before_set_delete();
+
+update proctored_questions set needs_categorization = (subject_id is null);
+
+alter table proctored_questions add constraint proctored_questions_subject_required_unless_flagged
+  check (needs_categorization or subject_id is not null);
+
+create index if not exists idx_proctored_questions_subject on proctored_questions(subject_id);
+
+-- Losing a Subject (delete) now flags its questions uncategorized —
+-- same posture as the old Set-delete trigger, just re-targeted.
+create or replace function proctored_flag_uncategorized_before_subject_delete()
+returns trigger as $$
+begin
+  update proctored_questions set needs_categorization = true where subject_id = old.id;
+  return old;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_proctored_subjects_before_delete on proctored_subjects;
+create trigger trg_proctored_subjects_before_delete
+  before delete on proctored_subjects
+  for each row execute function proctored_flag_uncategorized_before_subject_delete();
+
+-- ---------- Drop the now-superseded columns ----------
+alter table proctored_questions drop column if exists set_id;
+alter table proctored_sets drop constraint if exists proctored_sets_subject_id_name_key;
+alter table proctored_sets drop column if exists subject_id;
+alter table proctored_test_sections drop column if exists subject_id;
+
+-- ============================================================
+-- 0026_proctored_violation_types_v2 — 2026-09-28
+-- Two gaps found in real use: covering the camera lens triggered
+-- nothing at all (no violation type existed for "no face visible"),
+-- and turning away from the screen was only ever a client-side toast
+-- (0020_camera_proctoring.sql's comment explicitly called this out as
+-- intentional, "least precise... never a logged violation" — real use
+-- showed that's too lenient). Both become real, server-recorded
+-- violations now; see components/proctored-take/useCameraProctoring.ts
+-- for the detection logic.
+-- ============================================================
+
+alter type proctored_violation_type add value if not exists 'looking_away';
+alter type proctored_violation_type add value if not exists 'face_not_visible';
+
+-- ============================================================
+-- 0027_dsa_companies — 2026-09-28
+-- Company tagging for DSA questions ("asked by Adobe, TCS,
+-- Accenture..."), with a per-(question, company) frequency. Mirrors
+-- two existing patterns in this codebase rather than inventing a new
+-- one: dsa_topics (0015_topics.sql) for the standalone reference
+-- table shape, and question_set_items (0001_initial_schema.sql) for
+-- the many-to-many junction-with-a-payload-column shape.
+--
+-- No created_by on companies (unlike dsa_topics) — this table is
+-- seeded from a bulk import of a real company-wise question dataset,
+-- not created per-teacher. frequency is numeric, not int — the
+-- imported data carries it as a percentage-style score (e.g. 97.6),
+-- not a plain occurrence count.
+-- ============================================================
+
+create table if not exists companies (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  created_at timestamptz not null default now(),
+  unique (name)
+);
+
+create table if not exists question_companies (
+  question_id uuid not null references questions(id) on delete cascade,
+  company_id uuid not null references companies(id) on delete cascade,
+  frequency numeric,
+  primary key (question_id, company_id)
+);
+
+create index if not exists idx_question_companies_company on question_companies(company_id);
+create index if not exists idx_question_companies_question on question_companies(question_id);
+
+-- A small starter set so the picker isn't empty on first use — teachers
+-- add more from the new "Manage companies" list.
+insert into companies (name) values
+  ('Adobe'), ('TCS'), ('Accenture'), ('Google'), ('Amazon'),
+  ('Microsoft'), ('Infosys'), ('Wipro'), ('Flipkart')
+on conflict (name) do nothing;
+
+-- ---------- ROW LEVEL SECURITY (this migration's tables only) ----------
+alter table companies enable row level security;
+alter table question_companies enable row level security;
+-- No policies — service-role only, same posture as every other table.

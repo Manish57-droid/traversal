@@ -57,15 +57,21 @@ export interface Question {
   /** Companies this question has been asked by, each with its own
    * asked-frequency (null if not set) — a question can have several. */
   companies: { id: string; name: string; frequency: number | null }[];
+  /** The real, many-to-many topic tagging (question_topics) — a
+   * question can belong to several. Independent of topic/topic_id
+   * above, which are the teacher bank page's single-folder model and
+   * stay null for anything bulk-imported without them. */
+  topics: { id: string; name: string }[];
 }
 
 /** A recruiter tag for DSA questions ("asked by Adobe, TCS..."). Shared/
  * unscoped, same spirit as dsa_topics — any teacher/admin can create
- * one, any signed-in role can read the list. */
+ * one, any signed-in role can read the list. No created_by column
+ * (unlike dsa_topics) — this table was seeded from a bulk import
+ * rather than created per-teacher. */
 export interface Company {
   id: string;
   name: string;
-  created_by: string | null;
   created_at: string;
 }
 

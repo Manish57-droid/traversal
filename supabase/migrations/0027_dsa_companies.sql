@@ -6,12 +6,17 @@
 -- one: dsa_topics (0015_topics.sql) for the standalone reference
 -- table shape, and question_set_items (0001_initial_schema.sql) for
 -- the many-to-many junction-with-a-payload-column shape.
+--
+-- No created_by on companies (unlike dsa_topics) — this table is
+-- seeded from a bulk import of a real company-wise question dataset,
+-- not created per-teacher. frequency is numeric, not int — the
+-- imported data carries it as a percentage-style score (e.g. 97.6),
+-- not a plain occurrence count.
 -- ============================================================
 
 create table if not exists companies (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  created_by uuid references users(id) on delete set null,
   created_at timestamptz not null default now(),
   unique (name)
 );
@@ -19,7 +24,7 @@ create table if not exists companies (
 create table if not exists question_companies (
   question_id uuid not null references questions(id) on delete cascade,
   company_id uuid not null references companies(id) on delete cascade,
-  frequency int,
+  frequency numeric,
   primary key (question_id, company_id)
 );
 

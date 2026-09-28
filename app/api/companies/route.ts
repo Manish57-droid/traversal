@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   const supabase = supabaseAdmin();
   const { data, error } = await supabase
     .from("companies")
-    .insert({ name: name.trim(), created_by: user.id })
+    .insert({ name: name.trim() })
     .select()
     .single();
 

@@ -1,6 +1,5 @@
 "use client";
 
-import { PLATFORM_COLORS, PLATFORM_LABELS } from "@/lib/platform";
 import { DIFFICULTY_LABELS, DIFFICULTY_BADGE_STYLE } from "@/lib/difficulty";
 import CompanyBadge from "@/components/CompanyBadge";
 import type { Question, QuestionStatus } from "@/types";
@@ -11,13 +10,34 @@ const STATUS_LABEL: Record<QuestionStatus, string> = {
   completed: "Completed",
 };
 
+// Caps how many chips render inline before collapsing into "+N more"
+// — a question can carry ~5 companies and ~3 topics on average in the
+// imported dataset, too many to show in full inside a table cell.
+const MAX_CHIPS = 2;
+
+function TopicChip({ name }: { name: string }) {
+  return <span className="rounded border border-line/70 px-1.5 py-0.5 text-xs text-fg-muted">{name}</span>;
+}
+
+function ChipOverflow({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return <span className="text-xs text-fg-subtle">+{count} more</span>;
+}
+
 export default function QuestionRow({
+  index,
   question,
   status,
+  companyFilter,
   onStatusChange,
 }: {
+  /** 1-based row number across the whole filtered set, not just this page. */
+  index: number;
   question: Question;
   status: QuestionStatus;
+  /** When a specific company is selected in the filter, the Frequency
+   * column shows THAT company's number instead of the max across all. */
+  companyFilter?: string;
   onStatusChange: (next: QuestionStatus) => void;
 }) {
   const cycle: Record<QuestionStatus, QuestionStatus> = {
@@ -26,82 +46,79 @@ export default function QuestionRow({
     completed: "not_started",
   };
 
-  // Combined across every company tagged on this question — omitted
-  // entirely when none of them have a frequency set.
-  const totalFrequency = question.companies.reduce((sum, c) => sum + (c.frequency ?? 0), 0);
-  const hasFrequency = question.companies.some((c) => c.frequency !== null);
+  const shownCompanies = question.companies.slice(0, MAX_CHIPS);
+  const extraCompanies = question.companies.length - shownCompanies.length;
+
+  const shownTopics = question.topics.slice(0, MAX_CHIPS);
+  const extraTopics = question.topics.length - shownTopics.length;
+
+  const frequency = companyFilter
+    ? question.companies.find((c) => c.id === companyFilter)?.frequency ?? null
+    : question.companies.reduce((max, c) => (c.frequency !== null && c.frequency > (max ?? -Infinity) ? c.frequency : max), null as number | null);
 
   return (
-    <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex min-w-0 flex-1 items-start gap-3">
-        {question.companies.length > 0 && (
-          <div className="flex shrink-0 flex-wrap gap-1.5 pt-0.5">
-            {question.companies.map((c) => (
+    <tr className="border-b border-line/40 align-top last:border-0 hover:bg-surface-2/40">
+      <td className="py-3 pr-3 text-xs text-fg-subtle">{index}</td>
+      <td className="py-3 pr-3">
+        {question.companies.length === 0 ? (
+          <span className="text-xs text-fg-subtle">—</span>
+        ) : (
+          <div className="flex flex-wrap items-center gap-1">
+            {shownCompanies.map((c) => (
               <CompanyBadge key={c.id} name={c.name} />
             ))}
+            <ChipOverflow count={extraCompanies} />
           </div>
         )}
-
-        <div className="min-w-0">
-          {question.url ? (
-            <a
-              href={question.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block truncate font-medium text-fg hover:text-success hover:underline"
-            >
-              {question.title}
-            </a>
-          ) : (
-            <p className="truncate font-medium text-fg-muted">{question.title}</p>
-          )}
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            <span
-              className="rounded px-2 py-0.5 text-xs font-medium text-ink-fixed"
-              style={{ backgroundColor: PLATFORM_COLORS[question.platform] }}
-            >
-              {PLATFORM_LABELS[question.platform]}
-            </span>
-            {question.topic && (
-              <span className="rounded border border-line/70 px-2 py-0.5 text-xs text-fg-muted">
-                {question.topic}
-              </span>
-            )}
-            {question.needs_link_curation && (
-              <span className="rounded border border-warn/40 px-2 py-0.5 text-xs text-warn">Link coming soon</span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex shrink-0 items-center gap-2 self-start sm:self-auto">
-        {hasFrequency && (
-          <span className="rounded-full border border-line/70 px-2 py-1 text-xs text-fg-muted" title="Combined asked-frequency across tagged companies">
-            Asked ×{totalFrequency}
-          </span>
+      </td>
+      <td className="min-w-[220px] py-3 pr-3">
+        {question.url ? (
+          <a href={question.url} target="_blank" rel="noopener noreferrer" className="font-medium text-fg hover:text-success hover:underline">
+            {question.title}
+          </a>
+        ) : (
+          <span className="font-medium text-fg-muted">{question.title}</span>
         )}
-        {question.difficulty !== "unknown" && (
+        {question.needs_link_curation && (
+          <span className="ml-2 rounded border border-warn/40 px-1.5 py-0.5 text-xs text-warn">Link coming soon</span>
+        )}
+      </td>
+      <td className="py-3 pr-3 text-sm text-fg-muted">{frequency !== null ? `×${frequency}` : "—"}</td>
+      <td className="py-3 pr-3">
+        {question.topics.length === 0 ? (
+          <span className="text-xs text-fg-subtle">Uncategorized</span>
+        ) : (
+          <div className="flex flex-wrap items-center gap-1">
+            {shownTopics.map((t) => (
+              <TopicChip key={t.id} name={t.name} />
+            ))}
+            <ChipOverflow count={extraTopics} />
+          </div>
+        )}
+      </td>
+      <td className="py-3 pr-3">
+        {question.difficulty !== "unknown" ? (
           <span className={`rounded-full border px-2 py-1 text-xs capitalize ${DIFFICULTY_BADGE_STYLE[question.difficulty]}`}>
             {DIFFICULTY_LABELS[question.difficulty]}
           </span>
+        ) : (
+          <span className="text-xs text-fg-subtle">—</span>
         )}
+      </td>
+      <td className="py-3">
         <button
           onClick={() => onStatusChange(cycle[status])}
-          className="flex items-center gap-2 rounded-lg border border-line/70 px-3 py-2 text-sm transition-colors hover:border-line"
+          className="flex items-center gap-2 whitespace-nowrap rounded-lg border border-line/70 px-3 py-2 text-sm transition-colors hover:border-line"
           aria-label={`Mark as ${cycle[status].replace("_", " ")}`}
         >
           <span
             className={`h-3 w-3 rounded-full ${
-              status === "completed"
-                ? "bg-success"
-                : status === "attempted"
-                ? "bg-warn"
-                : "border border-line"
+              status === "completed" ? "bg-success" : status === "attempted" ? "bg-warn" : "border border-line"
             }`}
           />
           {STATUS_LABEL[status]}
         </button>
-      </div>
-    </div>
+      </td>
+    </tr>
   );
 }

@@ -148,23 +148,33 @@ body {
   }
 }
 
-.card {
-  @apply rounded-xl border border-line/70 bg-surface/70 backdrop-blur-sm;
-}
+/* @layer components (not plain CSS) so these compile in at
+   @tailwind components' position, BEFORE @tailwind utilities — a
+   one-off utility like `pl-8` on an `.input` (icon-in-input pattern,
+   used in several places) needs to win the cascade over `.input`'s
+   own `px-3.5`, which only happens if `.input` is registered as a
+   component. As plain CSS (the previous state of this block), it
+   compiled in below every utility regardless of className order,
+   silently winning that fight everywhere and mis-centering icons. */
+@layer components {
+  .card {
+    @apply rounded-xl border border-line/70 bg-surface/70 backdrop-blur-sm;
+  }
 
-.btn-primary {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5
-    font-semibold text-ink-fixed transition-colors hover:bg-accent-2
-    disabled:cursor-not-allowed disabled:opacity-50;
-}
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5
+      font-semibold text-ink-fixed transition-colors hover:bg-accent-2
+      disabled:cursor-not-allowed disabled:opacity-50;
+  }
 
-.btn-secondary {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg border border-line
-    bg-transparent px-4 py-2.5 font-medium text-fg transition-colors
-    hover:border-accent/50 hover:bg-surface;
-}
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-line
+      bg-transparent px-4 py-2.5 font-medium text-fg transition-colors
+      hover:border-accent/50 hover:bg-surface;
+  }
 
-.input {
-  @apply w-full rounded-lg border border-line bg-bg px-3.5 py-2.5 text-sm text-fg
-    placeholder:text-fg-subtle focus:border-success/60 focus:outline-none;
+  .input {
+    @apply w-full rounded-lg border border-line bg-bg px-3.5 py-2.5 text-sm text-fg
+      placeholder:text-fg-subtle focus:border-success/60 focus:outline-none;
+  }
 }
