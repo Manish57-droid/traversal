@@ -10,6 +10,12 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["@napi-rs/canvas"],
   },
+  // Interview Prep guide content (lib/interview-guides/*.md) is
+  // imported as a plain string and parsed in code.
+  webpack(config) {
+    config.module.rules.push({ test: /\.md$/, type: "asset/source" });
+    return config;
+  },
 };
 
 module.exports = nextConfig;

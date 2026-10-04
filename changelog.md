@@ -1701,3 +1701,39 @@
   a student's own score, inherently exposes *other* students' standing — worth being as strict
   about as the full per-question review already is.
 
+
+## [2026-10-04] — Static C++ and OOP interview guides, one topic per page
+- What changed: Added two read-only **Interview Prep guides** that live in the repo, not the DB:
+  **C++ Programming** (28 topics: program structure, C vs C++, data types, storage classes,
+  const/volatile, operators, control flow, arrays/C-strings, pointers, call by value/reference,
+  functions & recursion, references, inline vs macros, structs/unions/enums, preprocessor,
+  new/delete, overloading & default args, operator overloading, function and class templates,
+  exceptions, namespaces, casts & RTTI, const/mutable/explicit, STL overview, vector/list/map,
+  `string`, streams & file I/O) and **OOP in C++** (18 topics: classes, constructors/destructors,
+  copy constructor & deep/shallow copy, `this`, static members, friends, passing/returning objects,
+  inheritance access modes and types, ctor/dtor order, diamond problem & virtual base classes,
+  virtual functions, abstract classes, vtable/vptr, virtual destructors, overloading vs overriding
+  vs hiding, slicing, RAII & smart pointers). Content follows the coverage and classic examples
+  of Schildt's "C++: The Complete Reference" (3rd ed.), rewritten as original explanations with
+  walkthroughs, expected output, mermaid diagrams and "Key points" recaps.
+  Content is Markdown in `lib/interview-guides/{cpp,oop-cpp}.md` (format documented in
+  `lib/interview-guides/index.ts`), bundled as strings via a webpack `asset/source` rule in
+  `next.config.js`. New routes: `/student/interview-prep/guides/[guide]` (overview, topic list,
+  "Continue reading" from localStorage) and `/student/interview-prep/guides/[guide]/[topic]` (one
+  topic per page: sidebar/drawer topic list, progress bar, previous/next, numbered pagination,
+  ←/→ keys). `GuideArticle` renders topics with labelled code panels + copy button, green
+  "Output" panels, callouts and same-tab internal links between topics. The student Interview
+  Prep page is now a server component showing the guides above the teacher-authored categories
+  (moved unchanged into `components/interview-prep/CategoryGrid.tsx`), so guide text never ships
+  to the listing page's client bundle. No DB changes; teachers can't edit guides from the UI.
+- Verification: all 71 complete C++ programs compile with `g++ -std=c++17 -Wall` and print
+  exactly the ```text output shown under them; all 21 mermaid diagrams pass `mermaid.parse`;
+  every topic server-renders through `GuideArticle` with each fence as a labelled panel, unique
+  slugs and no broken internal links; `tsc --noEmit` and `next build` clean (only the existing
+  mediapipe warning). Not yet clicked through in a browser as a signed-in student.
+- Files touched: `next.config.js`, `app/student/interview-prep/page.tsx`. New:
+  `lib/interview-guides/{index.ts,shared.ts,cpp.md,oop-cpp.md}`, `types/markdown.d.ts`,
+  `app/student/interview-prep/guides/{page.tsx,[guide]/page.tsx,[guide]/[topic]/page.tsx}`,
+  `components/interview-prep/{GuideArticle,GuideReader,ContinueReading,CategoryGrid}.tsx`.
+- Why: Requested C++/OOP reading material from the reference book, kept in the frontend only
+  (not the database), well formatted and paged.
