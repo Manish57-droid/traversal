@@ -1759,3 +1759,60 @@
   `components/interview-prep/CategoryGrid.tsx`.
 - Why: Requested — guide content will gradually be added for every subject, so guides and
   categories should read as one list rather than two parallel sections.
+
+## [2026-10-04] — Computer Networks interview guide
+- What changed: Added a third static guide, **Computer Networks** (`lib/interview-guides/networking.md`,
+  36 topics, basics → advanced), built from the user's CN lecture notes (Tanenbaum/Forouzan-based
+  syllabus, units I–V) and rewritten as original explanations: data communication basics,
+  topologies, LAN/MAN/WAN and the ISP hierarchy, transmission media, circuit/packet/virtual-circuit
+  switching, OSI, TCP/IP vs OSI, network devices; framing and byte/bit stuffing, parity/checksum/CRC,
+  Hamming code, Stop-and-Wait/Go-Back-N/Selective Repeat ARQ, ALOHA, CSMA/CD/CA, controlled access,
+  Ethernet; network-layer design, Dijkstra/flooding, distance vector and count-to-infinity,
+  link state/path vector/hierarchical routing, IPv4 subnetting and CIDR, fragmentation/IPv6/ARP,
+  congestion control (RED, leaky vs token bucket); transport services and ports, three-way
+  handshake and the two-army problem, UDP (and TCP vs UDP), TCP header, connection management and
+  SYN flooding, TCP flow control (Nagle, silly window), TCP error/congestion control (slow start,
+  AIMD, fast retransmit, Reno); RPC/RTP/RTCP, WWW/HTTP, DNS, email/TELNET/FTP, security and RSA.
+  Slug `networking` matches the live "Computer Networks" category, so `SubjectGrid` merges the two
+  into one card. Worked calculations use a new ```calc fence, labelled "Worked example" in
+  `GuideArticle`.
+- Verification: every worked number was recomputed by script (bit stuffing, checksum, CRC
+  remainder, Hamming syndrome, ALOHA throughputs, CSMA/CD minimum frame, bandwidth-delay product,
+  Ethernet max length, hierarchical-routing table sizes, Dijkstra table, subnet/fragment offsets,
+  RSA encrypt/decrypt) — one rounding fixed (slotted ALOHA at G = ½: 152 frames/s, the notes say
+  151). All 22 mermaid diagrams pass `mermaid.parse`; all 36 topics server-render with no broken
+  links; `tsc --noEmit` and `next build` clean.
+- Files touched: `lib/interview-guides/{index.ts,shared.ts}`,
+  `components/interview-prep/GuideArticle.tsx`, `changelog.md`. New: `lib/interview-guides/networking.md`.
+- Why: Requested — Computer Networks content for the Interview Prep section from the provided notes.
+
+## [2026-10-04] — DBMS and SQL interview guides
+- What changed: Added two static guides built from the user's RDBMS textbook (Nilesh Shah,
+  *Database Systems Using Oracle*), rewritten as original explanations.
+  **DBMS** (`lib/interview-guides/dbms.md`, 20 topics): DBMS concepts and file system vs DBMS,
+  three-schema architecture and data independence, data models (incl. personal vs client/server
+  and SQL vs NoSQL), relational terms, keys, integrity rules, relational algebra and calculus
+  (on the book's PROJ2002/PARTS/EMPLOYEE tables), ER modelling, functional dependencies,
+  anomalies and 1NF–3NF (the book's INVOICE example), BCNF/4NF/5NF and lossless/dependency-preserving
+  decomposition, denormalization, transactions/ACID, schedules and serializability, locking/2PL/
+  timestamps/MVCC, deadlocks, isolation levels, recovery and indexing (B+ trees, hashing).
+  **SQL** (`lib/interview-guides/sql.md`, 29 topics): command categories and a sample company
+  schema, data types/constraints, ALTER and DELETE vs TRUNCATE vs DROP, DML and MERGE, SELECT,
+  filtering/sorting, NULL handling, single-row functions and CASE, GROUP BY/HAVING, logical
+  processing order, joins, self/non-equi joins, set operators, subqueries, correlated subqueries/
+  EXISTS/NOT IN trap, Top-N and Nth highest salary, window functions, CTEs/CONNECT BY, common
+  interview queries, views/materialized views, sequences/identity/synonyms, indexes and
+  performance, transaction control, GRANT/REVOKE/roles, and PL/SQL (blocks, cursors, exceptions,
+  procedures/functions/packages, triggers). Slugs `dbms` and `sql` match the live categories, so
+  `SubjectGrid` merges each into one card. `GuideArticle` labels ```sql and ```plsql blocks.
+- Beyond the book (which stops at 3NF and has no theory chapters on concurrency/recovery/
+  indexing): BCNF/4NF/5NF, schedules/serializability, 2PL/timestamps/MVCC, deadlocks, isolation
+  levels, recovery/ARIES, B+ trees/hashing, NoSQL, window functions, CTEs.
+- Verification: every ```sql block (except ones marked `-- Oracle` / `-- not run`) was executed on
+  PostgreSQL (PGlite) against the guide's sample data and its ```text output compared exactly —
+  DBMS 8 queries, SQL 92 queries, 0 mismatches. Oracle-only and PL/SQL blocks were not executed
+  (outputs hand-checked). All 11 mermaid diagrams pass `mermaid.parse`; all 49 topics
+  server-render with no broken links; `tsc --noEmit` and `next build` clean.
+- Files touched: `lib/interview-guides/{index.ts,shared.ts}`,
+  `components/interview-prep/GuideArticle.tsx`, `changelog.md`. New: `lib/interview-guides/{dbms,sql}.md`.
+- Why: Requested — DBMS and SQL content for the Interview Prep section from the provided book.

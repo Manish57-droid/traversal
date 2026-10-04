@@ -1,4 +1,4 @@
-// Static, read-only Interview Prep guides — long-form C++ and OOP
+// Static, read-only Interview Prep guides — long-form subject
 // reading material, paged one topic at a time at
 // /student/interview-prep/guides/[guide]/[topic]. Unlike the
 // teacher-authored categories (interview_categories /
@@ -17,6 +17,9 @@
 
 import cppSource from "./cpp.md";
 import oopCppSource from "./oop-cpp.md";
+import networkingSource from "./networking.md";
+import dbmsSource from "./dbms.md";
+import sqlSource from "./sql.md";
 import { GUIDE_INFO, type GuideDifficulty, type GuideInfo } from "./shared";
 
 export type { GuideDifficulty, GuideTopicSummary, GuideInfo } from "./shared";
@@ -26,6 +29,9 @@ export type { GuideDifficulty, GuideTopicSummary, GuideInfo } from "./shared";
 const SOURCES: Record<string, { source: string; file: string }> = {
   cpp: { source: cppSource, file: "cpp.md" },
   oop: { source: oopCppSource, file: "oop-cpp.md" },
+  networking: { source: networkingSource, file: "networking.md" },
+  dbms: { source: dbmsSource, file: "dbms.md" },
+  sql: { source: sqlSource, file: "sql.md" },
 };
 
 export interface GuideTopic {

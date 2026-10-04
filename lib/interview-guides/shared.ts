@@ -33,6 +33,24 @@ export const GUIDE_INFO: GuideInfo[] = [
     description: "Classes, constructors, inheritance, virtual functions and polymorphism — object-oriented programming explained through C++ code.",
     icon: "Boxes",
   },
+  {
+    slug: "networking",
+    name: "Computer Networks",
+    description: "From topologies and the OSI model to routing, TCP congestion control, DNS and HTTP — with worked calculations.",
+    icon: "Network",
+  },
+  {
+    slug: "dbms",
+    name: "DBMS",
+    description: "Relational model, keys, relational algebra, ER diagrams, normalization up to 5NF, transactions, concurrency, recovery and indexing.",
+    icon: "Database",
+  },
+  {
+    slug: "sql",
+    name: "SQL",
+    description: "SQL from CREATE TABLE to joins, subqueries and window functions, plus views, transactions and PL/SQL — every query shown with its real output.",
+    icon: "FileCode",
+  },
 ];
 
 export const lastTopicKey = (guideSlug: string) => `interview-guide:last-topic:${guideSlug}`;
