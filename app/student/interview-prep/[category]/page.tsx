@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ChevronDown, List, X } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, List, X } from "lucide-react";
 import type { InterviewCategoryWithCount, InterviewQuestion } from "@/types";
 import { getInterviewIcon } from "@/lib/interviewIcons";
 import AnswerContent from "@/components/interview-prep/AnswerContent";
+import { GUIDE_INFO } from "@/lib/interview-guides/shared";
 
 function QuestionAccordionItem({
   q,
@@ -139,6 +140,8 @@ export default function InterviewPrepCategoryPage() {
   }
 
   const Icon = category ? getInterviewIcon(category.icon) : null;
+  // Same subject as a static guide (matched by slug) -> point to it.
+  const guide = GUIDE_INFO.find((g) => g.slug === slug);
 
   return (
     <div className="space-y-6">
@@ -156,6 +159,22 @@ export default function InterviewPrepCategoryPage() {
         </div>
         {category?.description && <p className="mt-1 text-sm text-fg-muted">{category.description}</p>}
       </div>
+
+      {guide && (
+        <Link
+          href={`/student/interview-prep/guides/${guide.slug}`}
+          className="card group flex items-center gap-3 border-accent/40 p-4 transition-colors hover:border-accent/70"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
+            <BookOpen className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-fg group-hover:text-accent">Read the full guide: {guide.name}</p>
+            <p className="text-xs text-fg-subtle">In-depth topics with worked examples, one per page</p>
+          </div>
+          <ChevronRight className="h-4 w-4 shrink-0 text-fg-subtle" />
+        </Link>
+      )}
 
       {loading && <p className="text-sm text-fg-muted">Loading…</p>}
 

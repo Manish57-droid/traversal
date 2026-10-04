@@ -5,6 +5,7 @@ import { getGuide } from "@/lib/interview-guides";
 import { getInterviewIcon } from "@/lib/interviewIcons";
 import { DIFFICULTY_BADGE_STYLE, DIFFICULTY_LABELS } from "@/lib/difficulty";
 import ContinueReading from "@/components/interview-prep/ContinueReading";
+import TeacherTopicsLink from "@/components/interview-prep/TeacherTopicsLink";
 
 // Guide overview: what's covered, in reading order, and where to start.
 export default function GuideOverviewPage({ params }: { params: { guide: string } }) {
@@ -60,6 +61,8 @@ export default function GuideOverviewPage({ params }: { params: { guide: string 
           </li>
         ))}
       </ol>
+
+      <TeacherTopicsLink slug={guide.slug} />
     </div>
   );
 }

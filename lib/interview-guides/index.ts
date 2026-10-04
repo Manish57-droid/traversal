@@ -17,9 +17,16 @@
 
 import cppSource from "./cpp.md";
 import oopCppSource from "./oop-cpp.md";
-import type { GuideDifficulty } from "./shared";
+import { GUIDE_INFO, type GuideDifficulty, type GuideInfo } from "./shared";
 
-export type { GuideDifficulty, GuideTopicSummary } from "./shared";
+export type { GuideDifficulty, GuideTopicSummary, GuideInfo } from "./shared";
+
+// To add a guide: write its .md file, import it above, add its
+// GUIDE_INFO entry in shared.ts, and map the slug to the source here.
+const SOURCES: Record<string, { source: string; file: string }> = {
+  cpp: { source: cppSource, file: "cpp.md" },
+  oop: { source: oopCppSource, file: "oop-cpp.md" },
+};
 
 export interface GuideTopic {
   slug: string;
@@ -29,11 +36,7 @@ export interface GuideTopic {
   readMinutes: number;
 }
 
-export interface InterviewGuide {
-  slug: string;
-  name: string;
-  description: string;
-  icon: string; // a key of INTERVIEW_ICONS (lib/interviewIcons.ts)
+export interface InterviewGuide extends GuideInfo {
   topics: GuideTopic[];
 }
 
@@ -68,22 +71,11 @@ function parseTopics(source: string, file: string): GuideTopic[] {
     });
 }
 
-export const INTERVIEW_GUIDES: InterviewGuide[] = [
-  {
-    slug: "cpp",
-    name: "C++ Programming",
-    description: "C++ from the basics to advanced topics — pointers, memory, templates, exceptions and the STL, with worked examples.",
-    icon: "Code2",
-    topics: parseTopics(cppSource, "cpp.md"),
-  },
-  {
-    slug: "oop-cpp",
-    name: "OOP in C++",
-    description: "Classes, constructors, inheritance, virtual functions and polymorphism — object-oriented programming explained through C++ code.",
-    icon: "Boxes",
-    topics: parseTopics(oopCppSource, "oop-cpp.md"),
-  },
-];
+export const INTERVIEW_GUIDES: InterviewGuide[] = GUIDE_INFO.map((info) => {
+  const entry = SOURCES[info.slug];
+  if (!entry) throw new Error(`No .md source mapped for guide "${info.slug}"`);
+  return { ...info, topics: parseTopics(entry.source, entry.file) };
+});
 
 export function getGuide(slug: string) {
   return INTERVIEW_GUIDES.find((g) => g.slug === slug) ?? null;

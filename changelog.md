@@ -1737,3 +1737,25 @@
   `components/interview-prep/{GuideArticle,GuideReader,ContinueReading,CategoryGrid}.tsx`.
 - Why: Requested C++/OOP reading material from the reference book, kept in the frontend only
   (not the database), well formatted and paged.
+
+## [2026-10-04] — Merge guides and teacher categories into one subject grid
+- What changed: The student Interview Prep page no longer has separate "In-depth guides" and
+  "Topics by subject" sections — `SubjectGrid` shows **one card per subject**, merging static
+  guides with teacher-authored categories by slug. A merged card keeps the category's
+  name/icon/order, counts both ("28 topics in the guide · 6 more from teachers") and opens the
+  guide; the guide overview links on to the teacher topics (`TeacherTopicsLink`), and the teacher
+  category page shows a "Read the full guide" banner. A guide whose subject has no category gets
+  its own card after the rest. The OOP guide's slug changed `oop-cpp` → `oop` to match the live
+  `oop` category (its cross-links updated). Guide metadata moved to `GUIDE_INFO` in
+  `lib/interview-guides/shared.ts` (client-safe) — adding a guide for another subject = a new .md
+  file + a `GUIDE_INFO` entry with that subject's category slug + its line in `SOURCES`
+  (`lib/interview-guides/index.ts`).
+- Verification: `tsc --noEmit` and `next build` clean; all 46 topics still server-render with no
+  broken internal links. Checked the merge rule against the live category list (11 categories;
+  `cpp` and `oop` merge with their guides). Not clicked through in a browser yet.
+- Files touched: `app/student/interview-prep/page.tsx`, `app/student/interview-prep/[category]/page.tsx`,
+  `app/student/interview-prep/guides/[guide]/page.tsx`, `lib/interview-guides/{index.ts,shared.ts,cpp.md,oop-cpp.md}`.
+  New: `components/interview-prep/{SubjectGrid,TeacherTopicsLink}.tsx`. Removed:
+  `components/interview-prep/CategoryGrid.tsx`.
+- Why: Requested — guide content will gradually be added for every subject, so guides and
+  categories should read as one list rather than two parallel sections.

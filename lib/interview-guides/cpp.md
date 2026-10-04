@@ -259,7 +259,7 @@ flowchart TB
 - `static` on a local variable changes its **lifetime** (it persists); `static` on a global changes its **linkage** (it becomes file-private).
 - `static` variables are zero-initialized by default; ordinary locals contain garbage until assigned.
 - `extern` declares without defining; there must be exactly one definition across the program.
-- Inside a class, `static` means the member is shared by all objects (see [Static Data Members and Static Member Functions](/student/interview-prep/guides/oop-cpp/static-data-members-and-static-member-functions)).
+- Inside a class, `static` means the member is shared by all objects (see [Static Data Members and Static Member Functions](/student/interview-prep/guides/oop/static-data-members-and-static-member-functions)).
 
 === const and volatile Qualifiers (const with Pointers)
 difficulty: medium
@@ -1013,7 +1013,7 @@ int main()
 }
 ```
 
-**References to derived types:** a base-class reference can refer to a derived-class object, just like a base-class pointer can point to one. This is how virtual functions are called through references (see [Virtual Functions and Runtime Polymorphism](/student/interview-prep/guides/oop-cpp/virtual-functions-and-runtime-polymorphism)).
+**References to derived types:** a base-class reference can refer to a derived-class object, just like a base-class pointer can point to one. This is how virtual functions are called through references (see [Virtual Functions and Runtime Polymorphism](/student/interview-prep/guides/oop/virtual-functions-and-runtime-polymorphism)).
 
 **Key points:**
 - A reference is an alias and must be bound at creation.
@@ -1663,7 +1663,7 @@ Overloading `()` creates a **function object (functor)** — an object that can 
 - At least one operand must be a user-defined type — you cannot redefine `+` for two `int`s.
 - Keep the usual meaning: overloading `+` to subtract is legal but terrible design.
 
-Remember that the assignment operator `=` is generated automatically (memberwise copy). For classes that manage dynamic memory you must overload it yourself together with the copy constructor (see [Copy Constructor, Deep Copy and Shallow Copy](/student/interview-prep/guides/oop-cpp/copy-constructor-deep-copy-and-shallow-copy)).
+Remember that the assignment operator `=` is generated automatically (memberwise copy). For classes that manage dynamic memory you must overload it yourself together with the copy constructor (see [Copy Constructor, Deep Copy and Shallow Copy](/student/interview-prep/guides/oop/copy-constructor-deep-copy-and-shallow-copy)).
 
 **Key points:**
 - An overloaded operator is a function named `operatorX`.

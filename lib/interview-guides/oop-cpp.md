@@ -686,7 +686,7 @@ Demo a(1), b(2);
 b = a;            // b's data becomes a copy of a's data
 ```
 
-Assignment uses `operator=`, **not** the copy constructor (the object already exists). As with copying, the default memberwise assignment is a problem for classes with pointer members: both objects end up pointing to the same memory, and `b`'s original memory leaks. The solution is to overload `operator=` to perform a deep copy (see [Copy Constructor, Deep Copy and Shallow Copy](/student/interview-prep/guides/oop-cpp/copy-constructor-deep-copy-and-shallow-copy)).
+Assignment uses `operator=`, **not** the copy constructor (the object already exists). As with copying, the default memberwise assignment is a problem for classes with pointer members: both objects end up pointing to the same memory, and `b`'s original memory leaks. The solution is to overload `operator=` to perform a deep copy (see [Copy Constructor, Deep Copy and Shallow Copy](/student/interview-prep/guides/oop/copy-constructor-deep-copy-and-shallow-copy)).
 
 | Statement | What runs |
 |---|---|
@@ -883,7 +883,7 @@ Each base class in the list has its own access specifier: `class D : public A, B
 **Ambiguity:** if two bases have a member with the same name, using it is ambiguous and must be qualified: `obj.Printer::status()`.
 
 ### 5. Hybrid inheritance
-A combination of two or more of the above, for example hierarchical plus multiple. The best-known case is the **diamond**: `B` and `C` both derive from `A`, and `D` derives from both `B` and `C`. Without special handling, `D` contains **two copies** of `A`. C++ solves this with **virtual base classes** (see [Multiple Inheritance, the Diamond Problem and Virtual Base Classes](/student/interview-prep/guides/oop-cpp/multiple-inheritance-the-diamond-problem-and-virtual-base-classes)).
+A combination of two or more of the above, for example hierarchical plus multiple. The best-known case is the **diamond**: `B` and `C` both derive from `A`, and `D` derives from both `B` and `C`. Without special handling, `D` contains **two copies** of `A`. C++ solves this with **virtual base classes** (see [Multiple Inheritance, the Diamond Problem and Virtual Base Classes](/student/interview-prep/guides/oop/multiple-inheritance-the-diamond-problem-and-virtual-base-classes)).
 
 ### A complete multilevel example
 
@@ -1062,7 +1062,7 @@ Notes:
 While the `Shape` constructor is running, the `Rectangle` part does not exist yet, so a virtual function call inside a base constructor (or destructor) calls the **base** version, not the override. Never rely on virtual dispatch during construction or destruction.
 
 ### Destructors and polymorphism
-If a derived object is deleted **through a base-class pointer**, the base destructor must be **virtual**, otherwise only `~Shape` runs and the derived part is leaked (see [Virtual Destructors](/student/interview-prep/guides/oop-cpp/virtual-destructors)).
+If a derived object is deleted **through a base-class pointer**, the base destructor must be **virtual**, otherwise only `~Shape` runs and the derived part is leaked (see [Virtual Destructors](/student/interview-prep/guides/oop/virtual-destructors)).
 
 **Key points:**
 - Constructors: base first, then derived. Destructors: derived first, then base.
