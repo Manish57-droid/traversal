@@ -40,6 +40,12 @@ export const GUIDE_INFO: GuideInfo[] = [
     icon: "Network",
   },
   {
+    slug: "os",
+    name: "Operating Systems",
+    description: "Processes, threads, synchronization, CPU scheduling, deadlocks, memory and virtual memory, file systems and security — with worked numerical examples.",
+    icon: "Cpu",
+  },
+  {
     slug: "dbms",
     name: "DBMS",
     description: "Relational model, keys, relational algebra, ER diagrams, normalization up to 5NF, transactions, concurrency, recovery and indexing.",

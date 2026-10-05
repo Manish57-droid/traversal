@@ -61,16 +61,10 @@ difficulty: easy
 ---
 The **physical topology** of a network is the geometric arrangement of its links and nodes — how the devices are physically wired together. The four basic topologies are **mesh, star, bus and ring**, and real networks often combine them into a **hybrid**.
 
-```mermaid
-flowchart TB
-    T["Topology"] --> M["Mesh"]
-    T --> S["Star"]
-    T --> B["Bus"]
-    T --> R["Ring"]
-```
-
 ### Mesh
 Every node has a **dedicated point-to-point link to every other node**.
+
+![Figure: full mesh topology with 5 computers and 10 links](/interview-guides/networking/topology-mesh.svg)
 
 In a **full mesh** of *n* nodes, the number of links is:
 
@@ -89,11 +83,15 @@ A **partial mesh** connects only some nodes to several others — a cheaper way 
 ### Star
 Every node connects to a **central device** — a hub, switch or computer. Nodes are not linked to each other directly; all traffic goes through the centre.
 
+![Figure: star topology with a central switch](/interview-guides/networking/topology-star.svg)
+
 - **Advantages:** easy to install and add devices; one failed cable affects only one node; centralized management. This is the most common LAN layout today (computers connected to a switch with RJ-45 cables).
 - **Disadvantages:** the central device is a **single point of failure** — if it goes down, the whole network goes down; it also limits performance and the number of nodes.
 
 ### Bus
 All devices are attached to **one long backbone cable** using drop lines and taps, with a **terminator** at each end.
+
+![Figure: bus topology with one backbone cable and terminators](/interview-guides/networking/topology-bus.svg)
 
 - **Advantages:** easy to set up for small networks; needs less cable than star.
 - **Disadvantages:** a break in the backbone splits or kills the network; hard to troubleshoot; performance drops as devices are added because all of them share the same cable and collisions increase. Used in early Ethernet (10Base5, 10Base2).
@@ -101,11 +99,15 @@ All devices are attached to **one long backbone cable** using drop lines and tap
 ### Ring
 Each device connects to exactly two neighbours, forming a **closed loop**. Data travels from node to node (usually in one direction — a **unidirectional** ring) until it reaches its destination; each node contains a repeater that regenerates the signal.
 
+![Figure: ring topology with one-way data flow](/interview-guides/networking/topology-ring.svg)
+
 - **Advantages:** orderly access — packets flow one way, which reduces collisions (often controlled by a token); no central server needed.
 - **Disadvantages:** a single broken link or failed node can disrupt the whole ring (unless a dual ring is used); adding or removing a node disturbs the network; every packet passes through intermediate nodes.
 
 ### Hybrid
 A combination, for example a **star backbone whose branches are buses**, or several star networks joined by a mesh of routers. Most real-world networks are hybrids.
+
+![Figure: hybrid topology — a star core with bus and ring branches](/interview-guides/networking/topology-hybrid.svg)
 
 ### Comparison
 

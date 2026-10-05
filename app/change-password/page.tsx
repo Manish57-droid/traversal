@@ -43,8 +43,14 @@ export default function ChangePasswordPage() {
       return;
     }
 
-    await fetch("/api/account/password-changed", { method: "POST" });
+    // redirect: "manual" so a middleware redirect shows up as a failure
+    // here instead of being followed to a 200 HTML page.
+    const res = await fetch("/api/account/password-changed", { method: "POST", redirect: "manual" });
     setSubmitting(false);
+    if (!res.ok) {
+      setError("Your password was changed, but we couldn't finish setting up your account. Please try again.");
+      return;
+    }
     router.push("/dashboard");
     router.refresh();
   }

@@ -1816,3 +1816,49 @@
 - Files touched: `lib/interview-guides/{index.ts,shared.ts}`,
   `components/interview-prep/GuideArticle.tsx`, `changelog.md`. New: `lib/interview-guides/{dbms,sql}.md`.
 - Why: Requested — DBMS and SQL content for the Interview Prep section from the provided book.
+
+## [2026-10-05] — Operating Systems guide + topology figures in Computer Networks
+- What changed: Added a static **Operating Systems** guide (`lib/interview-guides/os.md`, 37 topics)
+  built from the user's BAOU BSCIT-104 "Fundamentals of Operating System" book: OS definition and
+  goals, evolution, types, structures, services and system calls, processes/PCB/states, fork/exec,
+  zombies and orphans, threads, IPC, race conditions and critical sections, Peterson/TSL, semaphores,
+  mutexes, monitors, classic synchronization problems, scheduling concepts, FCFS/SJF/SRTF, RR and
+  priority, MLQ/MLFQ/multiprocessor scheduling, deadlocks (RAG, prevention, Banker's, detection,
+  recovery), address binding and MMU, contiguous allocation and fits, paging and TLB, multilevel and
+  inverted page tables, segmentation, virtual memory, page replacement, thrashing and working sets,
+  I/O and DMA, disk scheduling, files, directories and links, file-system implementation (MBR,
+  allocation methods, inodes, free space), reliability and performance, security, protection, and
+  booting/installation. Slug `os` matches the live "Operating Systems" category (7 teacher
+  questions); a second live category `operating-systems` (4 questions) still shows as its own card.
+  Computer Networks: the topology topic now shows five SVG figures (mesh, star, bus, ring, hybrid)
+  in `public/interview-guides/networking/`, replacing a placeholder mermaid tree; `GuideArticle`
+  renders Markdown images as captioned figures.
+- Beyond the book: semaphores/mutexes/monitors and the classic synchronization problems, Peterson's
+  algorithm, multithreading models, copy-on-write, TLB/EAT maths, hashed page tables, LOOK/C-LOOK,
+  journaling, UEFI/GPT, DAC/MAC/RBAC detail.
+- Verification: every worked number was recomputed by script (all scheduling Gantt charts and
+  averages, FIFO/LRU/OPT traces and Belady's anomaly, Banker's safe sequences, disk-scheduling totals,
+  fit algorithms, address translation, EAT, inode sizes); the hand-written page-replacement traces
+  had wrong cells and were replaced by generated ones. Two book slips corrected (the Banker's example
+  has 5 free instances after P2 finishes, not 4; its "elevator" example is LOOK). The pthread example
+  compiles and runs; the fork() examples could not be run on Windows. All 17 OS diagrams pass
+  `mermaid.parse`; all 6 guides server-render with no problems and every image resolves to a file in
+  `public/`; `tsc --noEmit` and `next build` clean.
+- Files touched: `lib/interview-guides/{index.ts,shared.ts,networking.md}`,
+  `components/interview-prep/GuideArticle.tsx`, `changelog.md`. New: `lib/interview-guides/os.md`,
+  `public/interview-guides/networking/topology-{mesh,star,bus,ring,hybrid}.svg`.
+- Why: Requested — OS content from the provided book; topology images were missing from the CN guide.
+
+## [2026-10-05] — Fix: endless "Set a new password" loop after an admin password reset
+- What changed: `middleware.ts` now lets `POST /api/account/password-changed` through while the
+  user's `force_password_change` flag is set. `app/change-password/page.tsx` calls it with
+  `redirect: "manual"` and shows an error instead of navigating if it fails.
+- Cause: after `supabase.auth.updateUser` changed the password, the page's call to clear the flag
+  was itself caught by the middleware's force-change redirect and sent to the `/change-password`
+  page (fetch followed it and got 200 HTML), so the flag was never cleared. The page ignored the
+  response, pushed to `/dashboard`, and the middleware sent the user straight back. The password
+  did change on every attempt; only the flag stayed set (confirmed: one student account was stuck
+  with `force_password_change = true`).
+- Verification: `tsc --noEmit` and `next build` clean. Not exercised end-to-end in a browser.
+- Files touched: `middleware.ts`, `app/change-password/page.tsx`, `changelog.md`.
+- Why: Reported bug — a student could not get past the forced password change after an admin reset.

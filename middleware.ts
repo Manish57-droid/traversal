@@ -101,6 +101,12 @@ export async function middleware(req: NextRequest) {
     if (!profile.force_password_change) return NextResponse.redirect(new URL("/dashboard", req.url));
     return buildResponse();
   }
+  // The API call that clears the flag must itself get through, or
+  // /change-password's request is redirected to the page and the user
+  // loops on "Set a new password" forever.
+  if (pathname === "/api/account/password-changed") {
+    return buildResponse();
+  }
   if (profile.force_password_change) {
     return NextResponse.redirect(new URL("/change-password", req.url));
   }

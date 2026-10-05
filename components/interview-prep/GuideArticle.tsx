@@ -97,6 +97,16 @@ export default function GuideArticle({ content }: { content: string }) {
             </blockquote>
           ),
           hr: () => <hr className="my-8 border-line/60" />,
+          // Figures (SVGs in public/interview-guides). Markdown puts images
+          // inside a <p>, so this uses spans styled as blocks; the alt text
+          // doubles as the caption.
+          img: ({ src, alt }) => (
+            <span className="my-6 block overflow-hidden rounded-xl border border-line/70 bg-surface-2/60">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={typeof src === "string" ? src : undefined} alt={alt ?? ""} loading="lazy" className="mx-auto block h-auto w-full max-w-[520px]" />
+              {alt && <span className="block border-t border-line/60 px-4 py-2 text-center text-sm text-fg-subtle">{alt}</span>}
+            </span>
+          ),
           // Fenced blocks are rendered whole by `code` below.
           pre: ({ children }) => <>{children}</>,
           code(props) {
