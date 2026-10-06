@@ -7,7 +7,7 @@ import remarkGfm from "remark-gfm";
 import { Check, Copy } from "lucide-react";
 import MermaidDiagram from "./MermaidDiagram";
 
-const LANGUAGE_LABELS: Record<string, string> = { cpp: "C++", c: "C", text: "Output", calc: "Worked example", sql: "SQL", plsql: "PL/SQL" };
+const LANGUAGE_LABELS: Record<string, string> = { cpp: "C++", c: "C", text: "Output", calc: "Worked example", sql: "SQL", plsql: "PL/SQL", java: "Java", python: "Python" };
 
 function CodeBlock({ language, code }: { language: string; code: string }) {
   const [copied, setCopied] = useState(false);

@@ -17,6 +17,8 @@
 
 import cppSource from "./cpp.md";
 import oopCppSource from "./oop-cpp.md";
+import pythonSource from "./python.md";
+import javaSource from "./java.md";
 import networkingSource from "./networking.md";
 import osSource from "./os.md";
 import dbmsSource from "./dbms.md";
@@ -30,6 +32,8 @@ export type { GuideDifficulty, GuideTopicSummary, GuideInfo } from "./shared";
 const SOURCES: Record<string, { source: string; file: string }> = {
   cpp: { source: cppSource, file: "cpp.md" },
   oop: { source: oopCppSource, file: "oop-cpp.md" },
+  python: { source: pythonSource, file: "python.md" },
+  java: { source: javaSource, file: "java.md" },
   networking: { source: networkingSource, file: "networking.md" },
   os: { source: osSource, file: "os.md" },
   dbms: { source: dbmsSource, file: "dbms.md" },

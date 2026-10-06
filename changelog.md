@@ -1862,3 +1862,55 @@
 - Verification: `tsc --noEmit` and `next build` clean. Not exercised end-to-end in a browser.
 - Files touched: `middleware.ts`, `app/change-password/page.tsx`, `changelog.md`.
 - Why: Reported bug — a student could not get past the forced password change after an admin reset.
+
+## [2026-10-06] — Java interview guide
+- What changed: Added a static **Java** guide (`lib/interview-guides/java.md`, 35 topics) built from
+  the user's "Advanced Java Programming" (18PCS2) PDF — the user shared it as "the guide for
+  javascript", but it is a Java book; confirmed with the user to build a Java guide. Slug `java`
+  matches the live "Java" category, so `SubjectGrid` merges them. Topics: introduction/JDK-JRE-JVM,
+  JVM internals, data types and wrappers, casting and operators, control flow, arrays, strings,
+  classes and constructors, methods (pass-by-value, overloading, static, final), access modifiers
+  and packages, inheritance, polymorphism, abstract classes and interfaces, Object
+  (equals/hashCode/clone), nested classes, exceptions, collections, HashMap internals, generics and
+  Comparable/Comparator, Java 8 (lambdas, streams, Optional), threads, synchronization, concurrency
+  utilities, I/O streams, serialization, memory and GC, applets, AWT, event handling, networking,
+  JDBC, RMI, servlets, session tracking, JavaBeans. `GuideArticle` labels ```java blocks "Java".
+- Beyond the book: collections, HashMap internals, generics, Comparable/Comparator, Java 8 features,
+  concurrency utilities, JVM internals and GC detail. Book error corrected: its primitive-types table
+  lists C#'s `decimal` and `string` and gives `boolean` 8 bits.
+- Verification: every ```java program was compiled and run with a JDK 11 (the one bundled with
+  PyCharm) by a script that compares stdout with the guide's Output block — 53 compiled, 49 run with
+  output checked (thread demos marked nondeterministic), including a real TCP echo server/client, a
+  UDP exchange and an RMI registry + remote call. Applet/AWT/JDBC examples are compile-only (no
+  display/database); servlet and session snippets were not compiled (need the servlet API). Writing
+  the checks caught one wrong example (a for-each removal that never throws
+  ConcurrentModificationException), fixed. 11 diagrams pass `mermaid.parse`; all 7 guides
+  server-render with no problems; `tsc --noEmit` and `next build` clean.
+- Files touched: `lib/interview-guides/{index.ts,shared.ts}`, `components/interview-prep/GuideArticle.tsx`,
+  `changelog.md`. New: `lib/interview-guides/java.md`.
+- Why: Requested — Java content for the Interview Prep section from the provided book.
+
+## [2026-10-06] — Python interview guide
+- What changed: Added a static **Python** guide (`lib/interview-guides/python.md`, 23 topics) from
+  the user's *Python Basics* (Real Python, 4th ed.) PDF. The PDF is the free sample (chapters 1–4.8
+  plus the full table of contents), so the book directly covers only the first topics; the rest
+  follow the book's chapter outline and standard interview material. Topics: introduction/REPL,
+  errors and comments, variables and references, strings (indexing, slicing, immutability),
+  string methods/f-strings/input, numbers and precedence, conditionals and truthiness, loops,
+  functions, scope/LEGB/closures, lists and tuples, copying (shallow vs deep), dicts and sets,
+  comprehensions/iterators/generators, lambdas and decorators, exceptions, classes, inheritance/MRO,
+  dunder methods and dataclasses, modules/packages/pip/venv, files/pathlib/CSV, internals (memory,
+  GIL, threading vs multiprocessing vs asyncio), and a standard-library/ecosystem tour (random
+  simulations, sqlite3, re, NumPy/Tkinter/requests by name). Slug `python` matches the live
+  "Python" category. `GuideArticle` labels ```python blocks.
+- Verification: every ```python block was run with the local Python 3.9.13 (the version the book
+  targets) by a script that compares stdout (plus the final traceback line for intentional errors)
+  with the guide's Output block — 78 run, 0 mismatches; 4 fragments not run (numpy, match
+  statement needing 3.10, input(), a two-file module example). Checks caught and fixed two weak
+  examples (a sort that didn't show case ordering, an identity check relying on a CPython quirk)
+  and a wrong hand-computed election probability (0.6316, not 0.6338). Mermaid parses; all 8
+  guides server-render with no problems; `tsc --noEmit` and `next build` clean.
+- Files touched: `lib/interview-guides/{index.ts,shared.ts}`, `components/interview-prep/GuideArticle.tsx`,
+  `changelog.md`. New: `lib/interview-guides/python.md`.
+- Why: Requested — Python content for the Interview Prep section from the provided book. The user
+  mentioned two PDFs; only one arrived.

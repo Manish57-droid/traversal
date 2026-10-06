@@ -34,6 +34,18 @@ export const GUIDE_INFO: GuideInfo[] = [
     icon: "Boxes",
   },
   {
+    slug: "python",
+    name: "Python",
+    description: "Python 3 from strings and numbers to functions, data structures, comprehensions, OOP, exceptions, files, decorators and the GIL — every example run with its real output.",
+    icon: "Terminal",
+  },
+  {
+    slug: "java",
+    name: "Java",
+    description: "Core Java to advanced: OOP, strings, collections and HashMap internals, Java 8 streams, threads and concurrency, I/O, JDBC, RMI, servlets — every example compiled and run.",
+    icon: "Coffee",
+  },
+  {
     slug: "networking",
     name: "Computer Networks",
     description: "From topologies and the OSI model to routing, TCP congestion control, DNS and HTTP — with worked calculations.",
