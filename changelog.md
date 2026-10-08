@@ -2059,3 +2059,14 @@
 - Files touched: `lib/interview-guides/{index.ts,shared.ts}`, `app/api/piku/chat/route.ts`,
   `changelog.md`. New: `lib/interview-guides/generative-ai.md`.
 - Why: Requested — drop System Design from Interview Prep and add a full Generative AI guide.
+
+## [2026-10-08] — Merged the duplicate "Operating Systems" interview category
+- What changed: **Data change (live DB).** Two categories named "Operating Systems" existed: `os` (7 teacher
+  questions, where the 51-topic guide is attached) and `operating-systems` (4 questions: Process vs Thread,
+  Deadlock, Virtual Memory, CPU Scheduling). Students opening the `operating-systems` card saw only 4 questions
+  and never reached the guide. The 4 questions were moved into `os` (wording differs from the existing ones, and
+  CPU Scheduling had no counterpart, so all were kept), the empty `operating-systems` category was deleted, and
+  `os` took over its display position (2). A JSON backup of both category rows and the moved questions was
+  written to the session scratchpad (`os-merge-backup.json`) first. `os` now has 11 teacher questions.
+- Files touched: `changelog.md` (no code change).
+- Why: Reported — the Operating Systems card still showed only 4 topics after the full guide was added.
