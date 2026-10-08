@@ -10,7 +10,7 @@ export default async function ProfilePage() {
   if (user.status !== "approved") redirect("/pending-approval");
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="min-h-screen">
       <header className="sticky top-0 z-40 border-b border-line/70 bg-bg/80 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-2xl items-center justify-between px-4 sm:px-6">
           <Link href={`/${user.role}/dashboard`} className="text-sm text-fg-muted hover:text-fg">

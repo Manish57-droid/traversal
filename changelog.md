@@ -2070,3 +2070,19 @@
   written to the session scratchpad (`os-merge-backup.json`) first. `os` now has 11 teacher questions.
 - Files touched: `changelog.md` (no code change).
 - Why: Reported — the Operating Systems card still showed only 4 topics after the full guide was added.
+
+## [2026-10-08] — Circuit-trace background in wide-screen margins; new logo
+- What changed:
+  - `app/globals.css`: new `body::before` layer — a faint copper circuit-trace tile
+    (`public/backgrounds/circuit-{light,dark}.svg`, one per theme) fixed behind the page and masked
+    so it only appears outside the centred 1152px (`max-w-6xl`) content column. Nothing shows below
+    ~1300px wide, so phones/tablets/small laptops are unchanged.
+  - Removed the redundant `bg-bg` from the full-page wrappers in `app/{student,teacher,admin,topics}/layout.tsx`,
+    `app/profile/page.tsx` and `app/pending-approval/page.tsx` (body already paints `bg-bg`; the
+    wrappers' copy was hiding the new layer). Auth pages and the landing page keep their own
+    background and so stay plain.
+  - New logo: `public/logo-mark.png` and `app/icon.png` (favicon) replaced with the new book/brain
+    artwork, cropped around the icon on its teal background so it stays legible at 28px inside the
+    existing round mask.
+- Verification: screenshots of `/student/aptitude` at 1920 and 1366px in light and dark themes.
+- Why: Requested — the side margins looked empty on a laptop; new logo supplied.

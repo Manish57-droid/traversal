@@ -8,7 +8,7 @@ export default async function PendingApprovalPage() {
   if (user.status === "approved") redirect("/dashboard");
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="min-h-screen">
       {/* No role passed — this account doesn't have dashboard access yet,
           so the nav shows just the logo + Sign out, same as every other
           page, instead of a page with no header at all. */}

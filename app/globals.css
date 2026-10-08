@@ -128,6 +128,41 @@ body {
   @apply bg-bg text-fg font-sans antialiased;
 }
 
+/* Faint copper circuit traces in the empty side margins on wide
+   screens. Every layout centres its content in a max-w-6xl (1152px)
+   column, so the mask keeps a clear 1200px band in the middle and
+   fades the pattern in beyond it — on screens narrower than ~1300px
+   nothing shows at all. Fixed, behind all page content (z-index -1
+   still paints above the body background, which propagates to the
+   canvas) and click-through, so it never scrolls or gets in the way. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: url("/backgrounds/circuit-light.svg");
+  background-size: 240px 240px;
+  background-position: center top;
+  opacity: 0.22;
+  --margin-mask: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(50% - 760px),
+    transparent calc(50% - 600px),
+    transparent calc(50% + 600px),
+    #000 calc(50% + 760px),
+    #000 100%
+  );
+  -webkit-mask-image: var(--margin-mask);
+  mask-image: var(--margin-mask);
+}
+
+.dark body::before {
+  background-image: url("/backgrounds/circuit-dark.svg");
+  opacity: 0.16;
+}
+
 ::selection {
   @apply bg-accent/30 text-fg;
 }

@@ -14,7 +14,7 @@ export default async function TopicsLayout({ children }: { children: React.React
   const role = user && user.status === "approved" ? user.role : undefined;
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="min-h-screen">
       {user && role === "student" ? (
         <StudentNavbar user={{ full_name: user.full_name, email: user.email, role: user.role }} />
       ) : user && role ? (

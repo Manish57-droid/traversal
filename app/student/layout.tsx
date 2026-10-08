@@ -14,7 +14,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
   if (user.role !== "student") redirect(`/${user.role}/dashboard`);
 
   return (
-    <div className="flex min-h-screen flex-col bg-bg">
+    <div className="flex min-h-screen flex-col">
       <StudentNavbar user={{ full_name: user.full_name, email: user.email, role: user.role }} />
       {/* flex-1 so the footer sits at the bottom of the viewport on a
           short page instead of floating right under sparse content. */}
