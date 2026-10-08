@@ -60,8 +60,14 @@ export const GUIDE_INFO: GuideInfo[] = [
   {
     slug: "os",
     name: "Operating Systems",
-    description: "Processes, threads, synchronization, CPU scheduling, deadlocks, memory and virtual memory, file systems and security — with worked numerical examples.",
+    description: "Processes, threads, synchronization, CPU and real-time scheduling, deadlocks, memory and virtual memory, file systems, RAID, security and distributed systems — with worked numerical examples.",
     icon: "Cpu",
+  },
+  {
+    slug: "generative-ai",
+    name: "Generative AI",
+    description: "How LLMs, transformers and diffusion models work, prompting, RAG and evaluation — plus business use cases, IP law and responsible AI from HBR's Generative AI.",
+    icon: "Layers",
   },
   {
     slug: "dbms",

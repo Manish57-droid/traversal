@@ -1994,3 +1994,68 @@
     `max-w-sm` card).
 - Files touched: `changelog.md`.
 - Why: Requested — check responsiveness of the whole website.
+
+## [2026-10-08] — Operating Systems guide extended from *Operating System Concepts* (8th ed.)
+- What changed: The user supplied Silberschatz, Galvin & Gagne, *Operating System Concepts* (8th
+  ed.). The existing 37-topic guide already covered its core chapters, so 14 topics were added for
+  what it lacked, each inserted after the topic it extends (guide now 51 topics):
+  computer-system organization (interrupts, storage hierarchy, caching, DMA); threading issues
+  (fork/exec semantics, cancellation, signals, thread pools, TLS, scheduler activations, thread
+  libraries); synchronization in real kernels (adaptive mutexes, Windows/Linux/Pthreads, priority
+  inversion and inheritance, atomic transactions, log-based recovery, 2PL); scheduling-algorithm
+  evaluation (deterministic modeling, Little's formula, simulation, implementation); real-time
+  scheduling (latency, rate-monotonic, EDF, utilization bound, proportional share);
+  memory-mapped files, buddy and slab kernel allocators, prepaging, page size, TLB reach, program
+  structure, I/O interlock; mass storage (formatting, boot block, bad blocks, swap space, RAID 0–6
+  and 0+1/1+0, NAS/SAN, stable storage); application I/O interface (polling vs interrupts,
+  blocking/non-blocking/asynchronous I/O, kernel I/O subsystem, STREAMS); file-system mounting,
+  sharing semantics, NFS, journaling, WAFL; protection domains, access-matrix implementations and
+  revocation, language-based protection; network threats, firewalls/DMZ, Orange Book; distributed
+  systems (Lamport clocks, centralized/Ricart–Agrawala/token mutual exclusion, two-phase commit,
+  wait-die/wound-wait, bully and ring elections, Byzantine agreement); distributed file systems
+  (naming, caching, stateful vs stateless, AFS); Linux and Windows XP case studies.
+  `shared.ts` description updated.
+- Verification: every worked number was recomputed by script and matches the book —
+  deterministic modeling (FCFS 28, SJF 13, RR(10) 23 ms), both rate-monotonic examples (75%
+  utilization meets deadlines; 94% misses P2's deadline at 80), the EDF schedule, the RM bound
+  (0.83 for 2 tasks, → ln 2), Little's formula, buddy split for 21 KB, 16,384 vs 128 page faults,
+  TLB reach 512 KB / 256 MB, mirrored MTTDL ≈ 57,000 years, RAID parity rebuild, Lamport clock
+  201. Book facts spot-checked against its text (Windows priority classes, Linux clone flags and
+  page aging, Byzantine bound, Orange Book). The Pthreads example compiles and runs (sum = 55).
+  2 new diagrams pass mermaid.parse; all 9 guides server-render with no problems; `tsc --noEmit`
+  and `next build` clean.
+- Files touched: `lib/interview-guides/os.md`, `lib/interview-guides/shared.ts`, `changelog.md`.
+- Why: Requested — the user provided the full OS book.
+
+## [2026-10-08] — System Design removed from Interview Prep; Generative AI guide added
+- What changed:
+  - **Data change (live DB):** deleted the `system-design` interview category and, via the existing
+    `on delete cascade`, its 5 teacher questions (horizontal vs vertical scaling ×2, load balancing,
+    caching, database sharding). A full JSON backup of the category row and all 5 question rows was
+    written to the session scratchpad (`system-design-backup.json`) before deleting; no other table
+    references these rows. `lib/supabase/schema.sql` still contains the original System Design seed
+    rows — re-running that file on a fresh database would recreate them.
+  - `app/api/piku/chat/route.ts`: Piku's scope list now says "Generative AI" instead of "System Design".
+  - New static guide **Generative AI** (`lib/interview-guides/generative-ai.md`, slug
+    `generative-ai`, 20 topics) built from HBR's *Generative AI* (Insights You Need series, 2024).
+    The book is business-focused, so 8 technical topics were added from standard material and are
+    not from the book: what generative AI is (vs AI/ML/DL, discriminative vs generative), ML
+    foundations, neural networks and transformers, tokens/embeddings/sampling, training
+    (pretraining, fine-tuning, RLHF), diffusion/GANs/VAEs, hallucinations and RAG, evaluation and
+    red-teaming. Prompting combines standard techniques with the book's problem-formulation chapter.
+    The book's 11 chapters are covered in 10 topics (two merged), written as original summaries with
+    attribution: business impact, data network effects, the risk–demand matrix, creative-work
+    scenarios, augmenting creativity, sales, IP and legal risk, eight responsible-AI questions,
+    managing risks, and AI hype vs AGI; plus a 20-question interview Q&A topic. Shown as its own
+    card (no live category with that slug).
+- Verification: the 7 Python examples (gradient descent, a neuron, toy attention, cosine
+  similarity and analogy, temperature sampling, keyword RAG retrieval, precision/recall) were run
+  with Python 3.9 and their outputs filled from the real run; 5 mermaid diagrams parse; all 10
+  guides server-render with no problems; `tsc --noEmit` and `next build` clean. Book figures
+  (100M users in 2 months, 50% third-party data mismatch, 67%/84% Reddit/Wikipedia male
+  contributors, 175B parameters, 1.287 GWh / 700,000 L, 67/33/79/73% IT-leader survey, $150,000
+  willful-infringement damages, 35% Gender Shades error, 80%→15% MRI sedation) were checked
+  against the PDF text.
+- Files touched: `lib/interview-guides/{index.ts,shared.ts}`, `app/api/piku/chat/route.ts`,
+  `changelog.md`. New: `lib/interview-guides/generative-ai.md`.
+- Why: Requested — drop System Design from Interview Prep and add a full Generative AI guide.

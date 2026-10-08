@@ -22,6 +22,7 @@ import javascriptSource from "./javascript.md";
 import javaSource from "./java.md";
 import networkingSource from "./networking.md";
 import osSource from "./os.md";
+import generativeAiSource from "./generative-ai.md";
 import dbmsSource from "./dbms.md";
 import sqlSource from "./sql.md";
 import { GUIDE_INFO, type GuideDifficulty, type GuideInfo } from "./shared";
@@ -38,6 +39,7 @@ const SOURCES: Record<string, { source: string; file: string }> = {
   java: { source: javaSource, file: "java.md" },
   networking: { source: networkingSource, file: "networking.md" },
   os: { source: osSource, file: "os.md" },
+  "generative-ai": { source: generativeAiSource, file: "generative-ai.md" },
   dbms: { source: dbmsSource, file: "dbms.md" },
   sql: { source: sqlSource, file: "sql.md" },
 };

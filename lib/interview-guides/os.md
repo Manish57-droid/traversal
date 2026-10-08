@@ -53,6 +53,65 @@ A program enters the kernel only through a **system call** (a deliberate trap), 
 - Goals: convenience, efficiency, ability to evolve.
 - Dual mode + privileged instructions + memory protection + timer protect the system.
 
+=== Computer-System Organization: Interrupts, Storage Hierarchy and Caching
+difficulty: easy
+---
+Before looking at what the OS does, it helps to know the hardware it manages. A modern computer has one or more CPUs and several **device controllers** connected by a common **bus** to shared memory. CPUs and controllers run **concurrently**, competing for memory cycles.
+
+### Bootstrap
+When the computer is powered on, a small **bootstrap program** stored in firmware (ROM/EEPROM) runs: it initializes CPU registers, device controllers and memory, then **locates the OS kernel and loads it into memory**. The kernel then starts the first process (`init`) and waits for **events**.
+
+### Interrupts
+An OS is **interrupt driven**: the occurrence of an event is signalled by an **interrupt**.
+- **Hardware** raises interrupts by sending a signal to the CPU over the bus (a disk transfer finished, a key was pressed, the timer expired).
+- **Software** raises them by executing a **system call** (a *trap*), or by an error (division by zero, invalid memory access) — software-generated interrupts are called **traps** or **exceptions**.
+
+```mermaid
+sequenceDiagram
+    participant D as Device controller
+    participant C as CPU
+    participant H as Interrupt service routine
+    D->>C: interrupt signal
+    C->>C: finish current instruction, save PC and state
+    C->>H: jump via the interrupt vector (address table)
+    H->>H: service the device
+    H-->>C: return from interrupt, restore state
+```
+
+When the CPU is interrupted it stops what it is doing, **saves the address of the interrupted instruction**, and transfers control to the **interrupt service routine**, found through the **interrupt vector** — a table of addresses indexed by a device number. After servicing, the saved state is restored and the interrupted computation resumes as if nothing happened. Interrupts can be **disabled** (masked) while one is being processed, and they can have **priorities**, so an urgent interrupt can preempt a less urgent one.
+
+### Storage structure and hierarchy
+
+```calc
+             registers          fastest, smallest, most expensive per byte
+             cache              (volatile)
+             main memory (RAM)
+          ----------------------------------- volatile above / non-volatile below
+             solid-state disk
+             magnetic disk
+             optical disk
+             magnetic tape      slowest, largest, cheapest per byte
+```
+
+- The CPU can load instructions only from **main memory**, so programs must be in RAM to run. RAM is **volatile** (contents lost on power-off) and too small to hold everything permanently.
+- **Secondary storage** (disks, SSDs) is a non-volatile extension of main memory.
+- Higher levels are faster, smaller and costlier; lower levels are slower, larger and cheaper.
+
+### Caching and coherence
+**Caching** copies information from slower storage into faster storage temporarily: when data is needed, check the cache first; if it's there (**hit**) use it, otherwise (**miss**) fetch it from the slower level and keep a copy. Because caches are small, **cache management** — cache size and **replacement policy** — strongly affects performance.
+
+The same data can then exist at several levels at once (disk → RAM → cache → register). In a multiprocessor each CPU has its own cache, so a value updated in one cache must be invalidated or updated in the others — **cache coherency**, usually handled in hardware. In distributed systems, replicas on different machines must be kept consistent too.
+
+### I/O structure
+A device controller has a **local buffer** and registers; its **device driver** in the OS presents a uniform interface to the rest of the kernel. For small transfers, the controller interrupts the CPU when an operation completes. For bulk data (disk), **DMA (direct memory access)** lets the controller move a whole block between its buffer and memory **without CPU intervention**, generating **one interrupt per block** instead of one per byte.
+
+**Key points:**
+- The bootstrap program in firmware loads the kernel; the OS is then interrupt driven.
+- Interrupts save state, jump through the interrupt vector to a service routine, then resume.
+- Traps/exceptions are software interrupts (system calls, errors).
+- Storage hierarchy: registers → cache → RAM (volatile) → disk → tape; caching exploits it; coherence keeps copies consistent.
+- DMA moves blocks without the CPU, one interrupt per block.
+
 === Evolution of Operating Systems: Serial, Batch, Multiprogramming and Time Sharing
 difficulty: easy
 ---
@@ -634,6 +693,81 @@ The two "running" lines may appear in **either order** — thread scheduling is 
 - ULT: fast, but a blocking call blocks the whole process; KLT: kernel-scheduled, parallel, slower to manage.
 - Models: many-to-one, one-to-one (Linux/Windows), many-to-many.
 
+=== Threading Issues: fork/exec, Cancellation, Signals, Thread Pools and Thread Libraries
+difficulty: hard
+---
+Multithreaded programs raise questions that single-threaded ones never do.
+
+### fork() and exec() in a multithreaded process
+If one thread calls `fork()`, does the child duplicate **all** threads or only the calling one? Some UNIX systems offer both versions.
+- If the child immediately calls **`exec()`**, duplicating all threads is pointless — `exec` replaces the whole process — so duplicating **only the calling thread** is appropriate.
+- If the child does **not** call `exec`, it should duplicate all threads. (POSIX `fork` duplicates only the calling thread.)
+- `exec()` replaces the entire process, **including all threads**.
+
+### Thread cancellation
+Terminating a thread before it finishes (e.g. several threads search a database and one finds the answer; or the user presses Stop while a browser loads a page). The thread to be cancelled is the **target thread**.
+- **Asynchronous cancellation** — one thread terminates the target **immediately**. Dangerous: the target may be in the middle of updating shared data or holding resources, which may never be freed.
+- **Deferred cancellation** — the target **periodically checks** whether it should terminate, and exits at a safe **cancellation point**. Pthreads uses deferred cancellation by default.
+
+### Signal handling
+A **signal** notifies a process that an event occurred. Signals are generated by an event, delivered to a process, and then handled by a **default** or **user-defined handler**.
+- **Synchronous** signals are delivered to the process that caused them (illegal memory access, division by zero).
+- **Asynchronous** signals come from outside (Ctrl+C, a timer expiring).
+
+In a multithreaded process, where should a signal go? Options: to the thread it applies to (synchronous signals), to every thread (Ctrl+C), to certain threads, or to one designated thread. UNIX lets each thread **block** signals it doesn't want, and `pthread_kill()` sends a signal to a specific thread. Windows has no signals; it emulates them with **asynchronous procedure calls (APCs)** delivered to a particular thread.
+
+### Thread pools
+Creating a thread for every request (e.g. a web server) has two problems: **creation time** for each short-lived thread, and **no bound** on the number of threads — enough requests could exhaust CPU or memory. A **thread pool** creates a number of threads at start-up that wait for work; a request is handed to a free thread, which returns to the pool when done; if none is free, the request waits.
+- Servicing a request with an existing thread is **faster** than creating one.
+- The pool **limits** the number of threads that exist at any time.
+- Pool size can depend on CPUs, memory and expected load, and can be adjusted dynamically.
+
+### Thread-specific data and scheduler activations
+- **Thread-specific (thread-local) data** — each thread has its own copy of some data (e.g. a per-transaction ID), supported by Pthreads, Win32 and Java (`ThreadLocal`).
+- **Scheduler activations** — in the many-to-many and two-level models, the kernel provides the thread library with **lightweight processes (LWPs)** — virtual processors — and informs it of events with **upcalls** (e.g. "this thread is about to block"), so the library can schedule another thread on a free LWP.
+
+### Thread libraries
+| Library | Level | Notes |
+|---|---|---|
+| **Pthreads** (POSIX 1003.1c) | User or kernel level | A **specification**, not an implementation; Linux, macOS, Solaris |
+| **Win32 threads** | Kernel level | `CreateThread`, `WaitForSingleObject` |
+| **Java threads** | Implemented with the host's library | Extend `Thread` or implement `Runnable`; `join()` waits |
+
+```c
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+int sum;                                   /* shared by the threads */
+
+void *runner(void *param) {                /* the book's summation example */
+    int upper = atoi(param);
+    sum = 0;
+    for (int i = 1; i <= upper; i++) sum += i;
+    pthread_exit(0);
+}
+
+int main(int argc, char *argv[]) {
+    pthread_t tid;
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);              /* default attributes */
+    pthread_create(&tid, &attr, runner, argc > 1 ? argv[1] : "10");
+    pthread_join(tid, NULL);               /* wait for the thread to exit */
+    printf("sum = %d\n", sum);
+    return 0;
+}
+```
+
+```text
+sum = 55
+```
+
+**Key points:**
+- fork in a threaded process may copy one or all threads; exec replaces every thread.
+- Asynchronous cancellation is immediate and unsafe; deferred cancellation stops at safe points.
+- Signals: synchronous ones go to the causing thread; threads can block signals.
+- Thread pools avoid creation cost and bound thread count; Pthreads is a spec, Win32 and Java are other libraries.
+
 === Concurrency and Inter-Process Communication (IPC)
 difficulty: medium
 ---
@@ -1037,6 +1171,44 @@ A barber sleeps when there are no customers; a customer wakes the barber or wait
 - Dining philosophers: everyone grabbing the left chopstick → deadlock; fix with ordering, asymmetry or limiting diners.
 - Correct solutions must avoid both deadlock and starvation.
 
+=== Synchronization in Real Kernels: Priority Inversion, Adaptive Mutexes and Atomic Transactions
+difficulty: hard
+---
+### How real operating systems synchronize
+- **Solaris** uses **adaptive mutexes**: on a multiprocessor, a thread wanting a lock held by a thread **currently running** on another CPU **spins** (the holder will probably release it soon); if the holder is **not running**, it **blocks** (sleeps). On a single CPU it always sleeps. Spinning is only worth it for short code; longer sections use condition variables, semaphores, **readers–writers locks** and **turnstiles** (queues of threads blocked on a lock).
+- **Windows XP** masks interrupts on single-processor systems for kernel data, uses **spinlocks** on multiprocessors (a thread holding a spinlock is never preempted), and offers **dispatcher objects** — mutexes, semaphores, events and timers — in a **signaled** (available) or **nonsignaled** state.
+- **Linux** (2.6+, preemptive kernel) uses **spinlocks** and **semaphores**; on a single CPU, "spinlock" becomes enabling/disabling **kernel preemption**. A kernel task can be preempted only when its `preempt_count` (number of locks held) is 0.
+- **Pthreads** provides mutex locks, condition variables and read–write locks; semaphores and spinlocks are extensions.
+
+### Priority inversion
+A **higher-priority process waits for a lock held by a lower-priority process**, and a **medium-priority** process that doesn't need the lock keeps preempting the low-priority holder — so the high-priority process effectively waits for the medium one.
+
+```calc
+Priorities L < M < H.  L holds lock R.
+H wants R  -> H blocks, waiting for L.
+M becomes runnable and preempts L (M > L) - M runs as long as it likes.
+H (highest!) is now indirectly waiting for M.
+Priority inheritance: while L holds R needed by H, L runs at H's priority,
+so M cannot preempt it; when L releases R, it drops back to its own priority.
+```
+
+Fix: the **priority-inheritance protocol** — a process holding a resource needed by a higher-priority process temporarily **inherits** that higher priority. (The 1997 Mars Pathfinder lander kept resetting itself because of priority inversion; it was fixed remotely by enabling priority inheritance.)
+
+### Atomic transactions
+Mutual exclusion ensures that critical sections don't overlap; some applications also need a group of operations to be performed **all or nothing** — a **transaction** ending in **commit** or **abort** (**rolled back**). Storage types matter: **volatile** (lost in a crash), **non-volatile** (survives crashes but can fail) and **stable** storage (never loses information — approximated by replicating on several non-volatile devices with independent failure modes).
+
+- **Log-based recovery** — before any change, write a **write-ahead log** record (transaction name, data item, old value, new value) to stable storage, plus ⟨T starts⟩ and ⟨T commits⟩ records. After a failure, **undo(T)** restores old values for transactions with no commit record; **redo(T)** reapplies new values for committed ones. Both are **idempotent** (safe to repeat).
+- **Checkpoints** — periodically flush log and modified data to stable storage and write ⟨checkpoint⟩, so recovery only examines transactions after the last checkpoint.
+- **Concurrent transactions** must be **serializable** — equivalent to some serial order. **Two-phase locking** (a **growing** phase acquiring locks, then a **shrinking** phase releasing them) guarantees conflict serializability but not freedom from deadlock. **Timestamp-ordering** protocols serialize by start time instead, and are deadlock-free.
+
+(These are the same ideas databases use — see the DBMS guide's transactions, concurrency-control and recovery topics.)
+
+**Key points:**
+- Adaptive mutexes spin if the holder is running, sleep otherwise; Linux/Windows use spinlocks on SMP.
+- Priority inversion: a medium-priority task delays a high one through a low-priority lock holder; fix with priority inheritance.
+- Transactions are all-or-nothing; write-ahead logging + undo/redo + checkpoints give recovery.
+- Two-phase locking and timestamp ordering make concurrent transactions serializable.
+
 === CPU Scheduling Concepts: Schedulers, Dispatcher and Criteria
 difficulty: medium
 ---
@@ -1367,6 +1539,127 @@ Issues in SMP scheduling:
 - MLFQ: processes move — demoted after using a full quantum, promoted by aging; most general but complex.
 - ULT scheduled by a library inside the process; KLT scheduled by the kernel.
 - SMP: per-CPU self-scheduling with affinity and load balancing (push/pull).
+
+=== Evaluating Scheduling Algorithms: Deterministic Modeling, Queueing and Simulation
+difficulty: medium
+---
+Which scheduling algorithm is "best" depends on the **criteria** chosen — e.g. maximize CPU utilization subject to a maximum response time of 1 second, or maximize throughput with turnaround time linearly proportional to execution time. Once criteria are fixed, the algorithms are compared with one of four methods.
+
+### 1. Deterministic modeling
+Take a **specific, predetermined workload** and compute each algorithm's performance on it. The book's example: five processes arriving at time 0 with CPU bursts **P1 = 10, P2 = 29, P3 = 3, P4 = 7, P5 = 12** ms.
+
+```calc
+FCFS:  | P1 | P2 | P3 | P4 | P5 |
+       0    10   39   42   49   61
+       waits 0, 10, 39, 42, 49   -> average 140/5 = 28 ms
+
+SJF (non-preemptive):  | P3 | P4 | P1 | P5 | P2 |
+                       0    3    10   20   32   61
+       waits P1 10, P2 32, P3 0, P4 3, P5 20  -> average 65/5 = 13 ms
+
+RR, quantum 10:  | P1 | P2 | P3 | P4 | P5 | P2 | P5 | P2 |
+                 0    10   20   23   30   40   50   52   61
+       waits P1 0, P2 32, P3 20, P4 23, P5 40 -> average 115/5 = 23 ms
+```
+
+SJF gives less than half FCFS's average wait; RR lies in between.
+- **+** Simple, fast, exact numbers; good for teaching and for showing trends (for all processes available at time 0, SJF always gives the minimum average wait).
+- **−** Requires exact input, and the answer applies **only to that workload**.
+
+### 2. Queueing models
+Real workloads vary, but the **distributions** of CPU and I/O bursts and of arrival times can be measured and described mathematically. The system is modeled as a **network of servers**, each with a queue (the CPU with its ready queue, devices with their device queues) — **queueing-network analysis**. Knowing arrival and service rates, we can compute utilization, average queue length and average waiting time.
+
+**Little's formula**: in a steady state, the number of processes leaving the queue equals the number arriving, so
+
+```calc
+n = λ × W
+n = average queue length, λ = average arrival rate, W = average waiting time
+
+Example: 7 processes arrive per second and 14 are normally in the queue
+         W = n / λ = 14 / 7 = 2 seconds
+```
+
+It holds for **any** scheduling algorithm and arrival distribution. Limitation: realistic algorithms and distributions are hard to analyse, so models rely on simplifying assumptions and are only approximations.
+
+### 3. Simulation
+Program a **model of the computer system**: a clock variable advances, and the simulator updates the state of devices, processes and the scheduler. Data to drive it comes from **random-number generators** following measured distributions, or from **trace tapes** — recordings of real event sequences on a real system, which give the most accurate comparisons for that workload.
+- **+** More accurate than queueing models.
+- **−** Expensive: hours of computation, large storage for traces, and the simulator itself takes effort to design, code and debug.
+
+### 4. Implementation
+The only completely accurate method: **code the algorithm into the OS** and measure it under real conditions. Costs: coding and modifying the kernel, user reaction to a changing OS, and the fact that the environment changes — users adapt their behaviour to the scheduler (e.g. a user who learns that short interactive processes get priority may break work into tiny jobs). The most flexible schedulers can be **tuned** by administrators or offer APIs to adjust priorities.
+
+**Key points:**
+- Deterministic modeling: exact results for one fixed workload (book example: FCFS 28, SJF 13, RR(10) 23 ms).
+- Queueing models use measured distributions; Little's formula n = λ × W holds for any algorithm.
+- Simulation (random or trace-driven) is more accurate but costly.
+- Implementation is the only exact test, but users and workloads change in response.
+
+=== Real-Time CPU Scheduling: Rate-Monotonic and Earliest-Deadline-First
+difficulty: hard
+---
+A **real-time system** must produce results within **timing constraints**. In **hard real-time** systems, a missed deadline is a failure (airbag, anti-lock brakes); in **soft real-time** systems critical tasks just get priority and occasional misses are tolerated (multimedia). Real-time kernels need **preemptive, priority-based scheduling** and **low latency**.
+
+### Latency
+- **Interrupt latency** — time from an interrupt's arrival to the start of its service routine. Kernel code must disable interrupts only briefly.
+- **Dispatch latency** — time to stop one process and start another. Its **conflict phase** includes preempting any process running in the kernel and making low-priority processes release resources needed by a high-priority one. A **preemptive kernel** keeps it small.
+
+### Periodic tasks
+Real-time processes are often **periodic**: each needs the CPU at constant intervals. A task has a processing time **t**, a deadline **d** and a period **p**, with 0 ≤ t ≤ d ≤ p; its **rate** is 1/p. (In the examples below the deadline is the start of the next period.) A scheduler may use **admission control**: admit a process only if it can guarantee its deadline.
+
+CPU utilization of a task = **t / p**. A set of tasks can't be scheduled if total utilization exceeds 1.
+
+### Rate-monotonic scheduling
+**Static priorities, inversely proportional to the period** — the shorter the period, the higher the priority — with preemption.
+
+The book's example: **P1: p = 50, t = 20; P2: p = 100, t = 35.** Utilization = 20/50 + 35/100 = **0.75**.
+
+```calc
+If P2 had the higher priority:
+| P2 0-35 | P1 35-55 ...      P1 finishes at 55 > its deadline 50 -> MISSED
+
+Rate-monotonic (P1 has the shorter period -> higher priority):
+| P1 0-20 | P2 20-50 | P1 50-70 | P2 70-75 | idle 75-100 | P1 100-120 | P2 120-150 | ...
+P1 meets 50 and 100; P2 finishes at 75 (deadline 100). Both deadlines met.
+```
+
+Rate-monotonic is **optimal among static-priority algorithms**: if it can't schedule a task set, no static-priority algorithm can. But its utilization is bounded. The worst-case bound for **N** processes is
+
+```calc
+U <= N (2^(1/N) - 1)
+N = 1: 1.00    N = 2: about 0.83    N = 3: about 0.78    N -> infinity: ln 2 = about 0.69
+```
+
+The first example's 75% is under the 83% bound for two tasks, so it is **guaranteed** schedulable.
+
+Second example: **P1: p = 50, t = 25; P2: p = 80, t = 35.** Utilization = 25/50 + 35/80 ≈ **0.94** — above 0.83, so not guaranteed:
+
+```calc
+| P1 0-25 | P2 25-50 | P1 50-75 | P2 75-85 ...
+At 50, P1 preempts P2 (P2 still needs 10 ms). P2 finishes at 85 > deadline 80 -> MISSED
+```
+
+### Earliest-deadline-first (EDF)
+**Dynamic priorities by deadline** — the earlier the deadline, the higher the priority. When a process becomes runnable it announces its deadline, and priorities are adjusted.
+
+Same task set (50/25, 80/35):
+
+```calc
+| P1 0-25 | P2 25-60 | P1 60-85 | P2 85-100 | P1 100-125 | P2 125-145 | idle | P1 150-175 | ...
+At 50, P1's new job has deadline 100 but P2's deadline is 80 -> P2 keeps running (no preemption).
+P2 finishes at 60 (deadline 80); P1 finishes at 85 (deadline 100). All deadlines met.
+```
+
+EDF doesn't need periodic tasks or constant bursts — only that processes announce deadlines. **Theoretically optimal**: it can schedule any set whose utilization is ≤ 100%, but in practice context switching and interrupt handling make 100% unattainable.
+
+### Proportional-share scheduling
+Allocate **T shares** among all applications; an application given N shares gets N/T of the processor time. Must be combined with **admission control** — a new process is admitted only if enough shares are available.
+
+**Key points:**
+- Hard real-time: missing a deadline is failure; soft: priority only. Keep interrupt and dispatch latency low.
+- Utilization of a periodic task = t/p.
+- Rate-monotonic: static priority by shortest period; optimal among static schemes; bound N(2^(1/N) − 1) → 69%.
+- EDF: dynamic priority by earliest deadline; can reach 100% utilization in theory.
 
 === Deadlocks: Conditions and Resource-Allocation Graphs
 difficulty: medium
@@ -2093,6 +2386,74 @@ faster, smaller, more expensive per byte  <---->  slower, larger, cheaper
 - PFF: adjust frames to keep the fault rate between bounds.
 - Caches exploit locality at every level; measure by hit ratio and EAT.
 
+=== Memory-Mapped Files, Kernel Memory Allocation (Buddy and Slab) and Other VM Considerations
+difficulty: hard
+---
+### Memory-mapped files
+**Memory mapping** a file associates a range of a process's **virtual address space** with the file's disk blocks. Initial access faults in a page-sized part of the file; afterwards reads and writes are **ordinary memory accesses** — no `read()`/`write()` system calls — and the OS writes changed pages back (on `msync`, when the file is closed, or periodically).
+- Several processes can map the **same file** to **share** data (each one's writes are visible to the others), with **copy-on-write** mapping if a private copy is wanted.
+- **Shared memory** between processes is commonly implemented this way (Win32 `CreateFileMapping` / `MapViewOfFile`; POSIX `mmap`).
+- **Memory-mapped I/O**: device registers appear at memory addresses; the CPU transfers data by reading/writing those addresses (video memory, serial and parallel ports).
+
+### Allocating kernel memory
+User pages come from the free-frame list, but the **kernel** has different needs:
+1. Its data structures have **many different sizes**, often smaller than a page — fragmentation must be minimized because much kernel code isn't paged.
+2. Some memory must be **physically contiguous** (devices doing DMA may not go through the virtual-memory interface).
+
+**Buddy system** — allocate from a fixed-size segment of contiguous pages using a **power-of-2 allocator**: requests are rounded up to the next power of 2, and a segment is split into two equal halves (**buddies**) until a block of the right size exists.
+
+```calc
+Segment of 256 KB; kernel requests 21 KB
+256 -> two 128 KB buddies -> 64 KB buddies -> 32 KB buddies
+21 KB is served from a 32 KB block (next power of 2)
+Internal fragmentation: 32 - 21 = 11 KB wasted in that block
+Freeing: adjacent buddies are COALESCED back into larger blocks (32 + 32 -> 64 ...)
+```
+
+- **+** Fast **coalescing** of free buddies into larger segments.
+- **−** Rounding up to powers of 2 causes **internal fragmentation** (a 33 KB request gets 64 KB — almost half wasted).
+
+**Slab allocation** — a **slab** is one or more physically contiguous pages; a **cache** consists of one or more slabs, and there is a cache for **each unique kernel data structure** (process descriptors, file objects, semaphores...). Each cache is filled with **objects** of that type, marked **free** or **used**.
+- Requests are satisfied with a free object from the right cache; slabs are **full**, **empty** or **partial**; a new slab is allocated only when needed.
+- **No fragmentation** — each object exactly fits its cache's object size.
+- **Fast** — objects are created in advance and reused, which is ideal for kernel structures that are allocated and freed often.
+- First in Solaris 2.4; Linux has used a slab allocator since 2.2 (its own buddy system manages pages underneath).
+
+### Other virtual-memory considerations
+- **Prepaging** — bring in at once some or all of the pages a process will need (e.g. its remembered working set when it resumes) to avoid the burst of faults at start-up; worth it only if the cost is less than servicing the faults it prevents.
+- **Page size** — small pages: less internal fragmentation, better **resolution** (load only what's used), less I/O per fault; large pages: smaller page tables, fewer faults, faster disk transfers. The trend has been toward **larger** pages.
+- **TLB reach** = number of TLB entries × page size — the amount of memory accessible without a TLB miss. Ideally the working set fits in it.
+
+```calc
+64-entry TLB with 8 KB pages : reach = 64 x 8 KB  = 512 KB
+64-entry TLB with 4 MB pages : reach = 64 x 4 MB  = 256 MB
+Going from 8 KB to 32 KB pages quadruples the reach (at the cost of more fragmentation),
+so systems support several page sizes (Solaris uses 8 KB and 4 MB).
+```
+
+- **Inverted page tables** save memory but don't contain the information needed to page in a non-resident page; an external page table per process is still needed (consulted only on a fault).
+- **Program structure** matters. With `int data[128][128]` stored **row by row**, pages of 128 words (one row per page), and fewer than 128 frames:
+
+```c
+// fragment
+for (j = 0; j < 128; j++)          /* column by column: touches a new page on   */
+    for (i = 0; i < 128; i++)      /* every access -> 128 x 128 = 16,384 faults  */
+        data[i][j] = 0;
+
+for (i = 0; i < 128; i++)          /* row by row: finishes one page before the  */
+    for (j = 0; j < 128; j++)      /* next -> 128 faults                         */
+        data[i][j] = 0;
+```
+
+Careful choice of data structures and loop order improves **locality**; stacks have good locality, hash tables poor locality.
+- **I/O interlock** — pages being used as buffers for a pending I/O must not be replaced; a **lock bit** pins them in memory until the transfer finishes (or I/O is done only into kernel buffers and copied).
+
+**Key points:**
+- Memory-mapped files turn file I/O into memory accesses and let processes share memory.
+- Kernel memory needs mixed sizes and contiguity: buddy system (power-of-2 split/coalesce, internal fragmentation) and slab allocator (per-type caches, no fragmentation).
+- Prepaging, page size trade-offs, TLB reach = entries × page size.
+- Loop order and data structures change page-fault counts (16,384 vs 128); lock bits pin I/O pages.
+
 === I/O Management: Devices, Controllers, DMA and the I/O Software Layers
 difficulty: medium
 ---
@@ -2171,6 +2532,83 @@ Example — reading a file: the user program makes a read system call → device
 - Controller = electronics with registers; driver = device-specific OS code.
 - Polling → interrupts → DMA (one interrupt per block, CPU free during transfer).
 - Layers: interrupt handlers, drivers, device-independent software, user-level software.
+
+=== Application I/O Interface: Blocking, Non-blocking and Asynchronous I/O; the Kernel I/O Subsystem
+difficulty: medium
+---
+### Polling vs interrupts
+- **Polling (busy waiting)** — the host repeatedly reads the controller's **busy bit** until it clears, then issues the command. Efficient if the device is fast and ready almost at once; wasteful if the host waits a long time.
+- **Interrupts** — the device notifies the CPU when it is ready; better for slow or unpredictable devices. Interrupt controllers provide **deferral**, **vectored** dispatch and **priority levels** (with non-maskable interrupts for critical errors).
+
+### The application I/O interface
+The OS hides device differences behind a few **generic kinds of devices**, accessed through standard interfaces; device-specific code lives in **device drivers**. Devices differ along several dimensions:
+
+| Aspect | Variation | Example |
+|---|---|---|
+| Data-transfer mode | character / block | terminal / disk |
+| Access method | sequential / random | modem / CD-ROM |
+| Transfer schedule | synchronous / asynchronous | tape / keyboard |
+| Sharing | dedicated / sharable | tape / keyboard |
+| Speed | latency, seek time, transfer rate | |
+| I/O direction | read-only / write-only / read–write | CD-ROM / graphics controller / disk |
+
+Interfaces offered: **block-device** interface (`read`, `write`, `seek`; or memory-mapped access), **character-stream** interface (`get`, `put` — keyboards, mice), **network sockets** (with `select()` to manage many sockets), and **clocks and timers** (current time, elapsed time, set a timer to trigger an operation — the **programmable interval timer** drives time slicing). An escape (UNIX **`ioctl()`**) passes arbitrary commands to a driver.
+
+### Blocking, non-blocking and asynchronous I/O
+
+```mermaid
+sequenceDiagram
+    participant P as Process
+    participant K as Kernel
+    Note over P,K: Blocking
+    P->>K: read()
+    Note over P: suspended until data arrives
+    K-->>P: data
+    Note over P,K: Non-blocking
+    P->>K: read()
+    K-->>P: whatever is available now (maybe 0 bytes)
+    Note over P,K: Asynchronous
+    P->>K: aio_read()
+    K-->>P: returns immediately
+    Note over P: keeps working
+    K-->>P: later: signal / callback - transfer complete
+```
+
+- **Blocking** — the process is suspended (moved to a wait queue) until the I/O completes. Easiest to program; most common.
+- **Non-blocking** — the call returns **immediately with whatever data is available** (possibly none). Used by interactive programs (a UI reading the keyboard and mouse while processing data). Often done instead with multiple threads, each making blocking calls.
+- **Asynchronous** — the call returns immediately; the **entire transfer** completes later, and the process is notified (a variable is set, a signal, a callback).
+- Difference: a non-blocking `read()` returns what it can **right now**; an asynchronous `read()` requests the **whole** transfer, which finishes in the future.
+
+### The kernel I/O subsystem
+- **I/O scheduling** — reorder requests in device queues to improve overall efficiency and fairness (e.g. disk scheduling); a **device-status table** records each device's state and queue.
+- **Buffering** — memory that holds data during a transfer, to cope with **speed mismatch** (a slow modem filling a buffer before one fast disk write), **transfer-size mismatch** (network packet fragmentation), and **copy semantics** (copying the application's data into a kernel buffer when `write()` is called, so later changes by the app don't affect what's written). **Double buffering** lets one buffer fill while the other is written.
+- **Caching** — fast memory holding **copies** of data (a buffer may hold the only copy; a cache never does).
+- **Spooling** — a buffer holding output for a device that can't accept interleaved streams (a printer): each application's output is spooled to a separate disk file and printed one at a time.
+- **Device reservation** — exclusive access (`open` fails if the device is busy, or explicit allocate/deallocate) — beware deadlock.
+- **Error handling** — retries for transient failures (a disk read error, a network resend); system calls return an error code (UNIX `errno`); SCSI reports a **sense key**, additional sense code and qualifier.
+- **I/O protection** — all I/O instructions are **privileged**; users go through system calls; memory-mapped device and port addresses are protected from user access.
+- **Kernel data structures** — open-file tables, network connections, character-device state; UNIX's file-like abstraction lets `read()` work on files, devices and sockets alike.
+
+### From request to hardware — a blocking read
+1. The process issues a blocking `read()` on a file descriptor.
+2. The system-call code checks the parameters; if the data is in the **buffer cache**, it's returned at once.
+3. Otherwise physical I/O is needed: the process is moved to the device's **wait queue** and the request is scheduled.
+4. The driver allocates kernel buffer space and sends commands to the **device controller**.
+5. The controller operates the hardware (via **DMA**, generating an interrupt when done).
+6. The **interrupt handler** stores the data, signals the driver, and returns.
+7. The driver identifies the completed request and signals the kernel I/O subsystem.
+8. The kernel copies data to the process's address space and moves the process from the **wait queue to the ready queue**; the system call returns when the scheduler runs it.
+
+**STREAMS** (UNIX System V) is a full-duplex channel between a driver and a user process: a **stream head**, a **driver end** and any number of **stream modules** in between, passing messages through read and write queues — a modular way to build drivers and network protocols.
+
+### Performance
+I/O is a major factor in performance: it costs CPU time in drivers, context switches for interrupts, and data copies. Improve it by reducing context switches, data copies and interrupts (larger transfers, smart controllers, polling where busy waiting is short), using DMA, moving processing into hardware, and balancing CPU, memory, bus and I/O load.
+
+**Key points:**
+- Polling suits fast devices; interrupts suit slow ones.
+- Device classes: block, character, network (sockets), clocks/timers; `ioctl` for the rest.
+- Blocking suspends; non-blocking returns what's available now; asynchronous returns at once and notifies on completion.
+- Kernel I/O subsystem: scheduling, buffering (copy semantics, double buffering), caching, spooling, reservation, error handling, protection.
 
 === Disk Structure and Disk Scheduling: FCFS, SSTF, SCAN, C-SCAN, LOOK
 difficulty: hard
@@ -2266,6 +2704,76 @@ The book's "elevator" turns around at 36 (the last request) — strictly that is
 - FCFS (fair, slow), SSTF (nearest, may starve), SCAN (to the end and back), C-SCAN (one direction, uniform), LOOK/C-LOOK (turn at last request).
 - On 98,183,37,122,14,124,65,67 from 53: FCFS 640, SSTF 236.
 - SSDs don't need seek optimization.
+
+=== Mass Storage: Disk Management, Swap Space, RAID and Stable Storage
+difficulty: hard
+---
+### Disk management
+- **Low-level (physical) formatting** divides the disk into **sectors** the controller can read and write; each sector has a header and trailer with a sector number and an **error-correcting code (ECC)**, plus the data area (usually 512 bytes). Done at the factory.
+- The OS then **partitions** the disk into one or more groups of cylinders, and does **logical formatting** — writing the initial file-system structures (free-space map, empty root directory). For efficiency, blocks are grouped into **clusters**. Some programs (databases) use a partition as a **raw disk** without a file system.
+- **Boot block** — a tiny bootstrap loader in ROM loads the full bootstrap program from the disk's **boot blocks** (on Windows the **MBR** in the first sector, with the partition table identifying the **boot partition**).
+- **Bad blocks** — disks have defective sectors. Simple disks handle them manually (`chkdsk`, marking blocks unusable in the FAT). SCSI disks keep a list of bad blocks and use **sector sparing (forwarding)**: the controller remaps a bad sector to a spare one, ideally on the same cylinder to preserve disk-scheduling optimizations; **sector slipping** shifts sectors down to free a spot next to the bad one.
+
+### Swap-space management
+Swap space is disk space used by virtual memory as an extension of main memory; because disk is far slower than memory, its management aims at **throughput**.
+- It can live in the normal **file system** (an ordinary large file — easy, but slow to navigate) or in a separate **raw partition** with its own allocator optimized for speed (some internal fragmentation, but short-lived data).
+- Overestimating swap space wastes disk; underestimating can force the system to abort processes or crash. Modern systems (Solaris, Linux) allocate swap space only when a page is **paged out**, not when a process is created; text (code) pages are re-read from the executable instead of being swapped.
+
+### RAID (Redundant Arrays of Independent Disks)
+Many cheap disks attached to one system improve **reliability** through **redundancy** and **performance** through **parallelism**.
+
+**Reliability by mirroring.** With N disks, the chance that *some* disk fails is much higher than for one disk. **Mirroring** duplicates every disk; data is lost only if the second disk fails before the first is repaired.
+
+```calc
+Mean time to failure of one disk = 100,000 hours, mean time to repair = 10 hours
+Mean time to data loss of a mirrored pair = 100,000^2 / (2 x 10) = 500 x 10^6 hours
+                                          = about 57,000 years
+(assuming independent failures - power failures, disasters and manufacturing
+ defects make failures correlated, so the real figure is lower)
+```
+
+**Performance by striping.** Mirroring doubles the number of reads served per second. **Striping** splits data across disks: **bit-level striping** writes bit *i* of each byte to disk *i*; **block-level striping** (most common) puts block *i* of a file on disk (*i* mod *n*) + 1. Goals: increase throughput of many small accesses (load balancing) and reduce response time of large accesses.
+
+**RAID levels**
+
+| Level | Scheme | Redundancy | Notes |
+|---|---|---|---|
+| **0** | Block striping, **no redundancy** | None | Fastest, but one failure loses data |
+| **1** | **Mirroring** | Full copy | Doubles disks; fast reads; simple rebuild |
+| **2** | Memory-style **ECC** (Hamming) across disks | ECC bits | 3 overhead disks for 4 data disks; not used today |
+| **3** | **Bit-interleaved parity** — one parity disk | Parity | Controllers detect the bad sector, so 1 parity bit corrects it; each disk takes part in every I/O |
+| **4** | **Block-interleaved parity** — one parity disk | Parity | Small reads hit one disk; every write updates the parity disk (bottleneck) |
+| **5** | **Block-interleaved distributed parity** | Parity spread over all disks | Avoids the parity-disk bottleneck; the most common parity RAID |
+| **6** | **P + Q redundancy** (Reed-Solomon codes) | 2 redundant blocks per stripe | Survives **two** disk failures |
+| **0 + 1** | Stripe, then mirror the stripe | Mirror | One failure makes a whole stripe unavailable |
+| **1 + 0** | Mirror pairs, then stripe the pairs | Mirror | One failure loses only one disk; mirror still serves |
+
+How parity rebuilds a lost block — **XOR** of the surviving blocks:
+
+```calc
+data blocks   D1 = 1011   D2 = 0110   D3 = 1100
+parity        P  = D1 xor D2 xor D3 = 0001
+disk 2 fails: D2 = P xor D1 xor D3 = 0001 xor 1011 xor 1100 = 0110   (recovered)
+
+Usable capacity with four 1 TB disks:
+RAID 0: 4 TB   RAID 1 (mirrored pairs): 2 TB   RAID 5: 3 TB   RAID 6: 2 TB   RAID 1+0: 2 TB
+```
+
+Parity RAID's costs: computing and writing parity (a small write needs read-modify-write of data and parity — four I/Os), and slow **rebuilds**. Choosing a level: RAID 0 for speed where data loss is acceptable; RAID 1 for high reliability with fast recovery; RAID 1+0 for performance + reliability (databases); RAID 5 for large volumes of data with moderate write load; RAID 6 when two failures must be survived. **Hot spares** — idle disks that automatically replace a failed one.
+
+RAID can be implemented in kernel software, in the host bus adapter, in the storage array, or in the SAN interconnect. It protects against disk failures, **not** against software bugs, wrong writes or deleted files — backups are still needed.
+
+### Disk attachment and stable storage
+- **Host-attached storage** — via local I/O ports (SATA, SCSI, Fibre Channel).
+- **NAS (network-attached storage)** — a storage system accessed remotely over the data network with RPC-based protocols (**NFS**, **CIFS**).
+- **SAN (storage-area network)** — a private network (often Fibre Channel) connecting servers and storage units, so storage can be allocated flexibly to hosts.
+- **Stable storage** — information never lost: keep two physical copies; write the first block, then (only after success) the second; after a failure, compare the copies and repair from the good one.
+
+**Key points:**
+- Low-level formatting creates sectors with ECC; partitions + logical formatting create file systems; boot block loads the OS; bad sectors are spared or slipped.
+- Swap space lives in a file or raw partition; allocated on page-out.
+- Mirroring gives huge reliability (about 57,000 years MTTDL in the book's example); striping gives speed.
+- RAID 0 stripe, 1 mirror, 5 distributed parity, 6 double redundancy, 1+0 mirror-then-stripe; parity = XOR.
 
 === Files: Attributes, Operations, Types and Access Methods
 difficulty: easy
@@ -2527,6 +3035,54 @@ Disk access is millions of times slower than memory, so file systems optimize:
 - fsck/chkdsk compare in-use and free counts per block and link counts per inode; journaling speeds recovery.
 - Performance: buffer cache, read-ahead, placing related blocks together.
 
+=== File-System Mounting, Sharing, NFS and Log-Structured Recovery
+difficulty: medium
+---
+### Mounting
+A file system must be **mounted** before processes can use it. The OS is given the **device name** and a **mount point** — the location in the directory tree (usually an empty directory) where the new file system will be attached. It verifies that the device holds a valid file system (reading its directory structure and checking the format) and records the mount in its **mount table**.
+
+```calc
+Before:  /users is an empty directory on the root file system
+mount /dev/sdb1 /users
+After:   /users/asha, /users/ravi ... now come from the disk /dev/sdb1
+```
+
+Windows traditionally gives each volume a **drive letter** (`C:`, `F:`); UNIX and macOS mount file systems anywhere in a single tree (macOS mounts new disks under `/Volumes`).
+
+### File sharing
+On a multiuser system, files are shared under the control of **owner** and **group** attributes — the owner can change attributes and grant access; group members get a subset of the owner's rights (UNIX's `rwx` for owner/group/others).
+
+**Consistency semantics** specify when one user's modifications become visible to others sharing the file:
+- **UNIX semantics** — writes are **immediately visible** to all users with the file open; users may even share the file pointer.
+- **Session semantics** (Andrew File System) — writes are visible only to sessions that **open the file after it is closed**; each user works on their own image.
+- **Immutable-shared-files semantics** — once a file is declared shared it **cannot be modified**.
+
+### Remote file systems
+Methods have evolved from manual transfer (FTP), to **distributed file systems** that make remote directories visible locally, to the WWW.
+- **Client–server model** — the **server** exports file systems; **clients** mount them. Clients are identified by IP address or authenticated with keys/Kerberos; users must have matching IDs on both sides.
+- **Distributed information systems** (DNS, NIS, LDAP, Active Directory) provide unified naming and authentication.
+- **Failure modes** — local failures (disk crash, corrupted metadata) plus network and server failures. **Stateless** protocols (NFS v3) let a client simply retry after a server restart; **stateful** ones must recover state.
+
+### NFS (Network File System)
+Sun's NFS lets a set of interconnected, independent machines share file systems **transparently**:
+- A remote directory is **mounted** over a local directory; the mounted directory looks like an integral subtree. Mounts can be **cascading** (mount on top of a mounted file system).
+- The **mount protocol** handles exporting and mounting (the server's export list says which file systems can be mounted and by whom).
+- The **NFS protocol** provides RPCs for remote file operations: search for a file in a directory, read directory entries, manipulate links and directories, access file attributes, read and write files. Servers are **stateless** (each request carries all needed information, e.g. the file handle and the absolute offset); modified data must be committed to the server's disk before results return.
+- In the client, the **Virtual File System (VFS)** layer separates generic file operations from their implementation: a **vnode** represents each file, and VFS dispatches to the local file system or to the NFS client.
+- Path-name translation is done **component by component** (each lookup may cross a mount point), with a **directory-name-lookup cache** to speed it up.
+
+### Consistency checking, backups and log-structured recovery
+- **Consistency checker** (`fsck`, `chkdsk`) compares directory structure with data blocks and fixes inconsistencies after a crash — slow on large disks.
+- **Backup and restore** — full backups plus incremental ones (a typical cycle: day 1 full, days 2–N incremental since the previous day, then repeat).
+- **Log-structured (journaling) file systems** apply database **log-based recovery** to metadata: each metadata update is written **sequentially to a log** as a **transaction**; once written to the log it is **committed**, and the system call can return. Log entries are then **replayed** onto the actual file-system structures and removed as they complete. After a crash, committed but unapplied transactions in the log are completed; uncommitted ones are undone — so the file system is consistent without a full scan. Sequential log writes are also faster than random metadata writes. (Examples: NTFS, ext3/ext4, XFS, JFS.)
+- **WAFL** (NetApp's Write-Anywhere File Layout) never overwrites blocks in place; it writes new data to free blocks and can take **snapshots** (read-only copies of the file system at an instant) cheaply by keeping the old root.
+
+**Key points:**
+- Mounting attaches a file system at a mount point and records it in the mount table.
+- Consistency semantics: UNIX (immediate), session (on close/open), immutable shared files.
+- NFS: mount protocol + stateless NFS RPC protocol; VFS/vnodes make remote files transparent.
+- Journaling writes metadata changes to a log first, so crash recovery replays/undoes transactions instead of running fsck.
+
 === Computer Security: Goals, Threats, Intruders and Malware
 difficulty: medium
 ---
@@ -2685,6 +3241,255 @@ CPUs provide privilege levels: **ring 0** (kernel, most privileged) to **ring 3*
 - Symmetric crypto (one shared key, fast — DES/AES) vs public-key (key pair, slower — RSA); used together in practice.
 - Authentication: knows / has / is / context; store salted password hashes.
 - Access matrix stored as ACLs (per object) or capabilities (per subject); models DAC, MAC, RBAC.
+
+=== Protection Domains, Access Matrix Implementation and Revocation
+difficulty: hard
+---
+**Protection** is about controlling the access of **processes and users** to the resources of the system — a mechanism. **Security** (next topics) is the measure of confidence that the system's integrity will be preserved.
+
+### Goals and principles
+- Prevent mischievous or intentional violation of access restrictions, ensure each active component uses resources only according to stated **policies**, and detect latent errors at interfaces between subsystems.
+- **Separate policy from mechanism** — mechanisms say *how*, policies say *what*; policies change over time and between applications.
+- **Principle of least privilege** — programs, users and systems get **just enough privileges** to do their tasks, which limits the damage a failure or compromise can cause.
+- **Need-to-know** — a process should be able to access only the objects it **currently requires** to complete its task.
+
+### Domains of protection
+A process operates within a **protection domain**, which specifies the objects it may access and the operations allowed on each. A domain is a set of **access rights**: ⟨object-name, rights-set⟩, e.g. ⟨file F, {read, write}⟩. Domains may overlap, and can be realized as a **user**, a **process** or a **procedure**.
+- The association can be **static** (fixed for the process's life — then the domain must contain all rights it might ever need, violating need-to-know) or **dynamic** (the process can **switch domains**).
+- **UNIX**: the domain is the **user ID**; switching happens through the **setuid** bit — a program whose setuid bit is on runs with the **owner's** user ID (e.g. `passwd` runs as root so it can update the password file).
+- **MULTICS**: concentric **protection rings** 0–7; ring 0 has the most privileges; crossing into a lower ring goes through controlled **gates**. (x86 hardware rings come from the same idea.)
+
+### The access matrix
+Rows are **domains**, columns are **objects**; entry access(i, j) is the set of operations a process in domain Di may invoke on object Oj. Domains themselves can be objects, so the matrix also controls **switching**, and special rights control **changes to the matrix**:
+- **copy** (written `R*`) — a process in the domain may copy that right to another domain in the same column (variants: transfer — the original loses it; limited copy — the copy can't be copied further).
+- **owner** — the owner of an object may add and remove any rights in its column.
+- **control** — a process in domain Di with control over domain Dj may remove rights from row j.
+
+```calc
+          F1        F2        F3        printer   D1      D2
+D1        read                read                        switch
+D2                                      print             switch, control
+D3                  read*     execute
+D4        read,     read,               owner
+          write     write
+read* = may copy the read right; D1 may switch to D2; D2 controls row D4 ...
+```
+
+### Implementing the access matrix
+The matrix is large and sparse, so it is stored in other forms:
+
+| Method | Stored as | Pros | Cons |
+|---|---|---|---|
+| **Global table** | Set of triples ⟨domain, object, rights⟩ | Simple | Huge; can't be kept in memory; hard to group objects |
+| **Access lists** (ACLs) | Per **object** (column): ⟨domain, rights⟩ pairs, plus a default | Matches users' needs; easy to find all users of an object | To find all rights of a domain, search every object |
+| **Capability lists** | Per **domain** (row): list of ⟨object, rights⟩ — a capability is like a protected pointer | Easy to localize a process's rights | Hard to revoke; capabilities must be protected (tagged or kept in kernel space) |
+| **Lock–key** | Objects have **locks**, domains have **keys** (unique bit patterns) | Compromise; efficient revocation by changing a lock | Keys must be managed by the OS |
+
+Most systems combine **access lists and capabilities**: the ACL is checked on the **first access** (e.g. `open()`), which then returns a capability-like handle (a file descriptor) used for subsequent operations, with no further ACL checks.
+
+### Revocation of access rights
+Questions: **immediate or delayed**? **Selective** (some users) **or general** (all)? **Partial** (some rights) **or total**? **Temporary or permanent**?
+- With **access lists**, revocation is easy: search the list and delete the rights.
+- With **capabilities**, they are scattered across domains, so other schemes are needed: **reacquisition** (periodically delete all capabilities; a process must reacquire them), **back-pointers** (each object keeps pointers to all its capabilities — general but costly; MULTICS), **indirection** (capabilities point to a table entry that points to the object; delete the entry — Cal), and **keys** (a master key is associated with each object; changing it invalidates all capabilities — CAP, Hydra).
+
+### Capability-based and language-based protection
+- **Hydra** and **Cambridge CAP** are capability-based systems: rights include user-defined ones interpreted by subsystems; **rights amplification** lets a procedure gain extra rights on an object while executing on its behalf.
+- **Language-based protection** declares protection requirements in the programming language; the compiler and runtime enforce them. **Java**: classes are loaded into **protection domains** based on where they came from (e.g. a remote applet gets fewer rights); before a sensitive operation, the JVM performs **stack inspection** — walking the call stack — and permits it only if every caller's domain allows it (a trusted class can use `doPrivileged` to assert its own rights).
+
+**Key points:**
+- Least privilege and need-to-know; separate policy from mechanism.
+- A domain = set of ⟨object, rights⟩; UNIX domains are user IDs switched via setuid; MULTICS uses rings.
+- Access matrix rows = domains, columns = objects; copy/owner/control rights manage it.
+- Implemented as global table, ACLs (per object), capability lists (per domain) or lock–key; revocation is easy with ACLs, harder with capabilities.
+
+=== Network Threats, Firewalls and Security Classifications
+difficulty: medium
+---
+### System and network threats
+Program threats (Trojan horses, trap doors, logic bombs, stack/buffer overflows, viruses) attack through programs; **system and network threats** abuse services and network connections, and create an environment where OS resources and user files are misused. The more **open** a system (more services enabled, more remote access), the larger its attack surface — systems should be **secure by default**.
+- **Worms** — standalone programs that use **spawn** mechanisms to replicate across a network. The **Morris worm** (1988) exploited `rsh` trust between machines, a buffer overflow in **finger**, and the **debug** option of **sendmail**, infecting thousands of machines within hours. Its grappling-hook "bootstrap" program fetched the main worm.
+- **Port scanning** — automated attempts to connect to a range of TCP/IP ports to find services, and then to probe them for known bugs (tools like **nmap** detect the services and even the OS). Usually launched from previously compromised **zombie** machines to hide the attacker.
+- **Denial of service (DoS)** — not stealing resources but **disrupting legitimate use**: consuming CPU, or flooding the network. **SYN flooding** abuses TCP's handshake by starting many sessions and never completing them, exhausting the server's connection table. **Distributed DoS (DDoS)** launches attacks from many compromised machines at once; DoS is hard to prevent because attack traffic can look like normal traffic.
+
+### Implementing security defenses
+- **Security policy** — the first step: what is being secured, and against whom.
+- **Vulnerability assessment** — **penetration tests** and scans for weak passwords, unauthorized privileged programs (setuid), unexpected long-running processes, improper directory protections, suspicious changes to system files (detected with checksums — **Tripwire**).
+- **Intrusion detection** — detect attempted or successful intrusions and respond: **signature-based** detection looks for known attack patterns (like antivirus signatures; can't detect new attacks), **anomaly detection** flags deviations from normal behaviour (can detect new attacks but produces false alarms — the **base-rate fallacy** makes even a small false-alarm rate overwhelm operators). Honeypots attract and observe attackers.
+- **Virus protection** — antivirus scanning, safe computing practices, sandboxing.
+- **Auditing, accounting and logging** — record security-relevant events so violations can be traced.
+
+### Firewalls
+A **firewall** is a computer, appliance or router placed between the **trusted** and **untrusted** networks that limits network access between security domains, and monitors and logs connections. It can filter by source or destination address, port number or direction of connection.
+- A network is often split into security domains: the **Internet** (untrusted), a semi-trusted **demilitarized zone (DMZ)** holding public servers (web, mail), and the **company network** (trusted). Allowed: Internet → DMZ, company → Internet, company → DMZ; **not** Internet or DMZ → company network.
+- Kinds of firewalls: **network (packet-filtering)**, **personal firewalls** (software on a host, controlling what traffic each application may send/receive), **application proxy firewalls** (understand the protocol — e.g. an SMTP proxy accepts mail and then forwards it, rejecting illegal commands), **XML firewalls**, and **system-call firewalls** (between applications and the kernel).
+- Limitations: firewalls can't prevent attacks that **tunnel** inside allowed protocols (an attack over HTTP to an allowed web server), DoS against the firewall itself, or **spoofing** (an unauthorized host pretending to be authorized).
+
+### Computer-security classifications (Orange Book)
+The U.S. Department of Defense **Trusted Computer System Evaluation Criteria** define four divisions, **A** (highest) to **D**:
+- **D — minimal protection**: systems that failed higher classes (MS-DOS, Windows 3.1).
+- **C — discretionary protection and auditing**: **C1** (users cooperate at one level; identification/authentication; the **trusted computing base (TCB)** — all protection hardware and software enforcing the policy) and **C2** (individual-level access control and auditing; most commercial UNIX versions are C1, some are C2).
+- **B — mandatory protection**: **B1** adds **sensitivity labels** (unclassified, confidential, secret, top secret) on every object; **B2** extends labels to all resources and covers **covert channels**; **B3** adds access-control lists and security-domain structures.
+- **A — verified design**: **A1** is functionally like B3 but uses formal design specifications and verification.
+
+These have since been superseded by the international **Common Criteria**, but the vocabulary — TCB, discretionary vs mandatory access control, labels — remains standard.
+
+**Key points:**
+- Network threats: worms (Morris worm: rsh, finger overflow, sendmail debug), port scanning, DoS/DDoS (SYN flood).
+- Defenses: policy, vulnerability assessment, signature vs anomaly intrusion detection, auditing.
+- Firewalls separate trusted/untrusted networks; a DMZ hosts public servers; they can't stop tunnelled attacks or spoofing.
+- Orange Book: D (minimal), C (discretionary + audit), B (mandatory labels), A (verified).
+
+=== Distributed Systems: Event Ordering, Mutual Exclusion, Election and Agreement
+difficulty: hard
+---
+A **distributed system** is a collection of processors that **do not share memory or a clock**; each has its own local memory, and they communicate over a network. Motivations: **resource sharing**, **computation speedup** (load sharing), **reliability** (if one site fails, others continue), and **communication**.
+- **Network operating systems** — users know about the other machines and access them explicitly (remote login, file transfer).
+- **Distributed operating systems** — remote resources are accessed like local ones; the OS migrates **data** (whole files or needed portions), **computation** (remote procedure calls) or **processes** (for load balancing, speedup, hardware or software preference, data access).
+- **Robustness** requires detecting failures (**heartbeats**: "are you up?" messages), reconfiguring and recovering.
+
+Without shared memory or a common clock, familiar synchronization tools must be redesigned.
+
+### Event ordering: Lamport's logical clocks
+We can't always tell which of two events in different processes happened first. The **happened-before** relation (→) is defined as:
+1. If A and B are events in the **same process** and A was executed before B, then A → B.
+2. If A is **sending** a message and B is **receiving** it, then A → B.
+3. If A → B and B → C, then A → C (transitive).
+
+Events not related by → are **concurrent**. Each process keeps a **logical clock** LC, a counter incremented between successive events; an event's timestamp is the clock value. To respect messages, a process that receives a message with timestamp **t** where its clock **LC ≤ t** advances its clock to **t + 1**.
+
+```calc
+P1 sends a message at LC1 = 200; P2's slower clock reads 195 when it arrives.
+195 < 200 would make the receive look EARLIER than the send - wrong.
+Rule: LC2 = max(195, 200) + 1 = 201      -> send (200) < receive (201)
+Equal timestamps = concurrent events; break ties with process IDs for a total order.
+```
+
+### Distributed mutual exclusion
+- **Centralized approach** — one process is the **coordinator**. A process sends a **request**; the coordinator replies when the critical section is free (queueing other requests, often FCFS); the process sends **release** when done. **3 messages** per critical-section entry; if the coordinator fails, a new one must be elected.
+- **Fully distributed approach (Ricart–Agrawala)** — to enter, Pi sends **request(Pi, TS)** to all processes. A receiver replies **immediately** if it doesn't want the critical section, **defers** if it is in it, and if it also wants to enter, compares timestamps: it replies if the incoming request has the **smaller (earlier)** timestamp, otherwise defers. Pi enters after receiving replies from everyone, and on exit sends all deferred replies.
+
+```calc
+P1 requests with TS 10; P3 requests with TS 4; P2 doesn't want the section.
+P2 replies to both at once.
+P1 replies to P3 (P3's TS 4 < its own 10);   P3 defers its reply to P1.
+P3 has replies from P1 and P2 -> enters. On exit it replies to P1 -> P1 enters.
+Messages per entry: 2 x (n - 1)   (n = 3 -> 4 messages)
+```
+
+It guarantees mutual exclusion, freedom from deadlock and from starvation (FCFS by timestamp), with the minimum number of messages for independent processes — but every process must know all others, a failed process breaks it, and processes that never want the section still have to answer.
+- **Token-passing approach** — a single **token** circulates around a **logical ring**; only the holder may enter the critical section. Problems: a lost token (needs an election to regenerate it) and a failed process (the ring must be rebuilt).
+
+### Atomicity: two-phase commit (2PC)
+A transaction running at several sites must commit at **all or none**. Each site has a local **transaction coordinator**; the coordinator of the site where T started runs 2PC after T finishes:
+1. **Phase 1 (voting)** — the coordinator logs ⟨prepare T⟩ and sends **prepare** to all sites. Each site logs ⟨ready T⟩ and answers **ready**, or logs ⟨no T⟩ and answers **abort**.
+2. **Phase 2 (decision)** — if all answered ready, the coordinator logs ⟨commit T⟩ and sends **commit**; if any said abort (or timed out), it logs ⟨abort T⟩ and sends **abort**. Sites act on the decision and log it.
+
+If a site fails, on recovery it checks its log: ⟨commit T⟩ → redo, ⟨abort T⟩ → undo, ⟨ready T⟩ → ask the coordinator. If the **coordinator fails** while sites are in the ready state, they must **wait** for it to recover (the **blocking problem**) — they can't decide on their own.
+
+### Concurrency control and deadlock in distributed systems
+- Locking with a **single coordinator** (simple, a bottleneck), **majority protocol** (lock a majority of replicas), **biased protocol** (shared locks need one replica, exclusive locks all), or **primary copy**; or **timestamp ordering** with globally unique timestamps (local timestamp + site ID).
+- Deadlock **prevention** with timestamps: **wait-die** (an older process waits for a younger one; a younger requester dies and restarts with its original timestamp) and **wound-wait** (an older process wounds — preempts — a younger one; a younger requester waits). Both avoid starvation because timestamps are kept.
+- Deadlock **detection** needs a **global wait-for graph** (built centrally, or fully distributed with probe messages); false cycles can appear because of message delays.
+
+### Election algorithms
+Many algorithms need a coordinator; when it fails, a new one must be **elected** — the process with the **highest priority (ID)** that is still alive.
+- **Bully algorithm** — Pi, noticing the coordinator is dead, sends an **election** message to every process with a **higher** number. If none answers within time T, Pi wins and announces itself coordinator to all lower-numbered processes. If someone answers, Pi waits for its coordinator announcement (restarting if none comes). A recovered process starts an election and "bullies" its way back if it has the highest number.
+- **Ring algorithm** — processes form a logical ring; an **elect(i)** message travels around collecting active process numbers; when a process receives its own message back, the highest number in the list is the coordinator.
+
+### Reaching agreement
+- **Unreliable communication** — over a lossy network, two processes can **never be certain** they agree (the **two-army problem**: no finite number of acknowledgements suffices); timeouts give a practical answer.
+- **Faulty processes** — the **Byzantine generals problem**: n generals, m traitors that may send arbitrary messages. Agreement is possible only if **n ≥ 3m + 1** — e.g. one traitor needs at least 4 generals (the book works through exactly that case, m = 1, n = 4).
+
+**Key points:**
+- No shared clock: Lamport clocks order events (receiver sets LC = max(LC, t) + 1; tie-break by process ID).
+- Mutual exclusion: centralized (3 messages), Ricart–Agrawala (2(n − 1) messages), token ring.
+- Two-phase commit: prepare/ready, then commit/abort; blocks if the coordinator fails.
+- Elections: bully (highest ID wins) and ring; Byzantine agreement needs n ≥ 3m + 1.
+
+=== Distributed File Systems: Naming, Remote Access and Stateful vs Stateless Service
+difficulty: medium
+---
+A **distributed file system (DFS)** implements the classic time-sharing model of a file system, where many users share files and storage, on machines connected by a network. Clients, servers and storage are dispersed; **service activity** happens across the network. The ideal DFS looks to clients like a conventional centralized file system — its multiplicity and dispersion are **transparent** — and performs about as well.
+
+### Naming and transparency
+- **Location transparency** — the file name gives no hint of its **physical storage** location.
+- **Location independence** — the file name **doesn't need to change** when the file's physical location changes (supports **file migration**). Location independence is stronger than location transparency.
+
+Naming schemes:
+1. **Host name + local name** (`host:local-name`) — simple, but neither transparent nor independent.
+2. **Attach remote directories to local ones** (Sun's **NFS**) — mount the remote directory; only previously mounted remote directories are accessible transparently. Different clients may see different trees.
+3. **A single global name structure** spanning all files (Andrew, Locus) — ideally the composed file system is isomorphic to a conventional one.
+
+### Remote file access and caching
+With the **remote-service** method, every request goes to the server (RPC) and results return — like a disk access becoming a network message. To reduce traffic, clients **cache** data:
+- **Cache location** — **disk caches** survive crashes and allow large caches; **main-memory caches** allow diskless clients and faster access.
+- **Cache-update policy** — **write-through** (writes go to the server immediately: reliable, slow), **delayed write / write-back** (writes collected in the cache and flushed later — fast, but data can be lost if the client crashes); variants flush when a block is evicted, at regular intervals, or **write-on-close** (AFS).
+- **Consistency** — is the cached copy still valid? **Client-initiated** validation (contact the server on every access, or at fixed intervals) or **server-initiated** (the server records which files each client caches and notifies them of conflicting accesses — AFS **callbacks**).
+
+| | Caching | Remote service |
+|---|---|---|
+| Network traffic | Lower — most accesses served locally | Every access goes to the server |
+| Server load | Lower | Higher |
+| Large sequential transfers | Efficient | Less efficient |
+| Consistency | Hard when writes are frequent | Simple — one copy |
+| Diskless clients | Need memory caches | Natural |
+
+### Stateful vs stateless service
+- **Stateful** service — the server keeps information about each client (an `open` creates an entry in the server's table of open files; later requests use an identifier). **+** Better performance: read-ahead, cached data, no repeated information in requests. **−** After a **server crash** the state is lost; clients must detect it and rebuild it (or abort). After a **client crash**, the server must detect it and discard **orphan** state.
+- **Stateless** service (NFS v3) — each request is **self-contained**: it names the file and the position (absolute offset) — no open/close bookkeeping on the server. **+** Crash recovery is trivial: after a server restart, the client simply **retries** until it gets a response; no orphans. **−** Longer request messages, slower processing, no server-side read-ahead; operations must be **idempotent** (repeatable with the same effect). File locking needs a separate stateful service.
+
+### File replication
+Replicas of a file on different machines improve **availability** and performance (read the nearest one); they should be on failure-independent machines. The naming scheme maps a **replicated file name** to a particular replica, invisibly to users. Updates must keep replicas consistent (or allow controlled, **demand replication** where a nonlocal replica is cached on access).
+
+### An example: AFS (Andrew File System)
+Developed at CMU for very large scale (thousands of workstations). Clients see a **shared name space** (`/afs`) and a local one. Files are grouped into **volumes**. AFS caches **entire files** on the client's local disk, uses **session semantics** (changes visible to others after **close**), and **server-initiated callbacks** to invalidate stale cached copies — so most operations need no server contact, which gives it its scalability.
+
+**Key points:**
+- DFS goal: transparency — location transparency (name hides location) vs location independence (name survives migration).
+- Naming: host:name, NFS mounts, or a single global name space (AFS).
+- Caching (write-through vs write-back; client- vs server-initiated validation) vs remote service.
+- Stateful servers are faster but must recover state after crashes; stateless servers (NFS) just get retried — requests must be idempotent.
+
+=== Case Studies: How Linux and Windows XP Implement These Ideas
+difficulty: medium
+---
+The book ends with case studies showing how two real systems apply the concepts.
+
+### Linux
+- **History and design** — Linus Torvalds's 1991 kernel, combined with GNU tools into a free, **UNIX-compatible** system; distributions package kernel, libraries and tools. Licensed under the **GPL** (derived works must also be free).
+- **Kernel structure** — a **monolithic** kernel (all core code in one address space) for performance, but extensible with **loadable kernel modules** (device drivers, file systems, network protocols) loaded and unloaded at run time; module management, driver registration and **conflict resolution** for hardware resources.
+- **Processes and threads** — `fork()` creates a process; Linux doesn't distinguish processes and threads internally — both are **tasks**. `clone()` creates a task and its flags decide what is **shared** with the parent (`CLONE_FS`, `CLONE_VM` — address space, `CLONE_SIGHAND`, `CLONE_FILES`): share everything and you get a thread; share nothing and you get a process.
+- **Scheduling** — the 2.6 kernel's **O(1) scheduler**: preemptive, priority-based, with **real-time** priorities 0–99 and **nice** values for normal tasks (140 levels total); higher-priority tasks get **longer** time quanta; per-CPU **active** and **expired** arrays — when the active array is empty the two are swapped. Interactive (I/O-bound) tasks get dynamic priority bonuses. (Since 2.6.23 Linux uses the **Completely Fair Scheduler**, which gives each task a fair proportion of CPU time based on its weight.)
+- **Kernel synchronization** — a **preemptive kernel** (since 2.6) using spinlocks, semaphores and preemption disabling; interrupt handling is split into a fast **top half** and deferred **bottom halves**.
+- **Memory** — physical memory in **zones** (DMA, normal, high memory); a **buddy-system page allocator** plus a **slab allocator** for kernel objects; demand-paged virtual memory with **copy-on-write** for `fork`; a page-replacement policy based on a clock-like LFU approximation; the **page cache** unified with file I/O.
+- **File systems** — the **Virtual File System (VFS)** with four object types (**inode**, **file**, **superblock**, **dentry**) so many file systems coexist; **ext2/ext3** (ext3 adds journaling) allocate data in **block groups** to keep related blocks together; the **/proc** file system exposes kernel data as files.
+- **I/O** — block devices (with request queues and I/O schedulers such as the deadline scheduler), character devices and network devices; every device appears as a file.
+- **IPC** — signals, pipes, shared memory, semaphores and message queues; networking via sockets and a full TCP/IP stack.
+- **Security** — **PAM** (pluggable authentication modules), UNIX user/group IDs and permissions, **setuid** programs, and capabilities that split root's powers.
+
+### Windows XP
+- **Design goals** — security, reliability, Windows and POSIX application compatibility, high performance, extensibility, portability and international support.
+- **Architecture** — a layered, **hybrid (modified microkernel)** design: the **Hardware Abstraction Layer (HAL)** hides chipset differences; the **kernel** handles thread scheduling, low-level processor synchronization, interrupt and exception handling; the **executive** above it provides the **object manager**, **virtual-memory manager**, **process manager**, **I/O manager** (with layered drivers), **cache manager**, **security reference monitor**, plug-and-play and power managers, and the **local procedure call (LPC)** facility. User-mode **environmental subsystems** (Win32, POSIX) run applications.
+- **Objects** — kernel resources are **objects** managed by the object manager and accessed through **handles**, with reference counts and **ACL-based** security descriptors; dispatcher objects (events, mutants/mutexes, semaphores, threads, timers) are used for synchronization.
+- **Scheduling** — **32 priority levels**: 16–31 the **real-time class**, 1–15 the **variable class** (priority boosted after I/O completes or a wait ends, lowered after using a full quantum), 0 for the memory-management thread; preemptive, with per-priority queues and the foreground window's process given a larger quantum.
+- **Memory** — 32-bit virtual address space (2 GB user / 2 GB kernel by default); demand paging with **clustering** (fault in neighbouring pages too), **working-set** minimums and maximums per process, and copy-on-write.
+- **File system** — **NTFS**: everything is a file described in the **Master File Table (MFT)**; B+ trees index directories; **log-based recovery** of metadata (journaling); compression, encryption, and support for volume sets and **RAID-like fault tolerance** (striping, mirroring, parity).
+- **Networking** — protocols (TCP/IP, SMB/CIFS), distributed processing (RPC, named pipes), and **domains** with **Active Directory** for directory services and authentication (Kerberos).
+
+### Concepts mapped to real systems
+| Concept | Linux | Windows XP |
+|---|---|---|
+| Kernel structure | Monolithic + loadable modules | Hybrid: HAL, kernel, executive, subsystems |
+| Thread model | Tasks via `clone()` | Processes contain threads; kernel threads + fibers |
+| Scheduler | O(1) / CFS, real-time + nice priorities | 32-level priority, boosts and quanta |
+| Kernel allocator | Buddy + slab | Paged and nonpaged memory pools |
+| File system | VFS; ext3/ext4 with journaling | NTFS with MFT and log-based recovery |
+| Synchronization | Spinlocks, semaphores, preemption control | Spinlocks, dispatcher objects |
+
+**Key points:**
+- Linux: monolithic kernel with loadable modules; tasks created by clone() with sharing flags; O(1)/CFS scheduling; buddy + slab memory; VFS with inode/file/superblock/dentry; ext3 journaling.
+- Windows XP: HAL + kernel + executive + subsystems; everything is an object accessed by handles; 32 priority levels with boosts; NTFS with MFT and log-based recovery.
+- Both use preemptive kernels, demand paging with copy-on-write, and journaling file systems.
 
 === Booting and Installing an Operating System
 difficulty: easy
