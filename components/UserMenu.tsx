@@ -14,17 +14,21 @@ import type { UserRole } from "@/types";
 // `placement="top"` so it doesn't clip off the bottom of the viewport).
 // `role`, when passed, renders a small badge next to the name — the
 // one shared place this shows up, rather than three separate navbar
-// implementations each adding their own.
+// implementations each adding their own. `compact` keeps the trigger
+// to just the avatar until xl, for navbars with many links (the
+// dropdown still shows name, email and role).
 export default function UserMenu({
   name,
   email,
   role,
   placement = "bottom",
+  compact = false,
 }: {
   name: string;
   email: string;
   role?: UserRole;
   placement?: "top" | "bottom";
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -58,8 +62,8 @@ export default function UserMenu({
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-xs font-semibold text-ink-fixed">
           {initial}
         </span>
-        <span className="hidden max-w-[10rem] truncate sm:inline">{name || email}</span>
-        {role && <span className="hidden sm:inline"><RoleBadge role={role} /></span>}
+        <span className={`hidden max-w-[10rem] truncate ${compact ? "xl:inline" : "sm:inline"}`}>{name || email}</span>
+        {role && <span className={`hidden ${compact ? "xl:inline" : "sm:inline"}`}><RoleBadge role={role} /></span>}
         <ChevronDown className={`h-3.5 w-3.5 text-fg-muted transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 

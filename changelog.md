@@ -1914,3 +1914,83 @@
   `changelog.md`. New: `lib/interview-guides/python.md`.
 - Why: Requested — Python content for the Interview Prep section from the provided book. The user
   mentioned two PDFs; only one arrived.
+
+## [2026-10-06] — JavaScript interview guide
+- What changed: Added a static **JavaScript** guide (`lib/interview-guides/javascript.md`, 21 topics),
+  written from standard material at the user's request (no source book — the earlier "JavaScript"
+  PDF was a Java book). Slug `javascript` matches the live "JavaScript" category, so `SubjectGrid`
+  merges them. Topics: introduction (ECMAScript, engines vs runtimes), var/let/const and hoisting,
+  data types and typeof, coercion and == vs ===, functions and arrow functions, scope and closures
+  (memoize, once, debounce), `this` and call/apply/bind (with a bind implementation), objects
+  (optional chaining, destructuring, spread, structuredClone), prototypes and `new`, classes
+  (private fields, extends/super), arrays, strings/Map/Set/JSON, the event loop (microtasks vs
+  macrotasks, Node's nextTick/setImmediate), callbacks/promises/async-await (with a Promise.all
+  implementation), iterators/generators/symbols, error handling, ES modules vs CommonJS, the DOM
+  and event delegation, memory management, functional programming, and common interview
+  implementations (map/filter/reduce polyfills, deepClone, throttle, event emitter, output puzzles).
+  `GuideArticle` labels ```js blocks "JavaScript".
+- Verification: every ```js block was run with Node v22.20.0 by a script that compares stdout (plus
+  the error line for intentional errors) with the guide's Output block — 65 run, 0 mismatches; 6
+  skipped (browser-only DOM code and module-syntax fragments). One varying-order example
+  (setTimeout vs setImmediate) is labelled "one possible run". The checks caught and fixed a
+  misleading NaN display, a confusing console.log evaluation order and a self-importing module
+  that deadlocked. Both diagrams pass mermaid.parse; all 9 guides server-render with no problems;
+  `tsc --noEmit` and `next build` clean.
+- Files touched: `lib/interview-guides/{index.ts,shared.ts}`, `components/interview-prep/GuideArticle.tsx`,
+  `changelog.md`. New: `lib/interview-guides/javascript.md`.
+- Why: Requested — the JavaScript card had no guide.
+
+## [2026-10-08] — Interview Prep in the student navbar + responsive navbar fixes
+- What changed:
+  - `components/StudentNavbar.tsx`: added a top-level **Interview Prep** link (after DSA) so new
+    students find it without knowing it sits under Study Material; Study Material now only stays
+    highlighted for `/topics`. The link row now appears from `lg` (1024px) instead of `md`, with
+    no label wrapping (`whitespace-nowrap`, `gap-5`/`xl:gap-6`); below 1024px the existing
+    hamburger menu is used.
+  - `components/UserMenu.tsx`: new optional `compact` prop — the trigger shows only the avatar
+    until `xl` (1280px); name and role still show in the dropdown. Used by StudentNavbar only.
+  - `app/topics/layout.tsx`: signed-in users now get their role's responsive navbar
+    (StudentNavbar / TeacherNavbar, both with a mobile menu) instead of the old shared `Navbar`,
+    whose links were hidden on phones with no menu button. Signed-out visitors keep the old bar
+    (logo + Sign in).
+  - `app/student/study-material/page.tsx`: Interview Prep card description updated from
+    "Common interview questions and answers" to describe the reading guides; stale comment fixed.
+- Cause of the responsive bug: with 7 links, the student navbar overflowed at 768px (header 963px
+  wide → the whole page scrolled sideways) and labels wrapped onto two lines at 1024px.
+- Verification: a Playwright (headless Chromium) audit signed in as the test student
+  `retest.profile.acct@gmail.com` (session minted with the service key — no password change, no
+  email), crawled 21 page patterns (public pages, every student section, guide overview/topic,
+  interview-prep category, aptitude practice, `/topics` and a 3D topic page) and checked each at
+  320, 360, 390, 768, 1024, 1100, 1180 and 1280px for horizontal overflow, header overlap and
+  wrapped nav labels: before the fix every student page failed at 768px and 1024px; after it, 0
+  problems on all 21 pages at all 8 widths. Skipped on purpose: proctored-test take/start and
+  aptitude test pages (they start attempts). Teacher and admin pages were reviewed in code only
+  (TeacherNavbar already switches to a hamburger below `lg`; the admin sidebar collapses to an
+  icon rail on tablets and a drawer on phones). `tsc --noEmit` and `next build` clean.
+- Files touched: `components/StudentNavbar.tsx`, `components/UserMenu.tsx`, `app/topics/layout.tsx`,
+  `app/student/study-material/page.tsx`, `changelog.md`.
+- Why: Requested — surface Interview Prep for new students and make the site responsive on all
+  device sizes.
+
+## [2026-10-08] — Whole-site responsive audit (teacher, admin and test pages)
+- What changed: No code changes — this extends the previous entry's audit to the rest of the site.
+- Verification: the same Playwright audit was run as the teacher account
+  (`kushwahamanish572000@gmail.com`), the admin account (`manishkushwaha572000@gmail.com`) and again
+  as the test student for the proctored-test pages, at 320, 360, 390, 768, 1024, 1100, 1180 and
+  1280px. The browser aborted every non-GET request (except the auth token refresh), and the log
+  confirms none was attempted, so no data could change.
+  - Teacher: dashboard, classes, assign, DSA questions, question sets, aptitude questions,
+    interview prep, proctored questions, topics, topic page, profile — 0 overflow/overlap.
+  - Admin: dashboard, users, access requests, classes, role log, plus teacher class/dashboard/
+    assign pages, topics, profile — 0 overflow/overlap.
+  - Student test pages: proctored-test start, take, result, review (no-attempt states — the test
+    student has no submitted attempts, and real students' attempts were not opened), plus
+    `/reset-password` — 0 overflow/overlap.
+  - The audit's "wrapped nav label" check flagged the teacher navbar pills at every width; measured
+    directly they are one line (32px = padding + one line; the icon sits on its own line box), so
+    it was a false positive.
+  - Not covered: aptitude test pages (no aptitude tests exist in the database) and
+    `/change-password` (shown only to accounts flagged for a forced change; a single centered
+    `max-w-sm` card).
+- Files touched: `changelog.md`.
+- Why: Requested — check responsiveness of the whole website.

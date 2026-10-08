@@ -12,14 +12,17 @@ import type { UserRole } from "@/types";
 const NAV_LINKS = [
   { href: "/student/dashboard", label: "Dashboard" },
   { href: "/student/dsa", label: "DSA" },
+  // Top-level so new students find it without knowing it sits under
+  // Study Material; it's the largest content area (subject guides).
+  { href: "/student/interview-prep", label: "Interview Prep" },
   { href: "/student/aptitude", label: "Aptitude" },
   { href: "/student/proctored-tests", label: "Proctored Tests" },
   { href: "/student/classes", label: "My Classes" },
-  // DSA Topics (/topics) and Interview Prep live under this hub now
-  // (see app/student/study-material/page.tsx) but keep their own
-  // routes — /topics is also linked from other, non-student navbars —
-  // so this stays highlighted while browsing either.
-  { href: "/student/study-material", label: "Study Material", activePrefixes: ["/topics", "/student/interview-prep"] },
+  // DSA Topics (/topics) also lives under this hub (see
+  // app/student/study-material/page.tsx) but keeps its own route —
+  // /topics is linked from other, non-student navbars — so this stays
+  // highlighted while browsing it.
+  { href: "/student/study-material", label: "Study Material", activePrefixes: ["/topics"] },
 ];
 
 export default function StudentNavbar({ user }: { user: { full_name: string | null; email: string; role: UserRole } }) {
@@ -35,12 +38,12 @@ export default function StudentNavbar({ user }: { user: { full_name: string | nu
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <BrandMark href="/student/dashboard" />
 
-        <nav className="hidden items-center gap-6 text-sm md:flex">
+        <nav className="hidden items-center gap-5 text-sm lg:flex xl:gap-6">
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className={`transition-colors hover:text-fg ${
+              className={`whitespace-nowrap transition-colors hover:text-fg ${
                 isActive(link) ? "text-fg" : "text-fg-muted"
               }`}
             >
@@ -49,12 +52,12 @@ export default function StudentNavbar({ user }: { user: { full_name: string | nu
           ))}
         </nav>
 
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center gap-3 lg:flex">
           <ThemeToggle />
-          <UserMenu name={user.full_name ?? ""} email={user.email} role={user.role} />
+          <UserMenu name={user.full_name ?? ""} email={user.email} role={user.role} compact />
         </div>
 
-        <div className="flex items-center gap-2 md:hidden">
+        <div className="flex items-center gap-2 lg:hidden">
           <ThemeToggle />
           <button
             type="button"
@@ -68,7 +71,7 @@ export default function StudentNavbar({ user }: { user: { full_name: string | nu
       </div>
 
       {menuOpen && (
-        <div className="border-t border-line/70 bg-bg px-4 py-4 md:hidden">
+        <div className="border-t border-line/70 bg-bg px-4 py-4 lg:hidden">
           <nav className="flex flex-col gap-3 text-sm">
             {NAV_LINKS.map((link) => (
               <Link

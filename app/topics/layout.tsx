@@ -1,18 +1,27 @@
 import Link from "next/link";
 import { getCurrentAppUser } from "@/lib/roles";
 import Navbar from "@/components/Navbar";
+import StudentNavbar from "@/components/StudentNavbar";
+import TeacherNavbar from "@/components/TeacherNavbar";
 
 // Topics are public — anyone can read the 3D explanations without an
 // account, so unlike every other section this layout never redirects.
 // If someone happens to be signed in and approved, the nav shows their
-// normal role links too; otherwise it's just the logo + a Sign in link.
+// normal role navbar (the same responsive one as the rest of their
+// section, with a mobile menu); otherwise it's just the logo + a Sign in link.
 export default async function TopicsLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentAppUser();
   const role = user && user.status === "approved" ? user.role : undefined;
 
   return (
     <div className="min-h-screen bg-bg">
-      <Navbar role={role} authed={!!user} />
+      {user && role === "student" ? (
+        <StudentNavbar user={{ full_name: user.full_name, email: user.email, role: user.role }} />
+      ) : user && role ? (
+        <TeacherNavbar user={{ full_name: user.full_name, email: user.email, role: user.role }} />
+      ) : (
+        <Navbar role={role} authed={!!user} />
+      )}
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
         {!user && (
           <Link

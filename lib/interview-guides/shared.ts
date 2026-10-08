@@ -40,6 +40,12 @@ export const GUIDE_INFO: GuideInfo[] = [
     icon: "Terminal",
   },
   {
+    slug: "javascript",
+    name: "JavaScript",
+    description: "Types and coercion, scope and closures, this, prototypes and classes, the event loop, promises and async/await, the DOM — plus the classic interview implementations, all run in Node.",
+    icon: "FileCode",
+  },
+  {
     slug: "java",
     name: "Java",
     description: "Core Java to advanced: OOP, strings, collections and HashMap internals, Java 8 streams, threads and concurrency, I/O, JDBC, RMI, servlets — every example compiled and run.",

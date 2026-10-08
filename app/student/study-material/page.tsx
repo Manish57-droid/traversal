@@ -18,13 +18,12 @@ function formatBytes(bytes: number) {
 }
 
 // The student nav's "Study Material" entry — a small hub in front of
-// two pages that already existed on their own routes: DSA Topics
-// (/topics, public — also reachable from the landing/teacher navbars,
-// left untouched) and Interview Prep (/student/interview-prep, was
-// its own top-level nav item). Folding Interview Prep in here just
-// removes its separate nav entry; the page itself didn't move. Below
-// those, class materials a teacher uploads (see ClassMaterialsPanel on
-// the teacher dashboard) show up per class the student has joined.
+// two pages that live on their own routes: DSA Topics (/topics, public
+// — also reachable from the landing/teacher navbars) and Interview
+// Prep (/student/interview-prep, which also has its own top-level nav
+// entry). Below those, class materials a teacher uploads (see
+// ClassMaterialsPanel on the teacher dashboard) show up per class the
+// student has joined.
 const SECTIONS = [
   {
     href: "/topics",
@@ -36,7 +35,7 @@ const SECTIONS = [
     href: "/student/interview-prep",
     icon: MessagesSquare,
     title: "Interview Prep",
-    description: "Common interview questions and answers, organized by language and topic.",
+    description: "In-depth reading guides for C++, Java, Python, JavaScript, OS, DBMS, SQL and more — with your teachers' questions alongside.",
   },
 ];
 
