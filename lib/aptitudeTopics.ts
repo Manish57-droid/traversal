@@ -46,3 +46,9 @@ export const APTITUDE_TOPIC_SUGGESTIONS: Record<AptitudeCategory, string[]> = {
     "Cloze Test",
   ],
 };
+
+export const APTITUDE_CATEGORY_LABELS: Record<AptitudeCategory, string> = {
+  quant: "Quant",
+  logical: "Logical",
+  verbal: "Verbal",
+};

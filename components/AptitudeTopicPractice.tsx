@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { BookOpen, Clock, PencilLine } from "lucide-react";
 import type { AptitudeCategory, AptitudeQuestion } from "@/types";
+import GuideArticle from "@/components/interview-prep/GuideArticle";
 
 interface HistoryRow {
   question_id: string;
@@ -48,10 +49,23 @@ function pickNextQuestion(
   return null;
 }
 
-export default function AptitudePracticePage() {
-  const params = useParams<{ category: string; topic: string }>();
-  const category = params.category as AptitudeCategory;
-  const topic = decodeURIComponent(params.topic);
+type Tab = "theory" | "practice";
+
+// One aptitude topic: its theory (concepts, formulas, shortcuts from
+// lib/aptitude-theory) on the first tab, then adaptive practice on the
+// second. Opens on Theory so students read the tricks before
+// attempting questions; a topic without a theory section goes
+// straight to Practice with no tabs.
+export default function AptitudeTopicPractice({
+  category,
+  topic,
+  theory,
+}: {
+  category: AptitudeCategory;
+  topic: string;
+  theory: { body: string; readMinutes: number } | null;
+}) {
+  const [tab, setTab] = useState<Tab>(theory ? "theory" : "practice");
 
   const [questions, setQuestions] = useState<PracticeQuestion[]>([]);
   const [history, setHistory] = useState<Record<string, HistoryRow>>({});
@@ -120,8 +134,9 @@ export default function AptitudePracticePage() {
     setCurrent((prevCurrent) => pickNextQuestion(questions, history, prevCurrent?.id));
   }, [questions, history]);
 
-  if (loading) {
-    return <p className="text-sm text-fg-muted">Loading…</p>;
+  function startPractice() {
+    setTab("practice");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   return (
@@ -133,15 +148,62 @@ export default function AptitudePracticePage() {
           </Link>
           <h1 className="mt-2 font-display text-2xl text-fg sm:text-3xl">{topic}</h1>
         </div>
-        <div className="text-right text-xs text-fg-muted">
-          <p>
-            {progress.mastered}/{progress.total} mastered
-          </p>
-          <p>This session: {sessionCorrect}/{sessionCount} correct</p>
-        </div>
+        {!loading && (
+          <div className="text-right text-xs text-fg-muted">
+            <p>
+              {progress.mastered}/{progress.total} mastered
+            </p>
+            <p>This session: {sessionCorrect}/{sessionCount} correct</p>
+          </div>
+        )}
       </div>
 
-      {!current ? (
+      {theory && (
+        <div className="flex gap-1 border-b border-line/60" role="tablist">
+          {(
+            [
+              { id: "theory", label: "1. Theory & shortcuts", icon: BookOpen },
+              { id: "practice", label: "2. Practice", icon: PencilLine },
+            ] as const
+          ).map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              className={`-mb-px flex items-center gap-2 border-b-2 px-3 py-2 text-sm transition-colors ${
+                tab === id ? "border-accent text-fg" : "border-transparent text-fg-muted hover:text-fg"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {tab === "theory" && theory ? (
+        <div className="space-y-6">
+          <p className="flex items-center gap-1.5 text-xs text-fg-subtle">
+            <Clock className="h-3.5 w-3.5" />
+            {theory.readMinutes} min read · learn the concepts and shortcuts, then try the questions
+          </p>
+          <div className="card p-5 sm:p-8">
+            <GuideArticle content={theory.body} />
+          </div>
+          <div className="card flex flex-col items-start justify-between gap-3 p-5 sm:flex-row sm:items-center">
+            <div>
+              <p className="font-medium text-fg">Done with the theory?</p>
+              <p className="text-sm text-fg-muted">Put the shortcuts to work on this topic's questions.</p>
+            </div>
+            <button className="btn-primary" onClick={startPractice}>
+              Start practicing →
+            </button>
+          </div>
+        </div>
+      ) : loading ? (
+        <p className="text-sm text-fg-muted">Loading…</p>
+      ) : !current ? (
         <p className="card p-6 text-center text-sm text-fg-muted">
           No questions in this topic yet.
         </p>

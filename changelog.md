@@ -2086,3 +2086,41 @@
     existing round mask.
 - Verification: screenshots of `/student/aptitude` at 1920 and 1366px in light and dark themes.
 - Why: Requested — the side margins looked empty on a laptop; new logo supplied.
+
+## [2026-10-08] — Project report (Word document)
+- What changed: Produced a 118-page project report, `Traversal_Project_Report.docx` (plus a PDF copy),
+  saved to the owner's Downloads folder — not added to the repo. 17 chapters (requirements,
+  stack, architecture, database, security, student/teacher/admin modules, assessment engine,
+  interview content, design system, API reference, testing, deployment, limitations,
+  conclusion) and appendices (timeline, migrations, all 281 guide topics, glossary, references).
+  It has 55 figures (32 Mermaid diagrams rendered with the project's own mermaid, plus screenshots
+  of the running app taken with read-only sessions, with other students' names blurred) and 73
+  tables. Facts were taken from the code, `schema.sql`, the migrations, this changelog and live
+  row counts.
+- Files touched: `changelog.md` only.
+- Why: Requested — a detailed, downloadable report of the whole project in Word format.
+
+## [2026-10-09] — Aptitude: theory and shortcuts before every topic's questions
+- What changed: Every aptitude topic page now opens on a **"1. Theory & shortcuts"** tab (concepts,
+  formula tables, exam shortcuts, worked examples, common traps) with a **"2. Practice"** tab for
+  the existing adaptive questions; a "Start practicing →" button at the end of the theory switches
+  over. Topic cards on the category page show a "Theory" badge. Theory is written for all 19 live
+  topics (6 Quant, 7 Logical, 6 Verbal, ~10,000 words). Like the interview guides it is static repo
+  content, not DB rows — no schema change. Sections are matched to the teacher-managed topic names
+  by a normalized key (case, "&"/"and" and punctuation ignored); a topic with no section just shows
+  Practice with no tabs, as before.
+- Files touched: `lib/aptitude-theory/{index.ts,shared.ts,quant.md,logical.md,verbal.md}` (new);
+  `components/AptitudeTopicPractice.tsx` and `components/AptitudeTopicPicker.tsx` (moved from the
+  two client `page.tsx` files under `app/student/aptitude/practice/[category]/`, now taking props;
+  practice gains the tabs); those two `page.tsx` files are now thin server components that load the
+  theory; `lib/aptitudeTopics.ts` (+ `APTITUDE_CATEGORY_LABELS`). Rendering reuses
+  `components/interview-prep/GuideArticle.tsx`.
+- Verification: `tsc --noEmit` clean; every live topic name checked against the theory sections
+  (19/19 matched); worked examples' arithmetic re-checked by hand. Playwright, signed in as the test
+  student (read-only — no answers submitted), loaded the Quant picker and the Percentages and
+  Syllogisms topic pages at 1366px and 390px: no horizontal overflow, no page errors, tab switch
+  works. This caught a bug during the work: the category labels were first exported from a
+  `"use client"` module, which a server component receives as a client reference, so every page
+  404'd — moved to `lib/aptitudeTopics.ts`.
+- Why: Requested — students should learn the tricks and shortcuts for a topic before attempting
+  its questions.
