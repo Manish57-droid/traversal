@@ -4,7 +4,7 @@ import { ArrowRight, ArrowUp, ArrowUpRight, Mail } from "lucide-react";
 
 // lucide-react dropped brand icons a while back, so Instagram's glyph
 // is inlined here rather than pulled from the icon set.
-function InstagramIcon({ className }: { className?: string }) {
+export function InstagramIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
       <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
@@ -19,7 +19,8 @@ export const CONTACT_EMAIL = "traversalofficial@gmail.com";
 export const INSTAGRAM_HANDLE = "traversal_official";
 export const INSTAGRAM_URL = `https://instagram.com/${INSTAGRAM_HANDLE}`;
 
-export type FooterLink = { label: string; href: string };
+export type FooterLink = { label: string; href: string; icon?: React.ComponentType<{ className?: string }> };
+export type FooterHighlight = { emoji: string; title: string; hint: string };
 export type FooterColumn = { heading: string; links: FooterLink[] };
 export type FooterCta = { title: string; hint: string; label: string; href: string };
 
@@ -55,10 +56,12 @@ export default function SiteFooter({
   tagline,
   columns,
   cta,
+  highlights,
 }: {
   tagline: string;
   columns: FooterColumn[];
   cta: FooterCta;
+  highlights: FooterHighlight[];
 }) {
   return (
     <footer className="relative overflow-hidden border-t border-line/70 bg-surface/40">
@@ -109,7 +112,8 @@ export default function SiteFooter({
           </div>
 
           {/* Link columns */}
-          <div className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-3 lg:col-span-7 lg:pl-8">
+          <div className="lg:col-span-7 lg:pl-8">
+          <div className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-3">
             {columns.map((col) => (
               <div key={col.heading}>
                 <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest text-fg-subtle">
@@ -121,8 +125,11 @@ export default function SiteFooter({
                     <li key={link.label}>
                       <FooterAnchor
                         href={link.href}
-                        className="group inline-flex items-center gap-1 text-sm text-fg-muted transition-colors hover:text-fg"
+                        className="group inline-flex items-center gap-2 text-sm text-fg-muted transition-colors hover:text-fg"
                       >
+                        {link.icon && (
+                          <link.icon className="h-4 w-4 shrink-0 text-fg-subtle transition-colors group-hover:text-accent" />
+                        )}
                         {link.label}
                         {link.href.startsWith("http") && (
                           <ArrowUpRight className="h-3 w-3 opacity-60 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
@@ -133,6 +140,26 @@ export default function SiteFooter({
                 </ul>
               </div>
             ))}
+          </div>
+
+          {/* Emoji highlight tiles */}
+          <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {highlights.map((h) => (
+              <div
+                key={h.title}
+                className="group rounded-xl border border-line bg-surface/70 p-3.5 transition-colors hover:border-accent/50"
+              >
+                <span
+                  className="inline-block text-2xl transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:scale-110"
+                  aria-hidden="true"
+                >
+                  {h.emoji}
+                </span>
+                <p className="mt-2 text-sm font-medium text-fg">{h.title}</p>
+                <p className="mt-0.5 text-xs leading-snug text-fg-subtle">{h.hint}</p>
+              </div>
+            ))}
+          </div>
           </div>
         </div>
 
