@@ -51,7 +51,7 @@ export default function SignUpPage() {
 
   if (checkEmail) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg px-4">
+      <main data-circuit="narrow" className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
         <Link href="/" className="text-sm text-fg-muted hover:text-fg">
           ← Back to home
         </Link>
@@ -67,7 +67,7 @@ export default function SignUpPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg px-4 py-10">
+    <main data-circuit="narrow" className="flex min-h-screen flex-col items-center justify-center gap-4 px-4 py-10">
       <Link href="/" className="text-sm text-fg-muted hover:text-fg">
         ← Back to home
       </Link>

@@ -145,17 +145,32 @@ body::before {
   background-size: 240px 240px;
   background-position: center top;
   opacity: 0.22;
+  /* half-width of the clear centre band; narrower pages shrink it below */
+  --circuit-band: 600px;
   --margin-mask: linear-gradient(
     to right,
     #000 0,
-    #000 calc(50% - 760px),
-    transparent calc(50% - 600px),
-    transparent calc(50% + 600px),
-    #000 calc(50% + 760px),
+    #000 calc(50% - var(--circuit-band) - 160px),
+    transparent calc(50% - var(--circuit-band)),
+    transparent calc(50% + var(--circuit-band)),
+    #000 calc(50% + var(--circuit-band) + 160px),
     #000 100%
   );
   -webkit-mask-image: var(--margin-mask);
   mask-image: var(--margin-mask);
+}
+
+/* Pages whose content is much narrower than max-w-6xl (auth cards,
+   profile) would otherwise leave a wide blank band around it. Marking
+   any element with data-circuit pulls the traces in closer. Tablet and
+   up only — on phones the content already fills the screen. */
+@media (min-width: 768px) {
+  body:has([data-circuit="narrow"])::before {
+    --circuit-band: 260px; /* max-w-sm card (384px) + breathing room */
+  }
+  body:has([data-circuit="medium"])::before {
+    --circuit-band: 400px; /* max-w-2xl column (672px) + breathing room */
+  }
 }
 
 .dark body::before {

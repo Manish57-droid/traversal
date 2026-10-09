@@ -75,7 +75,7 @@ function ResetPasswordForm() {
 
   if (done) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg px-4">
+      <main data-circuit="narrow" className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
         <div className="card w-full max-w-sm space-y-4 p-6 text-center">
           <p className="font-display text-xl text-fg">Password updated</p>
           <p className="text-sm text-fg-muted">You can now sign in with your new password.</p>
@@ -86,7 +86,7 @@ function ResetPasswordForm() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg px-4">
+    <main data-circuit="narrow" className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
       <Link href="/forgot-password" className="text-sm text-fg-muted hover:text-fg">
         ← Request a new code
       </Link>
