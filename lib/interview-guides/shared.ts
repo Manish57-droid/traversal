@@ -22,6 +22,12 @@ export interface GuideInfo {
 
 export const GUIDE_INFO: GuideInfo[] = [
   {
+    slug: "c",
+    name: "C Programming",
+    description: "C from the build pipeline to pointers, strings, structures and padding, bit manipulation, the preprocessor, files and dynamic memory — plus undefined behaviour and output puzzles, every example compiled and run.",
+    icon: "Binary",
+  },
+  {
     slug: "cpp",
     name: "C++ Programming",
     description: "C++ from the basics to advanced topics — pointers, memory, templates, exceptions and the STL, with worked examples.",

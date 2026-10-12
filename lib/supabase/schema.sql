@@ -150,6 +150,8 @@ create table if not exists questions (
   -- A flagged row has no url yet by definition; an unflagged row must
   -- have a real one — keeps the two states from silently drifting.
   needs_link_curation boolean not null default false,
+  solution_video_url text,             -- YouTube walkthrough (0029)
+  solution_video_language text,        -- 'java' | 'python' (0030)
   constraint questions_url_required_unless_flagged
     check (needs_link_curation or url is not null)
 );

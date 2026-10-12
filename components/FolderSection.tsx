@@ -15,6 +15,7 @@ export default function FolderSection({
   variant = "default",
   depth = 0,
   actions,
+  badge,
   children,
 }: {
   label: string;
@@ -31,6 +32,8 @@ export default function FolderSection({
    * indents and uses a slightly smaller/muted heading. */
   depth?: number;
   actions?: React.ReactNode;
+  /** Small inline marker after the label, e.g. a "Teachers only" lock. */
+  badge?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -55,6 +58,7 @@ export default function FolderSection({
           <span className={`text-sm font-medium ${uncategorized ? "text-warn" : "text-fg"} ${depth ? "text-xs" : ""}`}>
             {label}
           </span>
+          {badge}
           <span className="text-xs text-fg-subtle">
             {count} {unit}{count === 1 ? "" : "s"}
           </span>

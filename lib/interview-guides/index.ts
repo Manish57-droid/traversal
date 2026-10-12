@@ -15,6 +15,7 @@
 // The .md files are bundled as plain strings (see the asset/source rule
 // in next.config.js), so nothing is read from disk at request time.
 
+import cSource from "./c.md";
 import cppSource from "./cpp.md";
 import oopCppSource from "./oop-cpp.md";
 import pythonSource from "./python.md";
@@ -32,6 +33,7 @@ export type { GuideDifficulty, GuideTopicSummary, GuideInfo } from "./shared";
 // To add a guide: write its .md file, import it above, add its
 // GUIDE_INFO entry in shared.ts, and map the slug to the source here.
 const SOURCES: Record<string, { source: string; file: string }> = {
+  c: { source: cSource, file: "c.md" },
   cpp: { source: cppSource, file: "cpp.md" },
   oop: { source: oopCppSource, file: "oop-cpp.md" },
   python: { source: pythonSource, file: "python.md" },

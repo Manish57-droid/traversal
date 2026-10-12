@@ -54,6 +54,10 @@ export interface Question {
   created_by: string | null;
   created_at: string;
   needs_link_curation: boolean;
+  /** YouTube solution walkthrough, when one has been found. */
+  solution_video_url: string | null;
+  /** Language of that walkthrough: "java", or "python" as a fallback. */
+  solution_video_language: string | null;
   /** Companies this question has been asked by, each with its own
    * asked-frequency (null if not set) — a question can have several. */
   companies: { id: string; name: string; frequency: number | null }[];
@@ -89,6 +93,9 @@ export interface CompanyWithCount {
 export interface DsaTopic {
   id: string;
   name: string;
+  /** Hidden from students: every question filed in this folder is
+   * filtered out of the student bank (e.g. "LeetCode Premium"). */
+  teacher_only: boolean;
   created_by: string | null;
   created_at: string;
 }

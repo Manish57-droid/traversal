@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Lock } from "lucide-react";
 import { PLATFORM_COLORS, PLATFORM_LABELS } from "@/lib/platform";
 import { DIFFICULTY_LABELS, FILTERABLE_DIFFICULTIES } from "@/lib/difficulty";
 import FolderSection from "@/components/FolderSection";
@@ -685,7 +686,15 @@ export default function TeacherQuestionsPage() {
               key={t.id}
               label={t.name}
               count={list.length}
+              badge={
+                t.teacher_only ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-warn/40 bg-warn/10 px-2 py-0.5 text-[11px] text-warn">
+                    <Lock className="h-3 w-3" /> Teachers only
+                  </span>
+                ) : null
+              }
               actions={
+                t.teacher_only ? null : (
                 <button
                   type="button"
                   onClick={() => handleDeleteTopic(t.id, t.name)}
@@ -693,6 +702,7 @@ export default function TeacherQuestionsPage() {
                 >
                   Delete
                 </button>
+                )
               }
             >
               {list.length === 0 && <p className="text-xs text-fg-subtle">No questions here yet.</p>}

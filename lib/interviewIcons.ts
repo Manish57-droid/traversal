@@ -1,4 +1,5 @@
 import {
+  Binary,
   Boxes,
   Code2,
   Coffee,
@@ -28,6 +29,7 @@ export const INTERVIEW_ICONS: Record<string, LucideIcon> = {
   Layers,
   Boxes,
   FileCode,
+  Binary,
 };
 
 export const INTERVIEW_ICON_NAMES = Object.keys(INTERVIEW_ICONS);

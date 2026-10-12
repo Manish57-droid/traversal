@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentAppUser } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { fetchAllRows } from "@/lib/supabase/fetchAll";
-import { QUESTION_SELECT, mapQuestion } from "@/lib/dsaQuestions";
+import { QUESTION_SELECT, mapQuestion, studentVisibleFilter } from "@/lib/dsaQuestions";
 import type { QuestionStatus } from "@/types";
 
 // GET  /api/progress -> the whole DSA bank for the signed-in student,
@@ -22,10 +22,15 @@ export async function GET() {
   const supabase = supabaseAdmin();
 
   try {
+    // Teacher-only folders are hidden from students; staff previewing
+    // the student bank see everything.
+    const visible = user.role === "student" ? await studentVisibleFilter(supabase) : null;
     const [questions, progressRows] = await Promise.all([
-      fetchAllRows((from, to) =>
-        supabase.from("questions").select(QUESTION_SELECT).order("created_at", { ascending: false }).range(from, to)
-      ),
+      fetchAllRows((from, to) => {
+        let query = supabase.from("questions").select(QUESTION_SELECT).order("created_at", { ascending: false }).range(from, to);
+        if (visible) query = query.or(visible);
+        return query;
+      }),
       fetchAllRows((from, to) => supabase.from("progress").select("*").eq("student_id", user.id).range(from, to)),
     ]);
 
@@ -59,6 +64,13 @@ export async function POST(req: Request) {
   }
 
   const supabase = supabaseAdmin();
+  if (user.role === "student") {
+    const visible = await studentVisibleFilter(supabase);
+    if (visible) {
+      const { data: q } = await supabase.from("questions").select("id").eq("id", question_id).or(visible).maybeSingle();
+      if (!q) return NextResponse.json({ error: "Question not found." }, { status: 404 });
+    }
+  }
   const { data, error } = await supabase
     .from("progress")
     .upsert(

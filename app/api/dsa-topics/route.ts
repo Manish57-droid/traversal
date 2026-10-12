@@ -17,16 +17,16 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const supabase = supabaseAdmin();
-  const { data, error } = await supabase
-    .from("dsa_topics")
-    .select("*, questions(count)")
-    .order("name", { ascending: true });
+  let query = supabase.from("dsa_topics").select("*, questions(count)").order("name", { ascending: true });
+  if (user.role === "student") query = query.eq("teacher_only", false);
+  const { data, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const topics: DsaTopicWithCount[] = (data ?? []).map((t: any) => ({
     id: t.id,
     name: t.name,
+    teacher_only: t.teacher_only ?? false,
     created_by: t.created_by,
     created_at: t.created_at,
     question_count: t.questions?.[0]?.count ?? 0,
@@ -61,6 +61,13 @@ export async function DELETE(req: Request) {
   if (!id) return NextResponse.json({ error: "id is required." }, { status: 400 });
 
   const supabase = supabaseAdmin();
+  // Deleting a teacher-only folder would uncategorize its questions,
+  // silently publishing them to every student — refuse instead.
+  const { data: topic } = await supabase.from("dsa_topics").select("teacher_only").eq("id", id).maybeSingle();
+  if (topic?.teacher_only) {
+    return NextResponse.json({ error: "Teacher-only folders can't be deleted — their questions would become visible to students." }, { status: 400 });
+  }
+
   const { error: uncatError } = await supabase
     .from("questions")
     .update({ topic_id: null, topic: null })

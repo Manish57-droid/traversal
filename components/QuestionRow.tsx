@@ -1,5 +1,6 @@
 "use client";
 
+import { PlayCircle } from "lucide-react";
 import { DIFFICULTY_LABELS, DIFFICULTY_BADGE_STYLE } from "@/lib/difficulty";
 import CompanyBadge from "@/components/CompanyBadge";
 import type { Question, QuestionStatus } from "@/types";
@@ -39,6 +40,7 @@ export default function QuestionRow({
   // "completed or not" and only ever writes those two, collapsing
   // "attempted" into "not completed" everywhere it shows up.
   const isCompleted = status === "completed";
+  const videoLanguage = question.solution_video_language === "python" ? "Python" : "Java";
 
   const shownCompanies = question.companies.slice(0, MAX_CHIPS);
   const extraCompanies = question.companies.length - shownCompanies.length;
@@ -75,6 +77,18 @@ export default function QuestionRow({
         )}
         {question.needs_link_curation && (
           <span className="ml-2 rounded border border-warn/40 px-1.5 py-0.5 text-xs text-warn">Link coming soon</span>
+        )}
+        {question.solution_video_url && (
+          <a
+            href={question.solution_video_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`Watch the ${videoLanguage} solution on YouTube`}
+            className="ml-2 inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 align-middle text-xs font-medium text-red-500 transition-colors hover:bg-red-500/20"
+          >
+            <PlayCircle className="h-3.5 w-3.5" />
+            {videoLanguage} solution
+          </a>
         )}
       </td>
       <td className="py-3 pr-3 text-sm text-fg-muted">{frequency !== null ? `×${frequency}` : "—"}</td>

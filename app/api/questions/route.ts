@@ -3,7 +3,7 @@ import { getCurrentAppUser, requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { detectPlatform, guessTitleFromUrl, isValidUrl } from "@/lib/platform";
 import { fetchAllRows } from "@/lib/supabase/fetchAll";
-import { QUESTION_SELECT, mapQuestion } from "@/lib/dsaQuestions";
+import { QUESTION_SELECT, mapQuestion, studentVisibleFilter } from "@/lib/dsaQuestions";
 
 // Platforms bucketed as: LeetCode / HackerRank / CodeChef individually
 // (the three most-assigned judges), everything else (Codeforces,
@@ -47,8 +47,10 @@ export async function GET(req: Request) {
   const supabase = supabaseAdmin();
 
   try {
+    const visible = user.role === "student" ? await studentVisibleFilter(supabase) : null;
     const data = await fetchAllRows((from, to) => {
       let query = supabase.from("questions").select(QUESTION_SELECT).order("created_at", { ascending: false }).range(from, to);
+      if (visible) query = query.or(visible);
       if (platform === "others") {
         query = query.in("platform", [...OTHERS_PLATFORMS]);
       } else if (platform && (NAMED_PLATFORMS as readonly string[]).includes(platform)) {
