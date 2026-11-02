@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, LogOut, User } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/browser-client";
 import RoleBadge from "@/components/RoleBadge";
+import { clearApiCache } from "@/lib/swr";
 import type { UserRole } from "@/types";
 
 // Avatar + name with a dropdown for signing out — shared by
@@ -45,6 +46,7 @@ export default function UserMenu({
   async function handleSignOut() {
     const supabase = supabaseBrowser();
     await supabase.auth.signOut();
+    await clearApiCache();
     router.push("/");
     router.refresh();
   }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import useSWR from "swr";
 import { Download, FileText, Trash2, Upload } from "lucide-react";
 import type { ClassMaterial } from "@/types";
 
@@ -15,8 +16,8 @@ function formatBytes(bytes: number) {
 // as ClassAccessPanel, DsaAssignmentsPanel, AptitudeTestsPanel, and
 // ProctoredTestsPanel).
 export default function ClassMaterialsPanel({ classId }: { classId: string }) {
-  const [materials, setMaterials] = useState<ClassMaterial[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading: loading, mutate } = useSWR<{ materials?: ClassMaterial[] }>(`/api/classes/${classId}/materials`);
+  const materials = data?.materials ?? [];
 
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -24,19 +25,6 @@ export default function ClassMaterialsPanel({ classId }: { classId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  async function load() {
-    setLoading(true);
-    const res = await fetch(`/api/classes/${classId}/materials`);
-    const data = await res.json();
-    setMaterials(data.materials ?? []);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classId]);
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
@@ -53,7 +41,7 @@ export default function ClassMaterialsPanel({ classId }: { classId: string }) {
       setTitle("");
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      await load();
+      await mutate();
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -65,7 +53,7 @@ export default function ClassMaterialsPanel({ classId }: { classId: string }) {
     if (!confirm(`Delete "${m.title}"? This can't be undone.`)) return;
     setDeletingId(m.id);
     await fetch(`/api/classes/${classId}/materials/${m.id}`, { method: "DELETE" });
-    await load();
+    await mutate();
     setDeletingId(null);
   }
 

@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC_PATHS = ["/", "/sign-in", "/sign-up", "/forgot-password", "/reset-password"];
 const TRUSTED_USER_HEADER = "x-verified-user-id";
+const TRUSTED_PROFILE_HEADER = "x-verified-user-profile";
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.includes(pathname);
@@ -18,6 +19,7 @@ export async function middleware(req: NextRequest) {
   // ever see for this header; a request can't forge it.
   const requestHeaders = new Headers(req.headers);
   requestHeaders.delete(TRUSTED_USER_HEADER);
+  requestHeaders.delete(TRUSTED_PROFILE_HEADER);
 
   // @supabase/ssr wants to update the session cookie mid-request
   // (token refresh); collect what it wants set here instead of
@@ -85,9 +87,18 @@ export async function middleware(req: NextRequest) {
   );
   const { data: profile } = await admin
     .from("users")
-    .select("role, status, force_password_change")
+    .select("*")
     .eq("id", user.id)
     .single();
+
+  // Hand the full row downstream too, so `getCurrentAppUser()` doesn't
+  // re-query the same `users` row we just read (one fewer DB round
+  // trip per layout and per API route). Same anti-forgery guarantee as
+  // TRUSTED_USER_HEADER: stripped above, only ever set here.
+  // URI-encoded because header values must be ASCII (names may not be).
+  if (profile) {
+    requestHeaders.set(TRUSTED_PROFILE_HEADER, encodeURIComponent(JSON.stringify(profile)));
+  }
 
   if (!profile || profile.status !== "approved") {
     if (pathname === "/pending-approval") return buildResponse();

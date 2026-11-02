@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { ChevronDown, Download } from "lucide-react";
 
 interface AssignmentRow {
@@ -21,13 +22,8 @@ interface StudentRollup {
 }
 
 function AssignmentDetail({ assignmentId }: { assignmentId: string }) {
-  const [students, setStudents] = useState<StudentRollup[] | null>(null);
-
-  useEffect(() => {
-    fetch(`/api/assign/${assignmentId}/rollup`)
-      .then((r) => r.json())
-      .then((d) => setStudents(d.students ?? []));
-  }, [assignmentId]);
+  const { data, error } = useSWR<{ students?: StudentRollup[] }>(`/api/assign/${assignmentId}/rollup`);
+  const students: StudentRollup[] | null = data ? data.students ?? [] : error ? [] : null;
 
   return (
     <div className="space-y-4 border-t border-line/70 pt-4">
@@ -68,17 +64,9 @@ function AssignmentDetail({ assignmentId }: { assignmentId: string }) {
 // owner/collaborator/admin authorization (gated by the parent, same
 // as ClassAccessPanel, ProctoredTestsPanel, and AptitudeTestsPanel).
 export default function DsaAssignmentsPanel({ classId }: { classId: string }) {
-  const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading: loading } = useSWR<{ assignments?: AssignmentRow[] }>(`/api/assign?classId=${classId}`);
+  const assignments = data?.assignments ?? [];
   const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  useEffect(() => {
-    setLoading(true);
-    fetch(`/api/assign?classId=${classId}`)
-      .then((r) => r.json())
-      .then((d) => setAssignments(d.assignments ?? []))
-      .finally(() => setLoading(false));
-  }, [classId]);
 
   if (loading) return null;
 

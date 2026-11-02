@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { Trophy, Medal, Award } from "lucide-react";
 import type { ProctoredLeaderboardWidget as WidgetData, ProctoredLeaderboardRow } from "@/types";
 
@@ -73,14 +73,8 @@ function LeaderboardRow({ row, highlight }: { row: ProctoredLeaderboardRow; high
 // component only renders whatever it gets back, including the "no
 // released test yet" empty state.
 export default function ProctoredLeaderboardWidget() {
-  const [data, setData] = useState<WidgetData | null>(null);
-
-  useEffect(() => {
-    fetch("/api/student/proctored-tests/leaderboard")
-      .then((r) => r.json())
-      .then(setData)
-      .catch(() => setData({ test: null, top: [], me: null, me_in_top: false }));
-  }, []);
+  const { data: fetched, error } = useSWR<WidgetData>("/api/student/proctored-tests/leaderboard");
+  const data: WidgetData | null = fetched ?? (error ? { test: null, top: [], me: null, me_in_top: false } : null);
 
   if (!data) return null;
 

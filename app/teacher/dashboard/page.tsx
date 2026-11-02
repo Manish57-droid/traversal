@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import useSWR from "swr";
 import { Users, Target, Percent } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/browser-client";
 import StatTile from "@/components/StatTile";
@@ -28,16 +29,24 @@ export default function TeacherDashboardPage() {
   const searchParams = useSearchParams();
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [classes, setClasses] = useState<ClassRow[]>([]);
+  const classesRes = useSWR<{ classes?: ClassRow[] }>("/api/classes");
+  const classes = useMemo(() => classesRes.data?.classes ?? [], [classesRes.data]);
   const [selectedClass, setSelectedClass] = useState<string>("");
   const [newClassName, setNewClassName] = useState("");
-  const [loadingClasses, setLoadingClasses] = useState(true);
+  const loadingClasses = classesRes.isLoading;
 
-  const [summary, setSummary] = useState<ClassAnalyticsSummary | null>(null);
-  const [students, setStudents] = useState<StudentAnalyticsRow[]>([]);
-  const [authorization, setAuthorization] = useState<Authorization | null>(null);
-  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
-  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const analyticsRes = useSWR<{
+    summary?: ClassAnalyticsSummary;
+    students?: StudentAnalyticsRow[];
+    authorization?: Authorization;
+  }>(selectedClass ? `/api/teacher/analytics?classId=${selectedClass}` : null);
+  // On an error, show nothing rather than the previous class's numbers.
+  const analytics = analyticsRes.error ? undefined : analyticsRes.data;
+  const summary = analytics?.summary ?? null;
+  const students = analytics?.students ?? [];
+  const authorization = analytics?.authorization ?? null;
+  const analyticsError: string | null = analyticsRes.error ? analyticsRes.error.message : null;
+  const loadingAnalytics = analyticsRes.isLoading;
 
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
 
@@ -48,49 +57,24 @@ export default function TeacherDashboardPage() {
   }, []);
 
   async function loadClasses() {
-    const res = await fetch("/api/classes");
-    const data = await res.json();
-    const fetched: ClassRow[] = data.classes ?? [];
-    setClasses(fetched);
-
-    const requestedClassId = searchParams.get("classId");
-    if (requestedClassId && fetched.some((c) => c.id === requestedClassId)) {
-      setSelectedClass(requestedClassId);
-    } else if (fetched.length && !selectedClass) {
-      setSelectedClass(fetched[0].id);
-    }
+    await classesRes.mutate();
   }
 
+  // Pick a class whenever the list (re)loads: the ?classId= one on the
+  // first load only (a background refresh mustn't undo a dropdown pick),
+  // else keep the current pick, else the first class.
+  const appliedRequestedClass = useRef(false);
   useEffect(() => {
-    loadClasses().finally(() => setLoadingClasses(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!selectedClass) {
-      setSummary(null);
-      setStudents([]);
-      setAuthorization(null);
-      return;
+    if (!classesRes.data) return;
+    const requestedClassId = appliedRequestedClass.current ? null : searchParams.get("classId");
+    appliedRequestedClass.current = true;
+    if (requestedClassId && classes.some((c) => c.id === requestedClassId)) {
+      setSelectedClass(requestedClassId);
+    } else if (classes.length && !selectedClass) {
+      setSelectedClass(classes[0].id);
     }
-    setLoadingAnalytics(true);
-    setAnalyticsError(null);
-    fetch(`/api/teacher/analytics?classId=${selectedClass}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) {
-          setAnalyticsError(d.error);
-          setSummary(null);
-          setStudents([]);
-          setAuthorization(null);
-          return;
-        }
-        setSummary(d.summary ?? null);
-        setStudents(d.students ?? []);
-        setAuthorization(d.authorization ?? null);
-      })
-      .finally(() => setLoadingAnalytics(false));
-  }, [selectedClass]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classesRes.data]);
 
   async function handleCreateClass(e: React.FormEvent) {
     e.preventDefault();

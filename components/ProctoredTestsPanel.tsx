@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import useSWR from "swr";
 import { Camera, ChevronDown, ChevronUp, Download, Mic, PenLine, RotateCcw, ShieldAlert, Trash2, Trophy } from "lucide-react";
 import type {
   ProctoredLeaderboardRow,
@@ -513,9 +514,11 @@ function SectionEditor({
 // as ClassAccessPanel) — every request here still re-checks
 // authorization server-side, this just controls visibility.
 export default function ProctoredTestsPanel({ classId }: { classId: string }) {
-  const [tests, setTests] = useState<ProctoredTestWithQuestions[]>([]);
-  const [sets, setSets] = useState<ProctoredSetWithCount[]>([]);
-  const [loading, setLoading] = useState(true);
+  const testsRes = useSWR<{ tests?: ProctoredTestWithQuestions[] }>(`/api/proctored-tests?classId=${classId}`);
+  const setsRes = useSWR<{ sets?: ProctoredSetWithCount[] }>("/api/proctored-sets");
+  const tests = useMemo(() => testsRes.data?.tests ?? [], [testsRes.data]);
+  const sets = useMemo(() => setsRes.data?.sets ?? [], [setsRes.data]);
+  const loading = testsRes.isLoading || setsRes.isLoading;
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [sections, setSections] = useState<SectionForm[]>([newSection()]);
@@ -524,27 +527,13 @@ export default function ProctoredTestsPanel({ classId }: { classId: string }) {
   const [expandedTestId, setExpandedTestId] = useState<string | null>(null);
 
   async function load() {
-    setLoading(true);
-    const [testsRes, setsRes] = await Promise.all([
-      fetch(`/api/proctored-tests?classId=${classId}`),
-      fetch("/api/proctored-sets"),
-    ]);
-    const testsData = await testsRes.json();
-    const setsData = await setsRes.json();
-    setTests(testsData.tests ?? []);
-    setSets(setsData.sets ?? []);
-    setLoading(false);
+    await Promise.all([testsRes.mutate(), setsRes.mutate()]);
   }
 
   function handleTestDeleted() {
     setExpandedTestId(null);
     load();
   }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classId]);
 
   function updateSection(clientId: string, patch: Partial<SectionForm>) {
     setSections((prev) => prev.map((s) => (s.clientId === clientId ? { ...s, ...patch } : s)));

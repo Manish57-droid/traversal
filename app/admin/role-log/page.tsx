@@ -1,20 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import useSWR from "swr";
 import type { RoleChangeLogRow } from "@/types";
 
 export default function AdminRoleLogPage() {
-  const [rows, setRows] = useState<RoleChangeLogRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading: loading } = useSWR<{ rows?: RoleChangeLogRow[] }>("/api/admin/role-log");
+  const rows = useMemo(() => data?.rows ?? [], [data]);
   const [filter, setFilter] = useState("");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-
-  useEffect(() => {
-    fetch("/api/admin/role-log")
-      .then((r) => r.json())
-      .then((d) => setRows(d.rows ?? []))
-      .finally(() => setLoading(false));
-  }, []);
 
   const filtered = useMemo(() => {
     const term = filter.trim().toLowerCase();

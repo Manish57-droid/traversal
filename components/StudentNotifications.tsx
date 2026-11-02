@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { useRouter } from "next/navigation";
 import { Bell, FileText, ShieldCheck, X } from "lucide-react";
 import type { StudentNotification } from "@/types";
@@ -30,19 +30,14 @@ function timeAgo(iso: string) {
 // and it's gone (still in the DB, just no longer surfaced here).
 export default function StudentNotifications() {
   const router = useRouter();
-  const [unread, setUnread] = useState<StudentNotification[]>([]);
-
-  useEffect(() => {
-    fetch("/api/student/notifications")
-      .then((r) => r.json())
-      .then((data) => {
-        const all: StudentNotification[] = data.notifications ?? [];
-        setUnread(all.filter((n) => !n.read));
-      });
-  }, []);
+  const { data, mutate } = useSWR<{ notifications?: StudentNotification[] }>("/api/student/notifications");
+  const unread = (data?.notifications ?? []).filter((n) => !n.read);
 
   function markRead(id: string) {
-    setUnread((prev) => prev.filter((n) => n.id !== id));
+    mutate(
+      (prev) => prev && { ...prev, notifications: (prev.notifications ?? []).map((n) => (n.id === id ? { ...n, read: true } : n)) },
+      { revalidate: false }
+    );
     fetch(`/api/student/notifications/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

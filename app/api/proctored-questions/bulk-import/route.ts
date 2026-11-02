@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { CACHE_TAGS, invalidatesAfter } from "@/lib/cache";
 
 // POST /api/proctored-questions/bulk-import { questions: [{ prompt, options, correct_option, subject_id, set_ids?, explanation?, difficulty? }] }
 // -> teacher/admin only. Only ever called from the review screen after
@@ -10,7 +11,7 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 // per-question override — resolved client-side before this call);
 // set_ids is optional. All-or-nothing: if any row fails validation,
 // nothing is inserted.
-export async function POST(req: Request) {
+async function handlePost(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -60,3 +61,6 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ imported: data?.length ?? 0 }, { status: 201 });
 }
+
+// Question writes move the question counts in these cached lists.
+export const POST = invalidatesAfter([CACHE_TAGS.proctoredSubjects], handlePost);

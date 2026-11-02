@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 import Link from "next/link";
 import { ChevronRight, Users } from "lucide-react";
 import type { InterviewCategoryWithCount } from "@/types";
@@ -9,17 +9,8 @@ import type { InterviewCategoryWithCount } from "@/types";
 // same subject (the interview_categories row with the guide's slug),
 // if there are any.
 export default function TeacherTopicsLink({ slug }: { slug: string }) {
-  const [category, setCategory] = useState<InterviewCategoryWithCount | null>(null);
-
-  useEffect(() => {
-    fetch("/api/interview-prep/categories")
-      .then((r) => r.json())
-      .then((d) => {
-        const match = (d.categories ?? []).find((c: InterviewCategoryWithCount) => c.slug === slug);
-        setCategory(match ?? null);
-      })
-      .catch(() => {});
-  }, [slug]);
+  const { data } = useSWR<{ categories?: InterviewCategoryWithCount[] }>("/api/interview-prep/categories");
+  const category = data?.categories?.find((c) => c.slug === slug) ?? null;
 
   if (!category || category.question_count === 0) return null;
 

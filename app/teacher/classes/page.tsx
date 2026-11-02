@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser-client";
 import type { ClassBrowseRow } from "@/types";
@@ -23,9 +24,7 @@ const RELATIONSHIP_STYLE: Record<string, string> = {
 
 export default function BrowseClassesPage() {
   const router = useRouter();
-  const [classes, setClasses] = useState<ClassBrowseRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const browse = useSWR<{ classes?: ClassBrowseRow[] }>("/api/classes/browse");
   const [requesting, setRequesting] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -40,23 +39,13 @@ export default function BrowseClassesPage() {
   // empty list — a `?? []` fallback here previously hid a real 500
   // (an ambiguous PostgREST embed) as "no classes exist yet," which is
   // exactly why the bug went unnoticed.
-  async function load() {
-    setLoading(true);
-    setError(null);
-    const res = await fetch("/api/classes/browse");
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error || "Failed to load classes.");
-      setClasses([]);
-    } else {
-      setClasses(data.classes ?? []);
-    }
-    setLoading(false);
-  }
+  const error: string | null = browse.error ? browse.error.message || "Failed to load classes." : null;
+  const classes = browse.error ? [] : browse.data?.classes ?? [];
+  const loading = browse.isLoading;
 
-  useEffect(() => {
-    load();
-  }, []);
+  async function load() {
+    await browse.mutate();
+  }
 
   async function handleRequestAccess(classId: string) {
     setRequesting(classId);

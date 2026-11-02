@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 import Link from "next/link";
 import type { AdminActivityItem, AdminOverviewStats } from "@/types";
 
@@ -16,19 +16,11 @@ function timeAgo(iso: string): string {
 }
 
 export default function AdminDashboardPage() {
-  const [stats, setStats] = useState<AdminOverviewStats | null>(null);
-  const [activity, setActivity] = useState<AdminActivityItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/admin/overview")
-      .then((r) => r.json())
-      .then((d) => {
-        setStats(d.stats ?? null);
-        setActivity(d.recentActivity ?? []);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const { data, isLoading: loading } = useSWR<{ stats?: AdminOverviewStats; recentActivity?: AdminActivityItem[] }>(
+    "/api/admin/overview"
+  );
+  const stats = data?.stats ?? null;
+  const activity = data?.recentActivity ?? [];
 
   return (
     <div className="space-y-8">

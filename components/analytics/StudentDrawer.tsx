@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import useSWR from "swr";
 import { X } from "lucide-react";
 import { PLATFORM_LABELS } from "@/lib/platform";
 import type { QuestionStatus, StudentAnalyticsDetail } from "@/types";
@@ -22,22 +23,10 @@ export default function StudentDrawer({
   classId: string;
   onClose: () => void;
 }) {
-  const [detail, setDetail] = useState<StudentAnalyticsDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-    fetch(`/api/teacher/analytics/student/${studentId}?classId=${classId}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) throw new Error(d.error);
-        setDetail(d.detail ?? null);
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [studentId, classId]);
+  const res = useSWR<{ detail?: StudentAnalyticsDetail }>(`/api/teacher/analytics/student/${studentId}?classId=${classId}`);
+  const detail = res.data?.detail ?? null;
+  const loading = res.isLoading;
+  const error: string | null = res.error ? res.error.message : null;
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {

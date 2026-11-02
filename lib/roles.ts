@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import type { AppUser, UserRole } from "@/types";
 
 const TRUSTED_USER_HEADER = "x-verified-user-id";
+const TRUSTED_PROFILE_HEADER = "x-verified-user-profile";
 
 /**
  * Identity comes from Supabase Auth (the session cookie); role and
@@ -23,15 +24,28 @@ const TRUSTED_USER_HEADER = "x-verified-user-id";
  * `auth.getUser()` network round-trip here — that redundant
  * re-check, once per layout AND once per API route on top of
  * middleware's own check, was the main reason the app felt slow
- * everywhere (see changelog.md for the measured numbers). We still
- * hit `users` fresh every call, so role/status changes apply
- * immediately — nothing here is cached or can go stale.
+ * everywhere (see changelog.md for the measured numbers). Middleware
+ * also passes along the `users` row it already read for this same
+ * request (`x-verified-user-profile`, equally unforgeable), so we
+ * reuse that instead of querying it again. It's read fresh once per
+ * request, so role/status changes still apply on the very next
+ * request — nothing is cached across requests.
  * Falls back to a real `auth.getUser()` check when the header isn't
  * present (e.g. a public path middleware doesn't check auth for).
  */
 export async function getCurrentAppUser(): Promise<AppUser | null> {
   const hdrs = await headers();
   let authUserId = hdrs.get(TRUSTED_USER_HEADER);
+
+  const profileHeader = authUserId ? hdrs.get(TRUSTED_PROFILE_HEADER) : null;
+  if (profileHeader) {
+    try {
+      const profile = JSON.parse(decodeURIComponent(profileHeader)) as AppUser;
+      if (profile.id === authUserId) return profile;
+    } catch {
+      // Malformed — fall through to the DB lookup below.
+    }
+  }
 
   if (!authUserId) {
     const supabase = await supabaseServer();

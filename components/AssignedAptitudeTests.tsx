@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 import Link from "next/link";
 import { ClipboardList } from "lucide-react";
 
@@ -31,15 +31,8 @@ const STATUS_STYLE: Record<AssignedTest["attempt_status"], string> = {
 };
 
 export default function AssignedAptitudeTests() {
-  const [tests, setTests] = useState<AssignedTest[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/student/aptitude/tests")
-      .then((r) => r.json())
-      .then((d) => setTests(d.tests ?? []))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data, isLoading: loading } = useSWR<{ tests?: AssignedTest[] }>("/api/student/aptitude/tests");
+  const tests = data?.tests ?? [];
 
   if (loading || tests.length === 0) return null;
 

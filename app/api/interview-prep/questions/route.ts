@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentAppUser, requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { CACHE_TAGS, invalidatesAfter } from "@/lib/cache";
 import type { InterviewQuestion } from "@/types";
 
 const MIN_EXPLANATION_WORDS = 200;
@@ -61,7 +62,7 @@ export async function GET(req: Request) {
   return NextResponse.json({ questions });
 }
 
-export async function POST(req: Request) {
+async function handlePost(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -106,7 +107,7 @@ export async function POST(req: Request) {
   return NextResponse.json({ question: created }, { status: 201 });
 }
 
-export async function PATCH(req: Request) {
+async function handlePatch(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -151,7 +152,7 @@ export async function PATCH(req: Request) {
   return NextResponse.json({ question: updated });
 }
 
-export async function DELETE(req: Request) {
+async function handleDelete(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -164,3 +165,8 @@ export async function DELETE(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ deleted: true });
 }
+
+// Question writes move the question counts in these cached lists.
+export const POST = invalidatesAfter([CACHE_TAGS.interviewCategories], handlePost);
+export const PATCH = invalidatesAfter([CACHE_TAGS.interviewCategories], handlePatch);
+export const DELETE = invalidatesAfter([CACHE_TAGS.interviewCategories], handleDelete);

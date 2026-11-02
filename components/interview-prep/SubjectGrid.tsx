@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 import Link from "next/link";
 import { BookOpen } from "lucide-react";
 import type { InterviewCategoryWithCount } from "@/types";
@@ -60,15 +60,8 @@ function topicCountLabel(s: Subject) {
 }
 
 export default function SubjectGrid({ guides }: { guides: GuideCardInfo[] }) {
-  const [categories, setCategories] = useState<InterviewCategoryWithCount[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/interview-prep/categories")
-      .then((r) => r.json())
-      .then((d) => setCategories(d.categories ?? []))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data, isLoading: loading } = useSWR<{ categories?: InterviewCategoryWithCount[] }>("/api/interview-prep/categories");
+  const categories = data?.categories ?? [];
 
   // Wait for the categories before drawing, so guide cards don't jump
   // around when the teacher-authored subjects merge in.

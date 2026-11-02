@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { LogOut, Users } from "lucide-react";
 
 interface StudentClassRow {
@@ -11,25 +12,13 @@ interface StudentClassRow {
 }
 
 export default function StudentClassesPage() {
-  const [classes, setClasses] = useState<StudentClassRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading: loading, mutate } = useSWR<{ classes?: StudentClassRow[] }>("/api/student/classes");
+  const classes = data?.classes ?? [];
   const [leavingId, setLeavingId] = useState<string | null>(null);
 
   const [joinCode, setJoinCode] = useState("");
   const [joining, setJoining] = useState(false);
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
-
-  async function load() {
-    setLoading(true);
-    const res = await fetch("/api/student/classes");
-    const data = await res.json();
-    setClasses(data.classes ?? []);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
 
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -45,7 +34,7 @@ export default function StudentClassesPage() {
     setJoinMessage(res.ok ? "Joined! Your teacher can now assign you questions." : data.error);
     if (res.ok) {
       setJoinCode("");
-      await load();
+      await mutate();
     }
     setJoining(false);
   }
@@ -54,7 +43,7 @@ export default function StudentClassesPage() {
     if (!confirm(`Leave "${cls.name}"? You'll need the join code again to get back in.`)) return;
     setLeavingId(cls.id);
     await fetch(`/api/student/classes/${cls.id}`, { method: "DELETE" });
-    await load();
+    await mutate();
     setLeavingId(null);
   }
 

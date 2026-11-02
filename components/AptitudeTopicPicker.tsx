@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import useSWR from "swr";
 import Link from "next/link";
 import { BookOpen } from "lucide-react";
 import type { AptitudeCategory, AptitudeQuestion } from "@/types";
@@ -16,15 +17,8 @@ export default function AptitudeTopicPicker({
   category: AptitudeCategory;
   theoryKeys: string[];
 }) {
-  const [questions, setQuestions] = useState<AptitudeQuestion[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(`/api/aptitude/questions?category=${category}`)
-      .then((r) => r.json())
-      .then((d) => setQuestions(d.questions ?? []))
-      .finally(() => setLoading(false));
-  }, [category]);
+  const { data, isLoading: loading } = useSWR<{ questions?: AptitudeQuestion[] }>(`/api/aptitude/questions?category=${category}`);
+  const questions = useMemo(() => data?.questions ?? [], [data]);
 
   const topics = useMemo(() => {
     const counts = new Map<string, number>();

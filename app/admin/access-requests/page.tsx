@@ -1,36 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import type { AdminClassAccessRequest } from "@/types";
 
 export default function AdminAccessRequestsPage() {
-  const [requests, setRequests] = useState<AdminClassAccessRequest[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading: loading, mutate } = useSWR<{ requests?: AdminClassAccessRequest[] }>("/api/admin/access-requests");
+  const requests = data?.requests ?? [];
   const [busyId, setBusyId] = useState<string | null>(null);
-
-  async function load() {
-    setLoading(true);
-    const res = await fetch("/api/admin/access-requests");
-    const data = await res.json();
-    setRequests(data.requests ?? []);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
 
   async function handleApprove(r: AdminClassAccessRequest) {
     setBusyId(r.id);
     await fetch(`/api/classes/${r.class_id}/access-requests/${r.id}/approve`, { method: "POST" });
-    await load();
+    await mutate();
     setBusyId(null);
   }
 
   async function handleReject(r: AdminClassAccessRequest) {
     setBusyId(r.id);
     await fetch(`/api/classes/${r.class_id}/access-requests/${r.id}/reject`, { method: "POST" });
-    await load();
+    await mutate();
     setBusyId(null);
   }
 

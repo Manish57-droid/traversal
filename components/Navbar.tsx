@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import BrandMark from "@/components/BrandMark";
 import { supabaseBrowser } from "@/lib/supabase/browser-client";
+import { clearApiCache } from "@/lib/swr";
 import type { UserRole } from "@/types";
 
 const ROLE_LABEL: Record<UserRole, string> = {
@@ -19,6 +20,7 @@ export default function Navbar({ role, authed = true }: { role?: UserRole; authe
   async function handleSignOut() {
     const supabase = supabaseBrowser();
     await supabase.auth.signOut();
+    await clearApiCache();
     router.push("/");
     router.refresh();
   }

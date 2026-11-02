@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Sparkles, X } from "lucide-react";
@@ -16,17 +16,11 @@ import { Sparkles, X } from "lucide-react";
 // so a quick reload before they've read it doesn't make it vanish.
 export default function WelcomeInterviewPrepTip() {
   const pathname = usePathname();
-  const [show, setShow] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/student/welcome-tip")
-      .then((r) => r.json())
-      .then((d) => setShow(d.seen === false))
-      .catch(() => {});
-  }, []);
+  const { data, mutate } = useSWR<{ seen?: boolean }>("/api/student/welcome-tip");
+  const show = data?.seen === false;
 
   function dismiss() {
-    setShow(false);
+    mutate({ seen: true }, { revalidate: false });
     fetch("/api/student/welcome-tip", { method: "PATCH" }).catch(() => {});
   }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentAppUser, requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { CACHE_TAGS, invalidatesAfter } from "@/lib/cache";
 import { detectPlatform, guessTitleFromUrl, isValidUrl } from "@/lib/platform";
 import { fetchAllRows } from "@/lib/supabase/fetchAll";
 import { QUESTION_SELECT, mapQuestion, studentVisibleFilter } from "@/lib/dsaQuestions";
@@ -78,7 +79,7 @@ async function resolveTopicName(topicId: string | null): Promise<{ topic_id: str
   return { topic_id: topicId, topic: topicRow.name };
 }
 
-export async function POST(req: Request) {
+async function handlePost(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -131,7 +132,7 @@ export async function POST(req: Request) {
 // it untouched; pass it explicitly as null to uncategorize. `companies`
 // (an array, possibly empty), when present, REPLACES the question's
 // full company/frequency tagging.
-export async function PATCH(req: Request) {
+async function handlePatch(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -183,3 +184,7 @@ export async function PATCH(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ question: mapQuestion(question) });
 }
+
+// Question writes move the question counts in these cached lists.
+export const POST = invalidatesAfter([CACHE_TAGS.dsaTopics, CACHE_TAGS.companies], handlePost);
+export const PATCH = invalidatesAfter([CACHE_TAGS.dsaTopics, CACHE_TAGS.companies], handlePatch);

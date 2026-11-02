@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import useSWR from "swr";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { BookOpen, ChevronDown, ChevronRight, List, X } from "lucide-react";
@@ -78,9 +79,11 @@ export default function InterviewPrepCategoryPage() {
   const params = useParams<{ category: string }>();
   const slug = params.category;
 
-  const [category, setCategory] = useState<InterviewCategoryWithCount | null>(null);
-  const [questions, setQuestions] = useState<InterviewQuestion[]>([]);
-  const [loading, setLoading] = useState(true);
+  const categoriesRes = useSWR<{ categories?: InterviewCategoryWithCount[] }>("/api/interview-prep/categories");
+  const questionsRes = useSWR<{ questions?: InterviewQuestion[] }>(`/api/interview-prep/questions?categorySlug=${slug}`);
+  const category = categoriesRes.data?.categories?.find((c) => c.slug === slug) ?? null;
+  const questions = useMemo(() => questionsRes.data?.questions ?? [], [questionsRes.data]);
+  const loading = categoriesRes.isLoading || questionsRes.isLoading;
 
   // Multiple questions can stay open at once — jumping to a new one
   // from the sidebar doesn't collapse whatever you already had open.
@@ -88,20 +91,6 @@ export default function InterviewPrepCategoryPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
-
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      fetch("/api/interview-prep/categories").then((r) => r.json()),
-      fetch(`/api/interview-prep/questions?categorySlug=${slug}`).then((r) => r.json()),
-    ])
-      .then(([catData, qData]) => {
-        const match = (catData.categories ?? []).find((c: InterviewCategoryWithCount) => c.slug === slug);
-        setCategory(match ?? null);
-        setQuestions(qData.questions ?? []);
-      })
-      .finally(() => setLoading(false));
-  }, [slug]);
 
   // Scroll-spy: highlight whichever question is most visible in the
   // main column as the user scrolls, not just on click.

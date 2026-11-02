@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentAppUser, requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { CACHE_TAGS, invalidatesAfter } from "@/lib/cache";
 import type { ProctoredQuestion } from "@/types";
 
 const DEFAULT_MIN_WORD_COUNT = 150;
@@ -102,7 +103,7 @@ export async function GET(req: Request) {
   return NextResponse.json({ questions: (data ?? []).map(mapQuestion) });
 }
 
-export async function POST(req: Request) {
+async function handlePost(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -176,7 +177,7 @@ export async function POST(req: Request) {
   return NextResponse.json({ question: mapQuestion(full) }, { status: 201 });
 }
 
-export async function PATCH(req: Request) {
+async function handlePatch(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -265,7 +266,7 @@ export async function PATCH(req: Request) {
   return NextResponse.json({ question: mapQuestion(full) });
 }
 
-export async function DELETE(req: Request) {
+async function handleDelete(req: Request) {
   const user = await requireRole(["teacher", "admin"]).catch(() => null);
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -278,3 +279,8 @@ export async function DELETE(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ deleted: true });
 }
+
+// Question writes move the question counts in these cached lists.
+export const POST = invalidatesAfter([CACHE_TAGS.proctoredSubjects], handlePost);
+export const PATCH = invalidatesAfter([CACHE_TAGS.proctoredSubjects], handlePatch);
+export const DELETE = invalidatesAfter([CACHE_TAGS.proctoredSubjects], handleDelete);

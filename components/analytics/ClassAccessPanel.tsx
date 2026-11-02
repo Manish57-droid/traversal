@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import type { ClassAccessRequest, ClassCollaborator } from "@/types";
 
 // Who else can manage this class, plus (for the owner/admin) pending
@@ -22,30 +23,21 @@ export default function ClassAccessPanel({
   onLeft: () => void;
   onDeleted: () => void;
 }) {
-  const [collaborators, setCollaborators] = useState<ClassCollaborator[]>([]);
-  const [requests, setRequests] = useState<ClassAccessRequest[]>([]);
-  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const canDecide = authorization === "owner" || authorization === "admin";
 
+  const collabRes = useSWR<{ collaborators?: ClassCollaborator[] }>(`/api/classes/${classId}/collaborators`);
+  const requestRes = useSWR<{ requests?: ClassAccessRequest[] }>(canDecide ? `/api/classes/${classId}/access-requests` : null);
+  const collaborators = collabRes.data?.collaborators ?? [];
+  const requests = requestRes.data?.requests ?? [];
+  const loading = collabRes.isLoading || requestRes.isLoading;
+
   async function load() {
-    setLoading(true);
-    const calls: Promise<any>[] = [fetch(`/api/classes/${classId}/collaborators`).then((r) => r.json())];
-    if (canDecide) calls.push(fetch(`/api/classes/${classId}/access-requests`).then((r) => r.json()));
-
-    const [collabData, requestData] = await Promise.all(calls);
-    setCollaborators(collabData.collaborators ?? []);
-    setRequests(requestData?.requests ?? []);
-    setLoading(false);
+    await Promise.all([collabRes.mutate(), requestRes.mutate()]);
   }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classId, authorization]);
 
   async function handleApprove(requestId: string) {
     setBusyId(requestId);

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { Flame, Target, Percent, Sparkles } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import StatTile from "@/components/StatTile";
@@ -72,26 +73,14 @@ function pickQuestionOfTheDay(candidates: ProgressJoinRow[]): ProgressJoinRow | 
 }
 
 export default function StudentDashboardPage() {
-  const [rows, setRows] = useState<ProgressJoinRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [proctoredTests, setProctoredTests] = useState<StudentProctoredTestRow[]>([]);
-  const [aptitude, setAptitude] = useState({ attempted: 0, total: 0 });
+  const progress = useSWR<{ progress?: ProgressJoinRow[] }>("/api/progress");
+  const { data: testsData } = useSWR<{ tests?: StudentProctoredTestRow[] }>("/api/student/proctored-tests");
+  const { data: aptitudeData } = useSWR<{ attempted?: number; total?: number }>("/api/student/aptitude-summary");
 
-  useEffect(() => {
-    fetch("/api/progress")
-      .then((r) => r.json())
-      .then((d) => setRows(d.progress ?? []))
-      .finally(() => setLoading(false));
-
-    fetch("/api/student/proctored-tests")
-      .then((r) => r.json())
-      .then((d) => setProctoredTests(d.tests ?? []));
-
-    fetch("/api/student/aptitude-summary")
-      .then((r) => r.json())
-      .then((d) => setAptitude({ attempted: d.attempted ?? 0, total: d.total ?? 0 }))
-      .catch(() => {});
-  }, []);
+  const rows = useMemo(() => progress.data?.progress ?? [], [progress.data]);
+  const loading = progress.isLoading;
+  const proctoredTests = testsData?.tests ?? [];
+  const aptitude = { attempted: aptitudeData?.attempted ?? 0, total: aptitudeData?.total ?? 0 };
 
   const attemptedTests = proctoredTests.filter((t) => t.attempt_status !== "not_started");
 
@@ -107,7 +96,10 @@ export default function StudentDashboardPage() {
   }, [rows]);
 
   async function handleStatusChange(questionId: string, status: QuestionStatus) {
-    setRows((prev) => prev.map((r) => (r.question_id === questionId ? { ...r, status } : r)));
+    progress.mutate(
+      (prev) => prev && { ...prev, progress: (prev.progress ?? []).map((r) => (r.question_id === questionId ? { ...r, status } : r)) },
+      { revalidate: false }
+    );
     await fetch("/api/progress", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

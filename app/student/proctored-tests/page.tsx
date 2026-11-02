@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 
@@ -35,15 +35,8 @@ const STATUS_STYLE: Record<StudentProctoredTest["attempt_status"], string> = {
 };
 
 export default function StudentProctoredTestsPage() {
-  const [tests, setTests] = useState<StudentProctoredTest[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/student/proctored-tests")
-      .then((r) => r.json())
-      .then((d) => setTests(d.tests ?? []))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data, isLoading: loading } = useSWR<{ tests?: StudentProctoredTest[] }>("/api/student/proctored-tests");
+  const tests = data?.tests ?? [];
 
   function actionFor(t: StudentProctoredTest) {
     if (t.attempt_status === "not_started") {

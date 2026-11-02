@@ -2124,3 +2124,32 @@
   404'd — moved to `lib/aptitudeTopics.ts`.
 - Why: Requested — students should learn the tricks and shortcuts for a topic before attempting
   its questions.
+
+## [2026-11-02] — Caching: client-side SWR, server-cached shared lists, one fewer `users` lookup
+- What changed: Three layers, all aimed at the "every page load waits on fresh round trips" feel.
+  (1) **Client cache (SWR):** student, teacher-dashboard and admin read views now use `useSWR`
+  instead of `fetch` in `useEffect`, so revisiting a page shows its last data instantly and
+  refreshes it in the background; writes update the cache (`mutate`) instead of re-fetching into
+  a blank loading state. The cache is wiped on sign-in/sign-out (`clearApiCache`) so one account's
+  data never shows for the next on a shared machine. (2) **Server cache:** the five shared lists
+  every user reads — DSA topics, companies, aptitude topics, interview categories, proctored
+  subjects (each with a question count) — are cached with `unstable_cache` and invalidated by tag
+  from every route that can change them, including the question routes (counts move on question
+  writes) and both user-delete routes (FK cascades delete authored questions). Mutating question
+  handlers are wrapped in `invalidatesAfter` so partial-failure paths invalidate too. A 5-minute
+  time limit covers edits made outside the app. DSA topics are cached per role, so students never
+  get teacher-only folders. (3) **Middleware → `getCurrentAppUser()`:** middleware already reads the
+  caller's `users` row; it now passes it on in `x-verified-user-profile` (stripped from incoming
+  requests, same as `x-verified-user-id`), saving one DB round trip per layout and per API route.
+  Still read fresh once per request — role/status changes apply on the next request.
+- Deliberately not cached: exam-taking and attempt pages (proctored take/start/review/result,
+  aptitude test/review/result), aptitude practice sessions, the account-deletion blast-radius
+  dialog, and the teacher bank editors (questions, aptitude/interview/proctored questions,
+  question sets, assign) plus admin users — those hold edit state derived from the fetch, and
+  correctness there matters more than a faster revisit.
+- Files touched: `lib/cache.ts`, `lib/swr.ts`, `components/SWRProvider.tsx` (new); `app/layout.tsx`;
+  `middleware.ts`, `lib/roles.ts`; the five list routes and the question/user-delete routes under
+  `app/api/`; ~25 client pages/components; `package.json` (+ `swr`).
+- Verification: `tsc --noEmit` clean; `next build` succeeds. Not yet exercised against a running
+  instance with real accounts.
+- Why: Requested — make the site faster by adding caching.

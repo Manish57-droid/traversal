@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentAppUser } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { CACHE_TAGS, invalidatesAfter } from "@/lib/cache";
 
 // DELETE /api/account { password } -> lets a signed-in user
 // irreversibly delete their OWN account: their owned classes (and
@@ -23,7 +24,7 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 //   3. Re-captures the blast-radius counts server-side and writes
 //      them to `user_deletion_log` BEFORE any destructive call, same
 //      ordering guarantee as the admin flow.
-export async function DELETE(req: Request) {
+async function handleDelete(req: Request) {
   const user = await getCurrentAppUser();
   if (!user || user.status !== "approved") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -108,3 +109,8 @@ export async function DELETE(req: Request) {
 
   return NextResponse.json({ deleted: true });
 }
+
+// Deleting a user cascades to every question they authored (the
+// `created_by ... on delete cascade` FKs), shifting counts in every
+// cached list.
+export const DELETE = invalidatesAfter(Object.values(CACHE_TAGS), handleDelete);

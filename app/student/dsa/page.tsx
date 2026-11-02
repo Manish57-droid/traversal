@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import useSWR from "swr";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import QuestionRow from "@/components/QuestionRow";
 import { DIFFICULTY_LABELS, FILTERABLE_DIFFICULTIES } from "@/lib/difficulty";
@@ -17,8 +18,9 @@ type StatusFilter = "" | "completed" | "not_completed";
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
 export default function StudentDsaPage() {
-  const [rows, setRows] = useState<ProgressJoinRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const progress = useSWR<{ progress?: ProgressJoinRow[] }>("/api/progress");
+  const rows = useMemo(() => progress.data?.progress ?? [], [progress.data]);
+  const loading = progress.isLoading;
 
   const [difficultyFilter, setDifficultyFilter] = useState<"" | QuestionDifficulty>("");
   const [companyFilter, setCompanyFilter] = useState("");
@@ -29,26 +31,15 @@ export default function StudentDsaPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  async function loadProgress() {
-    setLoading(true);
-    const res = await fetch("/api/progress");
-    const data = await res.json();
-    setRows(data.progress ?? []);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    loadProgress();
-  }, []);
-
   // Any filter/search change invalidates the current page.
   useEffect(() => {
     setPage(1);
   }, [difficultyFilter, companyFilter, topicFilter, statusFilter, search]);
 
   async function handleStatusChange(questionId: string, status: QuestionStatus) {
-    setRows((prev) =>
-      prev.map((r) => (r.question_id === questionId ? { ...r, status } : r))
+    progress.mutate(
+      (prev) => prev && { ...prev, progress: (prev.progress ?? []).map((r) => (r.question_id === questionId ? { ...r, status } : r)) },
+      { revalidate: false }
     );
     await fetch("/api/progress", {
       method: "POST",

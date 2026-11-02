@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { CACHE_TAGS, invalidatesAfter } from "@/lib/cache";
 
 // DELETE /api/admin/users/[id] -> irreversibly deletes a user account:
 // their owned classes (and everything scoped to those classes),
@@ -19,7 +20,7 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 //      `admin_delete_user_cascade` function that follows runs as a
 //      single Postgres transaction (all-or-nothing) and the log
 //      insert already committed independently before it's invoked.
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+async function handleDelete(req: Request, { params }: { params: { id: string } }) {
   const admin = await requireRole(["admin"]).catch(() => null);
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -121,3 +122,8 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
 
   return NextResponse.json({ deleted: true });
 }
+
+// Deleting a user cascades to every question they authored (the
+// `created_by ... on delete cascade` FKs), shifting counts in every
+// cached list.
+export const DELETE = invalidatesAfter(Object.values(CACHE_TAGS), handleDelete);

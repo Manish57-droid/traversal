@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import useSWR from "swr";
+import { apiFetcher } from "@/lib/swr";
 import Link from "next/link";
 import { BookOpen, Download, MessagesSquare } from "lucide-react";
 import FolderSection from "@/components/FolderSection";
@@ -39,28 +40,23 @@ const SECTIONS = [
   },
 ];
 
-export default function StudyMaterialPage() {
-  const [classes, setClasses] = useState<StudentClassRow[]>([]);
-  const [materialsByClass, setMaterialsByClass] = useState<Record<string, ClassMaterial[]>>({});
-  const [loading, setLoading] = useState(true);
+// Classes, then each class's materials, cached as one entry.
+async function loadStudyMaterial() {
+  const d = await apiFetcher<{ classes?: StudentClassRow[] }>("/api/student/classes");
+  const classes = d.classes ?? [];
+  const entries = await Promise.all(
+    classes.map(async (c) => {
+      const md = await apiFetcher<{ materials?: ClassMaterial[] }>(`/api/classes/${c.id}/materials`).catch(() => null);
+      return [c.id, md?.materials ?? []] as const;
+    })
+  );
+  return { classes, materialsByClass: Object.fromEntries(entries) as Record<string, ClassMaterial[]> };
+}
 
-  useEffect(() => {
-    fetch("/api/student/classes")
-      .then((r) => r.json())
-      .then(async (d) => {
-        const fetched: StudentClassRow[] = d.classes ?? [];
-        setClasses(fetched);
-        const entries = await Promise.all(
-          fetched.map(async (c) => {
-            const r = await fetch(`/api/classes/${c.id}/materials`);
-            const md = await r.json();
-            return [c.id, (md.materials ?? []) as ClassMaterial[]] as const;
-          })
-        );
-        setMaterialsByClass(Object.fromEntries(entries));
-      })
-      .finally(() => setLoading(false));
-  }, []);
+export default function StudyMaterialPage() {
+  const { data, isLoading: loading } = useSWR("student-study-material", loadStudyMaterial);
+  const classes = data?.classes ?? [];
+  const materialsByClass = data?.materialsByClass ?? {};
 
   return (
     <div className="space-y-8">

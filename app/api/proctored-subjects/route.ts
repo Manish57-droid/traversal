@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { getCurrentAppUser, requireRole } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { CACHE_TAGS, SHARED_LIST_REVALIDATE_SECONDS, invalidate } from "@/lib/cache";
 import type { ProctoredSubjectWithCount } from "@/types";
 
 // GET    /api/proctored-subjects -> every subject with its own direct
@@ -14,27 +16,37 @@ import type { ProctoredSubjectWithCount } from "@/types";
 // DELETE /api/proctored-subjects { id } -> teacher/admin only. Its
 //         questions are flagged needs_categorization before subject_id
 //         goes null (see migration 0025's trigger).
+// Throws on error so a failed query is never cached.
+const getSubjects = unstable_cache(
+  async (): Promise<ProctoredSubjectWithCount[]> => {
+    const { data: subjects, error } = await supabaseAdmin()
+      .from("proctored_subjects")
+      .select("*, proctored_questions(count)")
+      .order("name", { ascending: true });
+    if (error) throw new Error(error.message);
+
+    return (subjects ?? []).map((subj: any) => ({
+      id: subj.id,
+      name: subj.name,
+      created_by: subj.created_by,
+      created_at: subj.created_at,
+      question_count: subj.proctored_questions?.[0]?.count ?? 0,
+    }));
+  },
+  ["proctored-subjects"],
+  { tags: [CACHE_TAGS.proctoredSubjects], revalidate: SHARED_LIST_REVALIDATE_SECONDS }
+);
+
 export async function GET() {
   const user = await getCurrentAppUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const supabase = supabaseAdmin();
-  const { data: subjects, error } = await supabase
-    .from("proctored_subjects")
-    .select("*, proctored_questions(count)")
-    .order("name", { ascending: true });
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  const result: ProctoredSubjectWithCount[] = (subjects ?? []).map((subj: any) => ({
-    id: subj.id,
-    name: subj.name,
-    created_by: subj.created_by,
-    created_at: subj.created_at,
-    question_count: subj.proctored_questions?.[0]?.count ?? 0,
-  }));
-
-  return NextResponse.json({ subjects: result });
+  try {
+    const subjects = await getSubjects();
+    return NextResponse.json({ subjects });
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {
@@ -52,6 +64,7 @@ export async function POST(req: Request) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  invalidate(CACHE_TAGS.proctoredSubjects);
   return NextResponse.json({ subject: data }, { status: 201 });
 }
 
@@ -72,6 +85,7 @@ export async function PATCH(req: Request) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  invalidate(CACHE_TAGS.proctoredSubjects);
   return NextResponse.json({ subject: data });
 }
 
@@ -86,5 +100,6 @@ export async function DELETE(req: Request) {
   const { error } = await supabase.from("proctored_subjects").delete().eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  invalidate(CACHE_TAGS.proctoredSubjects);
   return NextResponse.json({ deleted: true });
 }

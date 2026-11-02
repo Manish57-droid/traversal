@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser-client";
 import PasswordInput from "@/components/PasswordInput";
+import { clearApiCache } from "@/lib/swr";
 
 export default function SignInPage() {
   return (
@@ -38,6 +39,7 @@ function SignInForm() {
       return;
     }
 
+    await clearApiCache();
     router.push("/dashboard");
     router.refresh();
   }

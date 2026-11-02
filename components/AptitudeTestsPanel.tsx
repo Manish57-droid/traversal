@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import useSWR from "swr";
 import { ChevronDown, Download } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { AptitudeAttemptRollup, AptitudeCategory, AptitudeQuestion, AptitudeTestWithQuestions } from "@/types";
@@ -157,9 +158,11 @@ const EMPTY_FORM = {
 // owner/collaborator/admin authorization (gated by the parent, same
 // as ClassAccessPanel and ProctoredTestsPanel).
 export default function AptitudeTestsPanel({ classId }: { classId: string }) {
-  const [tests, setTests] = useState<AptitudeTestWithQuestions[]>([]);
-  const [bank, setBank] = useState<AptitudeQuestion[]>([]);
-  const [loading, setLoading] = useState(true);
+  const testsRes = useSWR<{ tests?: AptitudeTestWithQuestions[] }>(`/api/aptitude/tests?classId=${classId}`);
+  const bankRes = useSWR<{ questions?: AptitudeQuestion[] }>("/api/aptitude/questions");
+  const tests = useMemo(() => testsRes.data?.tests ?? [], [testsRes.data]);
+  const bank = useMemo(() => bankRes.data?.questions ?? [], [bankRes.data]);
+  const loading = testsRes.isLoading || bankRes.isLoading;
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -171,22 +174,8 @@ export default function AptitudeTestsPanel({ classId }: { classId: string }) {
   const [expandedTestId, setExpandedTestId] = useState<string | null>(null);
 
   async function load() {
-    setLoading(true);
-    const [testsRes, bankRes] = await Promise.all([
-      fetch(`/api/aptitude/tests?classId=${classId}`),
-      fetch("/api/aptitude/questions"),
-    ]);
-    const testsData = await testsRes.json();
-    const bankData = await bankRes.json();
-    setTests(testsData.tests ?? []);
-    setBank(bankData.questions ?? []);
-    setLoading(false);
+    await Promise.all([testsRes.mutate(), bankRes.mutate()]);
   }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classId]);
 
   const topicsForRandomCategory = useMemo(
     () => Array.from(new Set(bank.filter((q) => q.category === randomCategory).map((q) => q.topic))).sort(),

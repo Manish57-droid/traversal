@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Hanken_Grotesk, Space_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { SWRProvider } from "@/components/SWRProvider";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -40,7 +41,9 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body suppressHydrationWarning>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <SWRProvider>{children}</SWRProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
